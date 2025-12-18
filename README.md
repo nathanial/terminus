@@ -8,7 +8,7 @@ Terminus provides widgets, layouts, and styling for building terminal user inter
 
 - **Full Color Support**: 16 ANSI colors, 256 indexed colors, and RGB true color
 - **Raw Terminal Mode**: Character-by-character input via FFI to termios
-- **Widget System**: Block, Paragraph, List, Table, Gauge, Tabs
+- **Widget System**: 16 widgets including charts, inputs, trees, and more
 - **Flexible Layouts**: Constraints (fixed, percent, ratio, fill) with vertical/horizontal splits
 - **Efficient Rendering**: Buffer diffing for minimal terminal updates
 
@@ -64,14 +64,25 @@ Build and run the examples:
 
 ```bash
 lake build
-.lake/build/bin/hello      # Basic hello world
-.lake/build/bin/counter    # Interactive counter with gauge
-.lake/build/bin/dashboard  # Multi-widget layout demo
+
+# Basic examples
+lake exe hello        # Basic hello world
+lake exe counter      # Interactive counter with gauge
+lake exe dashboard    # Multi-widget layout demo
+
+# Advanced examples
+lake exe charts       # Data visualization with charts
+lake exe fileexplorer # Tree view with scrollbar and popups
+lake exe texteditor   # Text input and editing widgets
 ```
 
 ### HelloWorld
 
 Displays a centered greeting with a styled border.
+
+```bash
+lake exe hello
+```
 
 ### Counter
 
@@ -79,6 +90,12 @@ Interactive counter demonstrating:
 - Keyboard input handling (arrow keys, +/-)
 - Gauge widget for progress display
 - Layout splitting
+
+```bash
+lake exe counter
+```
+
+**Controls:** `↑`/`↓` or `+`/`-` to change value, `q` to quit
 
 ### Dashboard
 
@@ -88,6 +105,51 @@ Complex multi-widget demo featuring:
 - Table widget
 - Multiple gauges
 - Responsive layout
+
+```bash
+lake exe dashboard
+```
+
+**Controls:** `Tab` to switch sections, `↑`/`↓` to navigate, `q` to quit
+
+### Charts
+
+Data visualization demo showcasing:
+- **Sparkline**: Inline mini-charts using Unicode block characters
+- **BarChart**: Vertical bar chart with labels and values
+- **LineChart**: Multi-series line graph with Braille rendering
+
+```bash
+lake exe charts
+```
+
+**Controls:** `Tab` to cycle chart types, `q` to quit
+
+### FileExplorer
+
+Tree-based file browser demonstrating:
+- **Tree**: Hierarchical view with expand/collapse
+- **Scrollbar**: Visual scroll position indicator
+- **Popup**: Confirmation dialogs
+
+```bash
+lake exe fileexplorer
+```
+
+**Controls:** `↑`/`↓` to navigate, `Enter` to expand/collapse, `d` to delete (with confirmation), `q` to quit
+
+### TextEditor
+
+Text editing demo featuring:
+- **TextInput**: Single-line input field with cursor
+- **TextArea**: Multi-line text editor with line numbers
+- **Calendar**: Monthly calendar with date selection
+
+```bash
+lake exe texteditor
+```
+
+**Controls:** `Tab` to switch focus, type to edit, arrow keys to navigate, `Ctrl+Q` to quit
 
 ## Architecture
 
@@ -109,12 +171,30 @@ class Widget (α : Type) where
 ```
 
 Available widgets:
+
+**Basic Widgets:**
 - `Block` - Container with borders and title
 - `Paragraph` - Multi-line text with alignment and wrapping
 - `ListWidget` - Selectable list with scrolling
 - `Table` - Data table with headers
 - `Gauge` - Horizontal progress bar
 - `Tabs` - Tab bar for navigation
+
+**Chart Widgets:**
+- `Sparkline` - Inline mini-chart using Unicode blocks (`▁▂▃▄▅▆▇█`)
+- `BarChart` - Vertical/horizontal bar chart with labels
+- `LineChart` - Line graph with axes (Braille rendering)
+- `Canvas` - Free-form drawing with Braille sub-cell resolution
+
+**Input Widgets:**
+- `TextInput` - Single-line text input with cursor
+- `TextArea` - Multi-line text editor with line numbers
+
+**Navigation Widgets:**
+- `Tree` - Hierarchical tree view with expand/collapse
+- `Calendar` - Monthly calendar with date selection
+- `Scrollbar` - Visual scroll position indicator
+- `Popup` - Centered overlay dialog box
 
 ### Layout
 
@@ -170,7 +250,7 @@ terminus/
 ├── Terminus.lean           # Library entry point
 ├── Terminus/
 │   ├── Core/
-│   │   ├── Style.lean      # Colors and modifiers
+│   │   ├── Style.lean      # Colors, modifiers, Orientation
 │   │   ├── Cell.lean       # Styled character
 │   │   ├── Rect.lean       # Rectangular regions
 │   │   └── Buffer.lean     # Cell grid
@@ -191,14 +271,27 @@ terminus/
 │   │   ├── List.lean       # Selectable list
 │   │   ├── Table.lean      # Data table
 │   │   ├── Gauge.lean      # Progress bar
-│   │   └── Tabs.lean       # Tab bar
+│   │   ├── Tabs.lean       # Tab bar
+│   │   ├── Sparkline.lean  # Mini inline chart
+│   │   ├── Scrollbar.lean  # Scroll indicator
+│   │   ├── Popup.lean      # Dialog overlay
+│   │   ├── BarChart.lean   # Bar chart
+│   │   ├── Tree.lean       # Tree view
+│   │   ├── Calendar.lean   # Calendar widget
+│   │   ├── TextInput.lean  # Single-line input
+│   │   ├── Canvas.lean     # Braille drawing
+│   │   ├── LineChart.lean  # Line graph
+│   │   └── TextArea.lean   # Multi-line editor
 │   └── Frame.lean          # Rendering frame
 ├── ffi/
 │   └── terminus.c          # C termios bindings
 └── examples/
-    ├── HelloWorld.lean
-    ├── Counter.lean
-    └── Dashboard.lean
+    ├── HelloWorld.lean     # Basic example
+    ├── Counter.lean        # Interactive counter
+    ├── Dashboard.lean      # Multi-widget demo
+    ├── Charts.lean         # Chart widgets demo
+    ├── FileExplorer.lean   # Tree/popup demo
+    └── TextEditor.lean     # Input widgets demo
 ```
 
 ## License

@@ -129,4 +129,10 @@ instance : Append Style where
 
 end Style
 
+/-- Orientation for directional widgets -/
+inductive Orientation where
+  | horizontal
+  | vertical
+  deriving Repr, BEq, Inhabited
+
 end Terminus

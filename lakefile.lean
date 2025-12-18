@@ -17,6 +17,15 @@ lean_exe «counter» where
 lean_exe «dashboard» where
   root := `examples.Dashboard
 
+lean_exe «charts» where
+  root := `examples.Charts
+
+lean_exe «fileexplorer» where
+  root := `examples.FileExplorer
+
+lean_exe «texteditor» where
+  root := `examples.TextEditor
+
 -- FFI: Build C code and link it
 target ffi.o pkg : System.FilePath := do
   let oFile := pkg.buildDir / "ffi" / "terminus.o"

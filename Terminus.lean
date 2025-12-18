@@ -22,5 +22,15 @@ import Terminus.Widgets.List
 import Terminus.Widgets.Table
 import Terminus.Widgets.Gauge
 import Terminus.Widgets.Tabs
+import Terminus.Widgets.Sparkline
+import Terminus.Widgets.Scrollbar
+import Terminus.Widgets.Popup
+import Terminus.Widgets.BarChart
+import Terminus.Widgets.Tree
+import Terminus.Widgets.Calendar
+import Terminus.Widgets.TextInput
+import Terminus.Widgets.Canvas
+import Terminus.Widgets.LineChart
+import Terminus.Widgets.TextArea
 
 import Terminus.Frame
