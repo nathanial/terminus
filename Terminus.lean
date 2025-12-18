@@ -7,6 +7,8 @@ import Terminus.Core.Buffer
 
 import Terminus.Backend.Ansi
 import Terminus.Backend.Raw
+import Terminus.Backend.TerminalEffect
+import Terminus.Backend.TerminalIO
 import Terminus.Backend.Terminal
 
 import Terminus.Input.Key

@@ -1,17 +1,18 @@
 -- Terminus.Input.Events: Event polling and parsing
 
 import Terminus.Input.Key
-import Terminus.Backend.Raw
+import Terminus.Backend.TerminalEffect
+import Terminus.Backend.TerminalIO
 
 namespace Terminus
 
 namespace Events
 
 /-- Read a byte with timeout, returns none if no input -/
-private def readByteOpt : IO (Option UInt8) := readByte
+def readByteOpt [Monad m] [TerminalEffect m] : m (Option UInt8) := TerminalEffect.readByte
 
 /-- Try to read multiple bytes (for escape sequences) -/
-private def readBytes (count : Nat) : IO (List UInt8) := do
+def readBytes [Monad m] [TerminalEffect m] (count : Nat) : m (List UInt8) := do
   let mut bytes : List UInt8 := []
   for _ in [0 : count] do
     match ← readByteOpt with
@@ -20,7 +21,7 @@ private def readBytes (count : Nat) : IO (List UInt8) := do
   pure bytes
 
 /-- Parse an escape sequence into a KeyEvent -/
-private def parseEscapeSequence : IO KeyEvent := do
+def parseEscapeSequence [Monad m] [TerminalEffect m] : m KeyEvent := do
   -- After ESC, check for [ which indicates CSI sequence
   match ← readByteOpt with
   | none => pure KeyEvent.escape
@@ -98,7 +99,7 @@ private def parseEscapeSequence : IO KeyEvent := do
       pure KeyEvent.escape
 
 /-- Parse a single byte into a KeyEvent -/
-private def parseKey (b : UInt8) : IO KeyEvent := do
+def parseKey [Monad m] [TerminalEffect m] (b : UInt8) : m KeyEvent := do
   match b with
   | 0 => pure { code := .null }
   | 3 => pure { code := .char 'c', modifiers := KeyModifiers.mkCtrl } -- Ctrl+C
@@ -121,14 +122,14 @@ private def parseKey (b : UInt8) : IO KeyEvent := do
       pure { code := .null }
 
 /-- Poll for the next event (non-blocking) -/
-def poll : IO Event := do
+def poll [Monad m] [TerminalEffect m] : m Event := do
   match ← readByteOpt with
   | none => pure Event.none
   | some b =>
     let key ← parseKey b
     pure (Event.key key)
 
-/-- Wait for the next key event (blocking) -/
+/-- Wait for the next key event (blocking) - IO specific due to sleep -/
 partial def read : IO KeyEvent := do
   match ← poll with
   | Event.key e => pure e
@@ -138,7 +139,7 @@ partial def read : IO KeyEvent := do
     read
 
 /-- Check if any input is available -/
-def available : IO Bool := do
+def available [Monad m] [TerminalEffect m] : m Bool := do
   match ← readByteOpt with
   | some _ => pure true
   | none => pure false

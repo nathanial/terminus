@@ -3,7 +3,8 @@
 import Terminus.Core.Buffer
 import Terminus.Core.Cell
 import Terminus.Backend.Ansi
-import Terminus.Backend.Raw
+import Terminus.Backend.TerminalEffect
+import Terminus.Backend.TerminalIO
 
 namespace Terminus
 
@@ -18,8 +19,8 @@ structure Terminal where
 namespace Terminal
 
 /-- Create a new terminal with the current size -/
-def new : IO Terminal := do
-  let (width, height) ← getTerminalSize
+def new [Monad m] [TerminalEffect m] : m Terminal := do
+  let (width, height) ← TerminalEffect.getTerminalSize
   pure {
     width
     height
@@ -44,55 +45,55 @@ def area (term : Terminal) : Rect := {
 }
 
 /-- Clear the terminal screen -/
-def clear : IO Unit := do
-  writeStdout Ansi.clearScreen
-  writeStdout Ansi.cursorHome
+def clear [Monad m] [TerminalEffect m] : m Unit := do
+  TerminalEffect.writeStdout Ansi.clearScreen
+  TerminalEffect.writeStdout Ansi.cursorHome
 
 /-- Hide the cursor -/
-def hideCursor : IO Unit := writeStdout Ansi.cursorHide
+def hideCursor [Monad m] [TerminalEffect m] : m Unit := TerminalEffect.writeStdout Ansi.cursorHide
 
 /-- Show the cursor -/
-def showCursor : IO Unit := writeStdout Ansi.cursorShow
+def showCursor [Monad m] [TerminalEffect m] : m Unit := TerminalEffect.writeStdout Ansi.cursorShow
 
 /-- Enter the alternate screen buffer -/
-def enterAltScreen : IO Unit := writeStdout Ansi.enterAltScreen
+def enterAltScreen [Monad m] [TerminalEffect m] : m Unit := TerminalEffect.writeStdout Ansi.enterAltScreen
 
 /-- Leave the alternate screen buffer -/
-def leaveAltScreen : IO Unit := writeStdout Ansi.leaveAltScreen
+def leaveAltScreen [Monad m] [TerminalEffect m] : m Unit := TerminalEffect.writeStdout Ansi.leaveAltScreen
 
 /-- Move cursor to position (0-indexed) -/
-def moveCursor (x y : Nat) : IO Unit := writeStdout (Ansi.cursorToZero x y)
+def moveCursor [Monad m] [TerminalEffect m] (x y : Nat) : m Unit := TerminalEffect.writeStdout (Ansi.cursorToZero x y)
 
 /-- Render a cell at the given position -/
-private def renderCell (x y : Nat) (cell : Cell) : IO Unit := do
-  writeStdout (Ansi.cursorToZero x y)
-  writeStdout (Ansi.styleCodes cell.style)
-  writeStdout cell.char.toString
+private def renderCell [Monad m] [TerminalEffect m] (x y : Nat) (cell : Cell) : m Unit := do
+  TerminalEffect.writeStdout (Ansi.cursorToZero x y)
+  TerminalEffect.writeStdout (Ansi.styleCodes cell.style)
+  TerminalEffect.writeStdout cell.char.toString
 
 /-- Flush the current buffer to the terminal using differential updates -/
-def flush (term : Terminal) : IO Terminal := do
+def flush [Monad m] [TerminalEffect m] (term : Terminal) : m Terminal := do
   let changes := Buffer.diff term.previousBuffer term.currentBuffer
   for (x, y, cell) in changes do
     renderCell x y cell
-  writeStdout Ansi.resetAll
-  flushStdout
+  TerminalEffect.writeStdout Ansi.resetAll
+  TerminalEffect.flushStdout
   pure { term with previousBuffer := term.currentBuffer }
 
 /-- Force a full redraw of the buffer -/
-def draw (term : Terminal) : IO Terminal := do
-  writeStdout Ansi.cursorHome
+def draw [Monad m] [TerminalEffect m] (term : Terminal) : m Terminal := do
+  TerminalEffect.writeStdout Ansi.cursorHome
   let mut lastStyle : Style := {}
-  writeStdout Ansi.resetAll
+  TerminalEffect.writeStdout Ansi.resetAll
   for y in [0 : term.height] do
-    writeStdout (Ansi.cursorToZero 0 y)
+    TerminalEffect.writeStdout (Ansi.cursorToZero 0 y)
     for x in [0 : term.width] do
       let cell := term.currentBuffer.get x y
       if cell.style != lastStyle then
-        writeStdout (Ansi.styleCodes cell.style)
+        TerminalEffect.writeStdout (Ansi.styleCodes cell.style)
         lastStyle := cell.style
-      writeStdout cell.char.toString
-  writeStdout Ansi.resetAll
-  flushStdout
+      TerminalEffect.writeStdout cell.char.toString
+  TerminalEffect.writeStdout Ansi.resetAll
+  TerminalEffect.flushStdout
   pure { term with previousBuffer := term.currentBuffer }
 
 /-- Get a mutable reference to the current buffer for drawing -/
@@ -108,7 +109,7 @@ def clearBuffer (term : Terminal) : Terminal :=
 
 /-- Standard terminal setup for TUI applications -/
 def setup : IO Unit := do
-  enableRawMode
+  TerminalEffect.enableRawMode
   enterAltScreen
   hideCursor
   clear
@@ -117,7 +118,7 @@ def setup : IO Unit := do
 def teardown : IO Unit := do
   showCursor
   leaveAltScreen
-  disableRawMode
+  TerminalEffect.disableRawMode
 
 /-- Run a TUI application with proper setup and teardown -/
 def withTerminal (app : Terminal → IO α) : IO α := do

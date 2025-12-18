@@ -4,8 +4,14 @@ open Lake DSL
 package «terminus» where
   precompileModules := true
 
+require LSpec from git
+  "https://github.com/argumentcomputer/LSpec" @ "main"
+
 lean_lib «Terminus» where
   roots := #[`Terminus]
+
+lean_lib «Tests» where
+  roots := #[`Tests]
 
 @[default_target]
 lean_exe «hello» where
@@ -25,6 +31,10 @@ lean_exe «fileexplorer» where
 
 lean_exe «texteditor» where
   root := `examples.TextEditor
+
+@[test_driver]
+lean_exe «tests» where
+  root := `Tests.Main
 
 -- FFI: Build C code and link it
 target ffi.o pkg : System.FilePath := do
