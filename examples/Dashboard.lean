@@ -12,6 +12,7 @@ structure DashboardState where
   cpuUsage : Float := 0.45
   memUsage : Float := 0.72
   diskUsage : Float := 0.38
+  netUsage : Float := 0.55
   tick : Nat := 0
   deriving Inhabited
 
@@ -75,7 +76,7 @@ def draw (frame : Frame) (state : DashboardState) : Frame := Id.run do
         f := f.render gaugeBlock rightArea
 
         let inner := gaugeBlock.innerArea rightArea
-        let gaugeSections := vsplit inner [.fixed 2, .fixed 2, .fixed 2, .fill]
+        let gaugeSections := vsplit inner [.fixed 2, .fixed 2, .fixed 2, .fixed 2, .fill]
 
         -- CPU Gauge
         if hg : 0 < gaugeSections.length then
@@ -97,6 +98,15 @@ def draw (frame : Frame) (state : DashboardState) : Frame := Id.run do
             |>.withLabel "Disk"
             |>.withFilledStyle (Style.fgColor Color.cyan)
           f := f.render diskGauge gaugeSections[2]
+
+        -- Network LineGauge (demonstrates the new widget)
+        if hg : 3 < gaugeSections.length then
+          let netGauge := LineGauge.new state.netUsage
+            |>.withLabel "Network"
+            |>.withFilledStyle (Style.fgColor Color.magenta)
+            |>.withUnfilledStyle (Style.fgColor Color.gray)
+            |>.withShowPercent
+          f := f.render netGauge gaugeSections[3]
 
     | 1 => -- Processes tab
       let table := Table.new tableData
@@ -162,6 +172,7 @@ def update (state : DashboardState) (key : KeyEvent) : DashboardState × Bool :=
         tick := state.tick + 1
         cpuUsage := 0.3 + 0.4 * (Float.sin (state.tick.toFloat * 0.1)).abs
         memUsage := 0.6 + 0.2 * (Float.cos (state.tick.toFloat * 0.05)).abs
+        netUsage := 0.2 + 0.6 * (Float.sin (state.tick.toFloat * 0.15)).abs
       }
       (newState, false)
 

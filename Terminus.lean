@@ -23,6 +23,7 @@ import Terminus.Widgets.Paragraph
 import Terminus.Widgets.List
 import Terminus.Widgets.Table
 import Terminus.Widgets.Gauge
+import Terminus.Widgets.LineGauge
 import Terminus.Widgets.Tabs
 import Terminus.Widgets.Sparkline
 import Terminus.Widgets.Scrollbar
