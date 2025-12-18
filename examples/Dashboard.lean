@@ -119,15 +119,19 @@ def draw (frame : Frame) (state : DashboardState) : Frame := Id.run do
       f := f.render table contentArea
 
     | _ => -- Network tab (placeholder)
+      -- Demonstrate Clear widget: clear area with a dark background before rendering
+      let clearBg := Clear.new.withBg Color.black
+      f := f.render clearBg contentArea
+
       let placeholder := Paragraph.fromLines [
         "",
         "Network statistics coming soon...",
         "",
-        "This tab demonstrates that the UI",
-        "can have multiple views controlled",
-        "by the tab widget."
+        "This tab demonstrates the Clear widget",
+        "which resets an area before rendering.",
+        "(Background cleared to black)"
       ] |>.centered
-        |>.withStyle Style.dim
+        |>.withStyle (Style.fgColor Color.yellow)
         |>.withBlock (Block.double.withTitle "Network" |>.withBorderStyle (Style.fgColor Color.yellow))
       f := f.render placeholder contentArea
 

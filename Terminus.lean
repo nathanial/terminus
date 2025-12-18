@@ -18,6 +18,7 @@ import Terminus.Layout.Constraint
 import Terminus.Layout.Layout
 
 import Terminus.Widgets.Widget
+import Terminus.Widgets.Clear
 import Terminus.Widgets.Block
 import Terminus.Widgets.Paragraph
 import Terminus.Widgets.List
