@@ -149,7 +149,7 @@ Text editing demo featuring:
 lake exe texteditor
 ```
 
-**Controls:** `Tab` to switch focus, type to edit, arrow keys to navigate, `Ctrl+Q` to quit
+**Controls:** `Tab` to switch focus, type to edit, arrow keys to navigate, `Esc` to quit
 
 ## Architecture
 

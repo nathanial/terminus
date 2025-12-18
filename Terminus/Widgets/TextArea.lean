@@ -208,6 +208,7 @@ def handleKey (t : TextArea) (key : KeyEvent) : TextArea :=
   if !t.focused then t
   else match key.code with
   | .char c => t.insertChar c
+  | .space => t.insertChar ' '
   | .enter => t.insertNewline
   | .backspace => t.deleteBackward
   | .delete => t.deleteForward

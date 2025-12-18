@@ -94,7 +94,7 @@ def draw (frame : Frame) (state : EditorState) : Frame := Id.run do
 
     let statusLeft := s!"Focus: {focusName}"
     let statusRight := s!"Ln {state.content.cursorRow + 1}, Col {state.content.cursorCol + 1}"
-    let statusMiddle := "Tab: Switch | Ctrl+Q: Quit"
+    let statusMiddle := "Tab: Switch | Esc: Quit"
 
     f := f.writeString statusArea.x statusArea.y statusLeft (Style.dim.withFg Color.cyan)
     let middleX := statusArea.x + (statusArea.width - statusMiddle.length) / 2
@@ -106,8 +106,7 @@ def draw (frame : Frame) (state : EditorState) : Frame := Id.run do
 
 def update (state : EditorState) (key : KeyEvent) : EditorState × Bool :=
   -- Global controls
-  if key.isCtrlQ then (state, true)
-  else if key.isCtrlC then (state, true)
+  if key.code == .escape then (state, true)
   else match key.code with
   -- Tab to switch focus
   | .tab =>
@@ -116,14 +115,6 @@ def update (state : EditorState) (key : KeyEvent) : EditorState × Bool :=
       | .content => .calendar
       | .calendar => .filename
     ({ state with focus := nextFocus }, false)
-
-  -- Shift+Tab (backtab) - not easily detectable, use Escape instead
-  | .escape =>
-    let prevFocus := match state.focus with
-      | .filename => .calendar
-      | .content => .filename
-      | .calendar => .content
-    ({ state with focus := prevFocus }, false)
 
   -- Handle input based on focus
   | _ =>

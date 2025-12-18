@@ -119,6 +119,7 @@ def handleKey (t : TextInput) (key : KeyEvent) : TextInput :=
   if !t.focused then t
   else match key.code with
   | .char c => t.insertChar c
+  | .space => t.insertChar ' '
   | .backspace => t.deleteBackward
   | .delete => t.deleteForward
   | .left => t.moveCursorLeft
