@@ -42,6 +42,9 @@ lean_exe «kitchensink» where
 lean_exe «menu» where
   root := `examples.Menu
 
+lean_exe «piechart» where
+  root := `examples.PieChart
+
 @[test_driver]
 lean_exe «tests» where
   root := `Tests.Main

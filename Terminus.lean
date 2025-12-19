@@ -40,5 +40,6 @@ import Terminus.Widgets.TextArea
 import Terminus.Widgets.BigText
 import Terminus.Widgets.Checkbox
 import Terminus.Widgets.Menu
+import Terminus.Widgets.PieChart
 
 import Terminus.Frame
