@@ -17,6 +17,9 @@ lean_lib «Tests» where
 lean_exe «hello» where
   root := `examples.HelloWorld
 
+lean_exe «bigtext» where
+  root := `examples.BigText
+
 lean_exe «counter» where
   root := `examples.Counter
 

@@ -37,5 +37,6 @@ import Terminus.Widgets.TextInput
 import Terminus.Widgets.Canvas
 import Terminus.Widgets.LineChart
 import Terminus.Widgets.TextArea
+import Terminus.Widgets.BigText
 
 import Terminus.Frame
