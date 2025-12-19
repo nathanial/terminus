@@ -39,6 +39,9 @@ lean_exe «texteditor» where
 lean_exe «kitchensink» where
   root := `examples.KitchenSink
 
+lean_exe «menu» where
+  root := `examples.Menu
+
 @[test_driver]
 lean_exe «tests» where
   root := `Tests.Main

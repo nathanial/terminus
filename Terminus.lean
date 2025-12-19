@@ -39,5 +39,6 @@ import Terminus.Widgets.LineChart
 import Terminus.Widgets.TextArea
 import Terminus.Widgets.BigText
 import Terminus.Widgets.Checkbox
+import Terminus.Widgets.Menu
 
 import Terminus.Frame
