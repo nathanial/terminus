@@ -35,6 +35,7 @@ def parseEscapeSequence [Monad m] [TerminalEffect m] : m KeyEvent := do
       | 66 => pure KeyEvent.down    -- B
       | 67 => pure KeyEvent.right   -- C
       | 68 => pure KeyEvent.left    -- D
+      | 90 => pure (KeyEvent.tab.withShift) -- Z (Shift+Tab)
       | 72 => pure { code := .home }    -- H
       | 70 => pure { code := .«end» }   -- F
       | 49 => -- '1' - could be F5-F8 or Home

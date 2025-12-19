@@ -13,6 +13,7 @@ lean_lib «Terminus» where
 lean_lib «Tests» where
   roots := #[`Tests]
 
+
 @[default_target]
 lean_exe «hello» where
   root := `examples.HelloWorld
@@ -34,6 +35,9 @@ lean_exe «fileexplorer» where
 
 lean_exe «texteditor» where
   root := `examples.TextEditor
+
+lean_exe «kitchensink» where
+  root := `examples.KitchenSink
 
 @[test_driver]
 lean_exe «tests» where
