@@ -45,6 +45,9 @@ lean_exe «menu» where
 lean_exe «piechart» where
   root := `examples.PieChart
 
+lean_exe «logger» where
+  root := `examples.Logger
+
 @[test_driver]
 lean_exe «tests» where
   root := `Tests.Main

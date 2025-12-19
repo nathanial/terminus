@@ -42,5 +42,6 @@ import Terminus.Widgets.Checkbox
 import Terminus.Widgets.Menu
 import Terminus.Widgets.PieChart
 import Terminus.Widgets.ScrollView
+import Terminus.Widgets.Logger
 
 import Terminus.Frame
