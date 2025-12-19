@@ -44,5 +44,6 @@ import Terminus.Widgets.PieChart
 import Terminus.Widgets.ScrollView
 import Terminus.Widgets.Logger
 import Terminus.Widgets.Image
+import Terminus.Widgets.Form
 
 import Terminus.Frame

@@ -1,5 +1,5 @@
 -- KitchenSink: Combined demo showcasing all example widgets
--- Use F1-F12 or Tab/Shift+Tab to switch demos, q/Esc to quit
+-- Use F1-F12 or Tab to switch demos, q/Esc to quit
 
 import Terminus
 
@@ -1133,6 +1133,133 @@ def update (state : State) (key : Option KeyEvent) : State × Bool :=
 
 end ControlsDemo
 
+namespace FormWidgetDemo
+
+inductive Focus where
+  | name
+  | email
+  | age
+  | subscribe
+  deriving Repr, BEq, Inhabited
+
+structure State where
+  focus : Focus := .name
+  name : TextInput := (TextInput.new.withPlaceholder "________________")
+  email : TextInput := (TextInput.new.withPlaceholder "________________")
+  age : TextInput := (TextInput.new.withPlaceholder "__" |>.withMaxLength 3)
+  subscribe : Bool := true
+  deriving Inhabited
+
+private def focusNext : Focus → Focus
+  | .name => .email
+  | .email => .age
+  | .age => .subscribe
+  | .subscribe => .name
+
+private def focusPrev : Focus → Focus
+  | .name => .subscribe
+  | .email => .name
+  | .age => .email
+  | .subscribe => .age
+
+private def applyFocus (s : State) : State :=
+  { s with
+    name := if s.focus == .name then s.name.focus else s.name.blur,
+    email := if s.focus == .email then s.email.focus else s.email.blur,
+    age := if s.focus == .age then s.age.focus else s.age.blur
+  }
+
+private def inputBlock (focused : Bool) : Block :=
+  let border := if focused then Style.fgColor Color.yellow else Style.dim
+  Block.single.withBorderStyle border
+
+def draw (frame : Frame) (state : State) : Frame := Id.run do
+  let area := frame.area
+  let mut f := frame
+  if area.isEmpty then return f
+
+  let state := applyFocus state
+
+  let main := Block.double
+    |>.withTitle "Form"
+    |>.withTitleStyle (Style.bold.withFg Color.cyan)
+    |>.withBorderStyle (Style.fgColor Color.blue)
+  f := f.render main area
+
+  let inner := main.innerArea area
+  if inner.isEmpty then return f
+
+  let nameInput := state.name.withBlock (inputBlock (state.focus == .name))
+  let emailInput := state.email.withBlock (inputBlock (state.focus == .email))
+  let ageInput := state.age.withBlock (inputBlock (state.focus == .age))
+
+  let subscribeStyle := if state.focus == .subscribe then Style.reversed else {}
+  let subscribe :=
+    (Checkbox.new "Subscribe to newsletter")
+      |>.withChecked state.subscribe
+      |>.withSymbols "[x]" "[ ]"
+      |>.withLabelStyle subscribeStyle
+      |>.withSymbolStyle subscribeStyle
+
+  let buttons :=
+    Paragraph.fromString "   [ Cancel ]  [ Submit ]"
+      |>.withStyle Style.dim
+
+  let ageSmall : AnyWidget := {
+    renderFn := fun a buf => Id.run do
+      let parts := hsplit a [.fixed 10, .fill]
+      if h : 0 < parts.length then
+        Widget.render ageInput parts[0] buf
+      else
+        buf
+  }
+
+  let form :=
+    (Form.new)
+      |>.withBlock (Block.rounded.withTitle "User Details" |>.withBorderStyle (Style.fgColor Color.cyan))
+      |>.withRowSpacing 1
+      |>.withRows [
+        FormRow.fieldOf "Name" nameInput 3,
+        FormRow.fieldOf "Email" emailInput 3,
+        FormRow.fieldWidget "Age" ageSmall 3,
+        FormRow.fullOf subscribe,
+        FormRow.gap 1,
+        FormRow.fullOf buttons
+      ]
+
+  let panels := vsplit inner [.fill, .fixed 2]
+  if h : 0 < panels.length then
+    f := f.render form panels[0]
+
+  if h : 1 < panels.length then
+    let help := Paragraph.fromLines [
+      "Type to edit (focused field shows cursor).",
+      "Up/Down: move focus  Space: toggle checkbox"
+    ] |>.withStyle Style.dim
+    f := f.render help panels[1]
+
+  f
+
+def update (state : State) (key : Option KeyEvent) : State × Bool :=
+  match key with
+  | none => (state, false)
+  | some k =>
+    match k.code with
+    | .up => ({ state with focus := focusPrev state.focus }, false)
+    | .down => ({ state with focus := focusNext state.focus }, false)
+    | .space =>
+      match state.focus with
+      | .subscribe => ({ state with subscribe := !state.subscribe }, false)
+      | _ => (state, false)
+    | _ =>
+      match state.focus with
+      | .name => ({ state with name := state.name.handleKey k }, false)
+      | .email => ({ state with email := state.email.handleKey k }, false)
+      | .age => ({ state with age := state.age.handleKey k }, false)
+      | .subscribe => (state, false)
+
+end FormWidgetDemo
+
 namespace LoggerDemo
 
 structure State where
@@ -1323,7 +1450,8 @@ def demoTitles : Array String :=
     "Image",
     "Dashboard",
     "File Explorer",
-    "Text Editor"
+    "Text Editor",
+    "Form"
   ]
 
 def demoCount : Nat := demoTitles.size
@@ -1340,6 +1468,7 @@ structure KitchenState where
   dashboard : DashboardDemo.State := {}
   explorer : FileExplorerDemo.State := {}
   editor : TextEditorDemo.State := {}
+  form : FormWidgetDemo.State := {}
   deriving Inhabited
 
 
@@ -1461,7 +1590,8 @@ def renderActiveDemo (frame : Frame) (state : KitchenState) (area : Rect) : Fram
   | 8 => renderSubframe frame area ImageDemo.draw state.image
   | 9 => renderSubframe frame area DashboardDemo.draw state.dashboard
   | 10 => renderSubframe frame area FileExplorerDemo.draw state.explorer
-  | _ => renderSubframe frame area TextEditorDemo.draw state.editor
+  | 11 => renderSubframe frame area TextEditorDemo.draw state.editor
+  | _ => renderSubframe frame area FormWidgetDemo.draw state.form
 
 
 def draw (frame : Frame) (state : KitchenState) : Frame := Id.run do
@@ -1490,7 +1620,7 @@ def draw (frame : Frame) (state : KitchenState) : Frame := Id.run do
 
       let inner := headerBlock.innerArea headerArea
       if inner.height > 1 then
-        let help := "F1-F12: Switch | Tab/Shift+Tab: Switch | q/Esc: Quit"
+        let help := "F1-F12: Switch | Tab: Next | q/Esc: Quit"
         let helpX := inner.x + 1
         let helpY := inner.y + 1
         f := f.writeString helpX helpY help Style.dim
@@ -1536,9 +1666,12 @@ def updateActive (state : KitchenState) (key : Option KeyEvent) : KitchenState �
   | 10 =>
     let (explorer, quit) := FileExplorerDemo.update state.explorer key
     ({ state with explorer := explorer }, quit)
-  | _ =>
+  | 11 =>
     let (editor, quit) := TextEditorDemo.update state.editor key
     ({ state with editor := editor }, quit)
+  | _ =>
+    let (form, quit) := FormWidgetDemo.update state.form key
+    ({ state with form := form }, quit)
 
 
 def handleGlobalKeys (state : KitchenState) (key : Option KeyEvent) : KitchenState × Option KeyEvent × Bool :=
@@ -1555,10 +1688,7 @@ def handleGlobalKeys (state : KitchenState) (key : Option KeyEvent) : KitchenSta
         else
           (state, some k, false)
       | .tab =>
-        if k.modifiers.shift then
-          ({ state with active := selectPrev state.active }, none, false)
-        else
-          ({ state with active := selectNext state.active }, none, false)
+        ({ state with active := selectNext state.active }, none, false)
       | _ =>
         (state, some k, false)
 

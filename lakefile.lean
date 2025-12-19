@@ -51,6 +51,9 @@ lean_exe «logger» where
 lean_exe «image» where
   root := `examples.Image
 
+lean_exe «form» where
+  root := `examples.Form
+
 @[test_driver]
 lean_exe «tests» where
   root := `Tests.Main
