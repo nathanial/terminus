@@ -13,5 +13,10 @@ instance : TerminalEffect IO where
   readByte := Terminus.readByte
   writeStdout := Terminus.writeStdout
   flushStdout := Terminus.flushStdout
+  readFileBytes path := do
+    try
+      IO.FS.readBinFile path
+    catch _ =>
+      pure ByteArray.empty
 
 end Terminus

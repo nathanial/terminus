@@ -2,7 +2,9 @@
 
 import Terminus.Core.Buffer
 import Terminus.Core.Cell
+import Terminus.Core.Base64
 import Terminus.Backend.Ansi
+import Terminus.Backend.Commands
 import Terminus.Backend.TerminalEffect
 import Terminus.Backend.TerminalIO
 
@@ -14,6 +16,8 @@ structure Terminal where
   height : Nat
   currentBuffer : Buffer
   previousBuffer : Buffer
+  previousCommandKeys : List String := []
+  previousImageRects : List Rect := []
   deriving Inhabited
 
 namespace Terminal
@@ -26,6 +30,8 @@ def new [Monad m] [TerminalEffect m] : m Terminal := do
     height
     currentBuffer := Buffer.new width height
     previousBuffer := Buffer.new width height
+    previousCommandKeys := []
+    previousImageRects := []
   }
 
 /-- Resize the terminal (call when window size changes) -/
@@ -34,6 +40,8 @@ def resize (term : Terminal) (width height : Nat) : Terminal := {
   height
   currentBuffer := term.currentBuffer.resize width height
   previousBuffer := term.previousBuffer.resize width height
+  previousCommandKeys := []
+  previousImageRects := []
 }
 
 /-- Get the terminal's drawable area as a Rect -/
@@ -70,14 +78,70 @@ private def renderCell [Monad m] [TerminalEffect m] (x y : Nat) (cell : Cell) : 
   TerminalEffect.writeStdout (Ansi.styleCodes cell.style)
   TerminalEffect.writeStdout cell.char.toString
 
+/-- Force redraw of a rectangular region from the current buffer.
+This is used to "erase" non-cell overlays (e.g. inline images) by overwriting with cells. -/
+private def redrawRect [Monad m] [TerminalEffect m] (term : Terminal) (r : Rect) : m Unit := do
+  let x0 := r.x
+  let y0 := r.y
+  let x1 := min (r.x + r.width) term.width
+  let y1 := min (r.y + r.height) term.height
+  for y in [y0 : y1] do
+    for x in [x0 : x1] do
+      renderCell x y (term.currentBuffer.get x y)
+
+private def iterm2ImageEscape (payloadB64 : String) (nameB64 : Option String) (w h : Nat) (preserve : Bool) : String :=
+  let esc := "\x1b]1337;File="
+  let namePart :=
+    match nameB64 with
+    | none => ""
+    | some n => s!"name={n};"
+  let preservePart := if preserve then "preserveAspectRatio=1;" else "preserveAspectRatio=0;"
+  -- width/height are in cells (iTerm2/WezTerm accept this form)
+  let params := s!"inline=1;{preservePart}{namePart}width={w};height={h}:"
+  esc ++ params ++ payloadB64 ++ "\x07"
+
+private def applyCommands [Monad m] [TerminalEffect m] (term : Terminal) (cmds : List TerminalCommand) : m Terminal := do
+  let keys := cmds.map TerminalCommand.key
+  let imageRects := cmds.foldl (fun acc c => match c.rect? with | some r => r :: acc | none => acc) [] |>.reverse
+
+  -- If any prior image rects disappeared (or changed), redraw those regions from the buffer to "erase" overlays.
+  let removed := term.previousImageRects.filter (fun r => !imageRects.contains r)
+  for r in removed do
+    redrawRect term r
+
+  -- Avoid re-sending identical command sets every tick (large image payloads).
+  if keys == term.previousCommandKeys then
+    pure { term with previousCommandKeys := keys, previousImageRects := imageRects }
+  else
+    for cmd in cmds do
+      match cmd with
+      | .image ic =>
+        if ic.rect.isEmpty then
+          pure ()
+        else
+          let bytes ←
+            match ic.source with
+            | .bytes b => pure b
+            | .path p => TerminalEffect.readFileBytes p
+          let payloadB64 := Base64.encode bytes
+          let nameB64 := ic.name.map (fun s => Base64.encode s.toUTF8)
+          match ic.protocol with
+          | .iterm2 =>
+            TerminalEffect.writeStdout (Ansi.cursorToZero ic.rect.x ic.rect.y)
+            TerminalEffect.writeStdout (iterm2ImageEscape payloadB64 nameB64 ic.rect.width ic.rect.height ic.preserveAspectRatio)
+
+    TerminalEffect.flushStdout
+    pure { term with previousCommandKeys := keys, previousImageRects := imageRects }
+
 /-- Flush the current buffer to the terminal using differential updates -/
-def flush [Monad m] [TerminalEffect m] (term : Terminal) : m Terminal := do
+def flush [Monad m] [TerminalEffect m] (term : Terminal) (commands : List TerminalCommand := []) : m Terminal := do
   let changes := Buffer.diff term.previousBuffer term.currentBuffer
   for (x, y, cell) in changes do
     renderCell x y cell
   TerminalEffect.writeStdout Ansi.resetAll
   TerminalEffect.flushStdout
-  pure { term with previousBuffer := term.currentBuffer }
+  let term := { term with previousBuffer := term.currentBuffer }
+  applyCommands term commands
 
 /-- Force a full redraw of the buffer -/
 def draw [Monad m] [TerminalEffect m] (term : Terminal) : m Terminal := do
@@ -94,7 +158,7 @@ def draw [Monad m] [TerminalEffect m] (term : Terminal) : m Terminal := do
       TerminalEffect.writeStdout cell.char.toString
   TerminalEffect.writeStdout Ansi.resetAll
   TerminalEffect.flushStdout
-  pure { term with previousBuffer := term.currentBuffer }
+  pure { term with previousBuffer := term.currentBuffer, previousCommandKeys := [], previousImageRects := [] }
 
 /-- Get a mutable reference to the current buffer for drawing -/
 def getBuffer (term : Terminal) : Buffer := term.currentBuffer

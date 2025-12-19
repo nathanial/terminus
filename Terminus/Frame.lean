@@ -3,6 +3,7 @@
 import Terminus.Core.Buffer
 import Terminus.Core.Rect
 import Terminus.Widgets.Widget
+import Terminus.Backend.Commands
 import Terminus.Backend.Terminal
 import Terminus.Input.Key
 import Terminus.Input.Events
@@ -13,6 +14,7 @@ namespace Terminus
 structure Frame where
   buffer : Buffer
   area : Rect
+  commands : List TerminalCommand := []
   deriving Inhabited
 
 namespace Frame
@@ -21,28 +23,36 @@ namespace Frame
 def new (area : Rect) : Frame := {
   buffer := Buffer.new area.width area.height
   area
+  commands := []
 }
 
 /-- Create a frame from terminal dimensions -/
 def fromTerminal (term : Terminal) : Frame := {
   buffer := term.currentBuffer
   area := term.area
+  commands := []
 }
 
 /-- Get the drawable area -/
 def size (f : Frame) : Rect := f.area
 
+/-- Widget-like rendering that can also emit terminal commands. -/
+class FrameWidget (α : Type) where
+  render : α → Rect → Frame → Frame
+
+instance [Widget α] : FrameWidget α where
+  render w area f := { f with buffer := Widget.render w area f.buffer }
+
 /-- Render a widget into the frame at the given area -/
-def render [Widget α] (f : Frame) (widget : α) (area : Rect) : Frame := {
-  f with buffer := Widget.render widget area f.buffer
-}
+def render [FrameWidget α] (f : Frame) (widget : α) (area : Rect) : Frame :=
+  FrameWidget.render widget area f
 
 /-- Render a widget into the full frame area -/
-def renderFull [Widget α] (f : Frame) (widget : α) : Frame :=
+def renderFull [FrameWidget α] (f : Frame) (widget : α) : Frame :=
   f.render widget f.area
 
 /-- Render a widget with an offset from the frame origin -/
-def renderAt [Widget α] (f : Frame) (widget : α) (x y width height : Nat) : Frame :=
+def renderAt [FrameWidget α] (f : Frame) (widget : α) (x y width height : Nat) : Frame :=
   f.render widget { x, y, width, height }
 
 /-- Set a single cell -/
@@ -56,7 +66,11 @@ def writeString (f : Frame) (x y : Nat) (s : String) (style : Style := {}) : Fra
 }
 
 /-- Clear the frame buffer -/
-def clear (f : Frame) : Frame := { f with buffer := f.buffer.clear }
+def clear (f : Frame) : Frame := { f with buffer := f.buffer.clear, commands := [] }
+
+/-- Add a terminal command to the frame. -/
+def addCommand (f : Frame) (cmd : TerminalCommand) : Frame :=
+  { f with commands := f.commands ++ [cmd] }
 
 end Frame
 
@@ -118,7 +132,7 @@ def tick (app : App State) (draw : DrawFn State) (update : UpdateFn State) : IO 
 
   -- Update terminal buffer and flush
   let term := app.terminal.setBuffer frame.buffer
-  let term ← term.flush
+  let term ← term.flush frame.commands
 
   pure { app with terminal := term }
 

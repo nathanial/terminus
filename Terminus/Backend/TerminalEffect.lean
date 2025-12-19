@@ -23,6 +23,9 @@ class TerminalEffect (m : Type → Type) where
   /-- Flush stdout -/
   flushStdout : m Unit
 
+  /-- Read a file as raw bytes. Used for image protocols and other binary payloads. -/
+  readFileBytes : System.FilePath → m ByteArray
+
 namespace TerminalEffect
 
 /-- Run an action with raw mode enabled, restoring settings on exit -/

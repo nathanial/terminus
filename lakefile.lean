@@ -48,6 +48,9 @@ lean_exe «piechart» where
 lean_exe «logger» where
   root := `examples.Logger
 
+lean_exe «image» where
+  root := `examples.Image
+
 @[test_driver]
 lean_exe «tests» where
   root := `Tests.Main

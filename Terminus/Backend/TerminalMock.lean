@@ -1,6 +1,7 @@
 -- Terminus.Backend.TerminalMock: Mock implementation of TerminalEffect for testing
 
 import Terminus.Backend.TerminalEffect
+import Std.Data.HashMap
 
 namespace Terminus
 
@@ -16,7 +17,9 @@ structure MockTerminalState where
   outputBuffer : String := ""
   /-- Whether output has been flushed -/
   flushed : Bool := true
-  deriving Repr, Inhabited
+  /-- Virtual file system for `readFileBytes`. Keys are string paths. -/
+  files : Std.HashMap String ByteArray := {}
+  deriving Inhabited
 
 /-- State monad for mock terminal operations -/
 abbrev MockTerminal := StateM MockTerminalState
@@ -43,18 +46,22 @@ instance : TerminalEffect MockTerminal where
 
   flushStdout := modify fun s => { s with flushed := true }
 
+  readFileBytes path := do
+    let s ← get
+    pure (s.files.getD path.toString ByteArray.empty)
+
 namespace MockTerminal
 
 /-- Run a mock terminal computation with initial state -/
-def run (action : MockTerminal α) (initial : MockTerminalState := {}) : α × MockTerminalState :=
+def run (action : MockTerminal α) (initial : MockTerminalState := ({} : MockTerminalState)) : α × MockTerminalState :=
   StateT.run action initial
 
 /-- Run and return only the result -/
-def eval (action : MockTerminal α) (initial : MockTerminalState := {}) : α :=
+def eval (action : MockTerminal α) (initial : MockTerminalState := ({} : MockTerminalState)) : α :=
   (run action initial).1
 
 /-- Run and return only the final state -/
-def exec (action : MockTerminal α) (initial : MockTerminalState := {}) : MockTerminalState :=
+def exec (action : MockTerminal α) (initial : MockTerminalState := ({} : MockTerminalState)) : MockTerminalState :=
   (run action initial).2
 
 /-- Create initial state with preset input bytes -/
@@ -68,6 +75,10 @@ def withSize (width height : Nat) : MockTerminalState :=
 /-- Create initial state with both input and size -/
 def withInputAndSize (bytes : List UInt8) (width height : Nat) : MockTerminalState :=
   { inputQueue := bytes, terminalSize := (width, height) }
+
+/-- Add a file to the virtual filesystem. -/
+def withFile (path : String) (bytes : ByteArray) (s : MockTerminalState := ({} : MockTerminalState)) : MockTerminalState :=
+  { s with files := s.files.insert path bytes }
 
 /-- Get the captured output from a mock terminal run -/
 def getOutput (state : MockTerminalState) : String :=

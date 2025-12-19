@@ -1,5 +1,5 @@
 -- KitchenSink: Combined demo showcasing all example widgets
--- Use F1-F11 or Tab/Shift+Tab to switch demos, q/Esc to quit
+-- Use F1-F12 or Tab/Shift+Tab to switch demos, q/Esc to quit
 
 import Terminus
 
@@ -1249,6 +1249,67 @@ def update (state : State) (key : Option KeyEvent) : State × Bool :=
 
 end LoggerDemo
 
+namespace ImageDemo
+
+private def samplePng : ByteArray :=
+  ByteArray.mk #[
+    137, 80, 78, 71, 13, 10, 26, 10, 0, 0, 0, 13, 73, 72, 68, 82, 0, 0, 0, 1, 0, 0, 0, 1, 8, 4,
+    0, 0, 0, 181, 28, 12, 2, 0, 0, 0, 11, 73, 68, 65, 84, 120, 218, 99, 252, 255, 31, 0, 3, 3, 2,
+    0, 239, 1, 207, 107, 0, 0, 0, 0, 73, 69, 78, 68, 174, 66, 96, 130
+  ]
+
+structure State where
+  preserve : Bool := true
+  deriving Inhabited
+
+def draw (frame : Frame) (state : State) : Frame := Id.run do
+  let area := frame.area
+  let mut f := frame
+  if area.isEmpty then return f
+
+  let block := Block.double
+    |>.withTitle "Image (iTerm2/WezTerm)"
+    |>.withBorderStyle (Style.fgColor Color.blue)
+  f := f.render block area
+
+  let inner := block.innerArea area
+  if inner.isEmpty then return f
+
+  let sections := vsplit inner [.fill, .fixed 5]
+
+  if h : 0 < sections.length then
+    let imgBlock := Block.rounded
+      |>.withTitle (if state.preserve then "preserve AR" else "stretch")
+      |>.withBorderStyle (Style.fgColor Color.cyan)
+    let img := Image.fromBytes samplePng
+      |>.withName (some "sample.png")
+      |>.withPreserveAspectRatio state.preserve
+      |>.withBlock imgBlock
+      |>.withBackground (Style.bgColor Color.black)
+    f := f.render img sections[0]
+
+  if h : 1 < sections.length then
+    let help := Paragraph.fromLines [
+      "This uses the iTerm2 inline image protocol.",
+      "If you don't see an image, try iTerm2 or WezTerm.",
+      "",
+      "p: toggle preserve aspect ratio"
+    ] |>.withStyle Style.dim
+      |>.withBlock (Block.rounded.withTitle "Help" |>.withBorderStyle (Style.fgColor Color.cyan))
+    f := f.render help sections[1]
+
+  f
+
+def update (state : State) (key : Option KeyEvent) : State × Bool :=
+  match key with
+  | none => (state, false)
+  | some k =>
+    match k.code with
+    | .char 'p' => ({ state with preserve := !state.preserve }, false)
+    | _ => (state, false)
+
+end ImageDemo
+
 def demoTitles : Array String :=
   #[
     "Hello",
@@ -1259,6 +1320,7 @@ def demoTitles : Array String :=
     "ScrollView",
     "Controls",
     "Logger",
+    "Image",
     "Dashboard",
     "File Explorer",
     "Text Editor"
@@ -1274,6 +1336,7 @@ structure KitchenState where
   scrollView : ScrollViewDemo.State := {}
   controls : ControlsDemo.State := {}
   logger : LoggerDemo.State := {}
+  image : ImageDemo.State := {}
   dashboard : DashboardDemo.State := {}
   explorer : FileExplorerDemo.State := {}
   editor : TextEditorDemo.State := {}
@@ -1297,7 +1360,8 @@ def renderSubframe (frame : Frame) (area : Rect) (draw : Frame → α → Frame)
   let subArea : Rect := { x := 0, y := 0, width := area.width, height := area.height }
   let subFrame := draw (Frame.new subArea) state
   let merged := frame.buffer.merge subFrame.buffer area.x area.y
-  { frame with buffer := merged }
+  let cmds := subFrame.commands.map (fun c => TerminalCommand.offset c area.x area.y)
+  { frame with buffer := merged, commands := frame.commands ++ cmds }
 
 
 def drawHello (frame : Frame) (_ : Unit) : Frame := Id.run do
@@ -1394,8 +1458,9 @@ def renderActiveDemo (frame : Frame) (state : KitchenState) (area : Rect) : Fram
   | 5 => renderSubframe frame area ScrollViewDemo.draw state.scrollView
   | 6 => renderSubframe frame area ControlsDemo.draw state.controls
   | 7 => renderSubframe frame area LoggerDemo.draw state.logger
-  | 8 => renderSubframe frame area DashboardDemo.draw state.dashboard
-  | 9 => renderSubframe frame area FileExplorerDemo.draw state.explorer
+  | 8 => renderSubframe frame area ImageDemo.draw state.image
+  | 9 => renderSubframe frame area DashboardDemo.draw state.dashboard
+  | 10 => renderSubframe frame area FileExplorerDemo.draw state.explorer
   | _ => renderSubframe frame area TextEditorDemo.draw state.editor
 
 
@@ -1425,7 +1490,7 @@ def draw (frame : Frame) (state : KitchenState) : Frame := Id.run do
 
       let inner := headerBlock.innerArea headerArea
       if inner.height > 1 then
-        let help := "F1-F11: Switch | Tab/Shift+Tab: Switch | q/Esc: Quit"
+        let help := "F1-F12: Switch | Tab/Shift+Tab: Switch | q/Esc: Quit"
         let helpX := inner.x + 1
         let helpY := inner.y + 1
         f := f.writeString helpX helpY help Style.dim
@@ -1463,9 +1528,12 @@ def updateActive (state : KitchenState) (key : Option KeyEvent) : KitchenState �
     let (logger, quit) := LoggerDemo.update state.logger key
     ({ state with logger := logger }, quit)
   | 8 =>
+    let (image, quit) := ImageDemo.update state.image key
+    ({ state with image := image }, quit)
+  | 9 =>
     let (dashboard, quit) := DashboardDemo.update state.dashboard key
     ({ state with dashboard := dashboard }, quit)
-  | 9 =>
+  | 10 =>
     let (explorer, quit) := FileExplorerDemo.update state.explorer key
     ({ state with explorer := explorer }, quit)
   | _ =>
