@@ -68,15 +68,18 @@ def draw (frame : Frame) (state : CounterState) : Frame := Id.run do
 
   f
 
-def update (state : CounterState) (key : KeyEvent) : CounterState × Bool :=
-  match key.code with
-  | .char 'q' => (state, true)  -- Quit
-  | .char '+' | .up => ({ state with count := min (state.count + 1) state.maxCount }, false)
-  | .char '-' | .down => ({ state with count := state.count - 1 }, false)
-  | .char 'r' => ({ state with count := 0 }, false)
-  | _ =>
-    if key.isCtrlC || key.isCtrlQ then (state, true)
-    else (state, false)
+def update (state : CounterState) (key : Option KeyEvent) : CounterState × Bool :=
+  match key with
+  | none => (state, false)
+  | some k =>
+    match k.code with
+    | .char 'q' => (state, true)  -- Quit
+    | .char '+' | .up => ({ state with count := min (state.count + 1) state.maxCount }, false)
+    | .char '-' | .down => ({ state with count := state.count - 1 }, false)
+    | .char 'r' => ({ state with count := 0 }, false)
+    | _ =>
+      if k.isCtrlC || k.isCtrlQ then (state, true)
+      else (state, false)
 
 def main : IO Unit := do
   let initialState : CounterState := { count := 50 }

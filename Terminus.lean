@@ -28,6 +28,7 @@ import Terminus.Widgets.LineGauge
 import Terminus.Widgets.Tabs
 import Terminus.Widgets.Sparkline
 import Terminus.Widgets.Scrollbar
+import Terminus.Widgets.Spinner
 import Terminus.Widgets.Popup
 import Terminus.Widgets.BarChart
 import Terminus.Widgets.Tree

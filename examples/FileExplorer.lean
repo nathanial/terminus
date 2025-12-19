@@ -109,61 +109,64 @@ def draw (frame : Frame) (state : FileExplorerState) : Frame := Id.run do
 
   f
 
-def update (state : FileExplorerState) (key : KeyEvent) : FileExplorerState × Bool :=
-  -- Handle popup mode
-  if state.showPopup then
-    match key.code with
-    | .char 'y' | .char 'Y' | .enter =>
-      if state.confirmPopup.selectedYes then
-        -- Delete action (just close popup for demo)
-        ({ state with showPopup := false }, false)
-      else
-        ({ state with showPopup := false }, false)
-    | .char 'n' | .char 'N' | .escape =>
-      ({ state with showPopup := false }, false)
-    | .left | .right | .tab =>
-      ({ state with confirmPopup := state.confirmPopup.toggle }, false)
-    | _ => (state, false)
-  else
-    match key.code with
-    | .char 'q' => (state, true)
-    | .up =>
-      ({ state with tree := state.tree.selectPrev }, false)
-    | .down =>
-      ({ state with tree := state.tree.selectNext }, false)
-    | .enter | .char ' ' =>
-      ({ state with tree := state.tree.toggleSelected }, false)
-    | .char 'd' | .char 'D' =>
-      -- Show delete confirmation popup
-      match state.tree.getSelected with
-      | some line =>
-        let popup := ConfirmPopup.new s!"Delete '{line.label}'?"
-          |>.withYesLabel "Delete"
-          |>.withNoLabel "Cancel"
-          |>.selectNo  -- Default to Cancel for safety
-        ({ state with showPopup := true, confirmPopup := popup }, false)
-      | none => (state, false)
-    | .left =>
-      -- Collapse current node or move to parent
-      match state.tree.getSelected with
-      | some line =>
-        if !line.isLeaf && line.isExpanded then
-          ({ state with tree := state.tree.toggleSelected }, false)
+def update (state : FileExplorerState) (key : Option KeyEvent) : FileExplorerState × Bool :=
+  match key with
+  | none => (state, false)
+  | some k =>
+    -- Handle popup mode
+    if state.showPopup then
+      match k.code with
+      | .char 'y' | .char 'Y' | .enter =>
+        if state.confirmPopup.selectedYes then
+          -- Delete action (just close popup for demo)
+          ({ state with showPopup := false }, false)
         else
-          (state, false)
-      | none => (state, false)
-    | .right =>
-      -- Expand current node
-      match state.tree.getSelected with
-      | some line =>
-        if !line.isLeaf && !line.isExpanded then
-          ({ state with tree := state.tree.toggleSelected }, false)
-        else
-          (state, false)
-      | none => (state, false)
-    | _ =>
-      if key.isCtrlC || key.isCtrlQ then (state, true)
-      else (state, false)
+          ({ state with showPopup := false }, false)
+      | .char 'n' | .char 'N' | .escape =>
+        ({ state with showPopup := false }, false)
+      | .left | .right | .tab =>
+        ({ state with confirmPopup := state.confirmPopup.toggle }, false)
+      | _ => (state, false)
+    else
+      match k.code with
+      | .char 'q' => (state, true)
+      | .up =>
+        ({ state with tree := state.tree.selectPrev }, false)
+      | .down =>
+        ({ state with tree := state.tree.selectNext }, false)
+      | .enter | .char ' ' =>
+        ({ state with tree := state.tree.toggleSelected }, false)
+      | .char 'd' | .char 'D' =>
+        -- Show delete confirmation popup
+        match state.tree.getSelected with
+        | some line =>
+          let popup := ConfirmPopup.new s!"Delete '{line.label}'?"
+            |>.withYesLabel "Delete"
+            |>.withNoLabel "Cancel"
+            |>.selectNo  -- Default to Cancel for safety
+          ({ state with showPopup := true, confirmPopup := popup }, false)
+        | none => (state, false)
+      | .left =>
+        -- Collapse current node or move to parent
+        match state.tree.getSelected with
+        | some line =>
+          if !line.isLeaf && line.isExpanded then
+            ({ state with tree := state.tree.toggleSelected }, false)
+          else
+            (state, false)
+        | none => (state, false)
+      | .right =>
+        -- Expand current node
+        match state.tree.getSelected with
+        | some line =>
+          if !line.isLeaf && !line.isExpanded then
+            ({ state with tree := state.tree.toggleSelected }, false)
+          else
+            (state, false)
+        | none => (state, false)
+      | _ =>
+        if k.isCtrlC || k.isCtrlQ then (state, true)
+        else (state, false)
 
 def main : IO Unit := do
   let initialState : FileExplorerState := {}

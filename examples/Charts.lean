@@ -123,34 +123,37 @@ def draw (frame : Frame) (state : ChartsState) : Frame := Id.run do
 
   f
 
-def update (state : ChartsState) (key : KeyEvent) : ChartsState × Bool :=
-  match key.code with
-  | .char 'q' => (state, true)
-  | .tab =>
-    ({ state with activeTab := (state.activeTab + 1) % 3 }, false)
-  | .char '1' => ({ state with activeTab := 0 }, false)
-  | .char '2' => ({ state with activeTab := 1 }, false)
-  | .char '3' => ({ state with activeTab := 2 }, false)
-  | .left =>
-    ({ state with activeTab := if state.activeTab == 0 then 2 else state.activeTab - 1 }, false)
-  | .right =>
-    ({ state with activeTab := (state.activeTab + 1) % 3 }, false)
-  | _ =>
-    if key.isCtrlC || key.isCtrlQ then (state, true)
-    else
-      -- Update sparkline data on any other key (simulates real-time updates)
-      let newTick := state.tick + 1
-      let newValue1 := generateSparklineValue newTick 0
-      let newValue2 := generateSparklineValue newTick 2.5
+def update (state : ChartsState) (key : Option KeyEvent) : ChartsState × Bool :=
+  -- Always update sparkline data for animation
+  let newTick := state.tick + 1
+  let newValue1 := generateSparklineValue newTick 0
+  let newValue2 := generateSparklineValue newTick 2.5
+  let newData1 := (state.sparklineData ++ [newValue1]).drop (if state.sparklineData.length >= 50 then 1 else 0)
+  let newData2 := (state.sparklineData2 ++ [newValue2]).drop (if state.sparklineData2.length >= 50 then 1 else 0)
+  let state := { state with
+    tick := newTick,
+    sparklineData := newData1,
+    sparklineData2 := newData2
+  }
 
-      let newData1 := (state.sparklineData ++ [newValue1]).drop (if state.sparklineData.length >= 50 then 1 else 0)
-      let newData2 := (state.sparklineData2 ++ [newValue2]).drop (if state.sparklineData2.length >= 50 then 1 else 0)
-
-      ({ state with
-        tick := newTick,
-        sparklineData := newData1,
-        sparklineData2 := newData2
-      }, false)
+  -- Handle key events
+  match key with
+  | none => (state, false)
+  | some k =>
+    match k.code with
+    | .char 'q' => (state, true)
+    | .tab =>
+      ({ state with activeTab := (state.activeTab + 1) % 3 }, false)
+    | .char '1' => ({ state with activeTab := 0 }, false)
+    | .char '2' => ({ state with activeTab := 1 }, false)
+    | .char '3' => ({ state with activeTab := 2 }, false)
+    | .left =>
+      ({ state with activeTab := if state.activeTab == 0 then 2 else state.activeTab - 1 }, false)
+    | .right =>
+      ({ state with activeTab := (state.activeTab + 1) % 3 }, false)
+    | _ =>
+      if k.isCtrlC || k.isCtrlQ then (state, true)
+      else (state, false)
 
 def main : IO Unit := do
   -- Initialize with some sparkline data

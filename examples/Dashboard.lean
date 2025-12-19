@@ -118,22 +118,55 @@ def draw (frame : Frame) (state : DashboardState) : Frame := Id.run do
         |>.withBlock (Block.single.withTitle "Processes" |>.withBorderStyle (Style.fgColor Color.blue))
       f := f.render table contentArea
 
-    | _ => -- Network tab (placeholder)
-      -- Demonstrate Clear widget: clear area with a dark background before rendering
+    | _ => -- Network tab - demonstrates Spinner and Clear widgets
+      -- Clear the area with a dark background first
       let clearBg := Clear.new.withBg Color.black
       f := f.render clearBg contentArea
 
-      let placeholder := Paragraph.fromLines [
-        "",
-        "Network statistics coming soon...",
-        "",
-        "This tab demonstrates the Clear widget",
-        "which resets an area before rendering.",
-        "(Background cleared to black)"
-      ] |>.centered
-        |>.withStyle (Style.fgColor Color.yellow)
-        |>.withBlock (Block.double.withTitle "Network" |>.withBorderStyle (Style.fgColor Color.yellow))
-      f := f.render placeholder contentArea
+      -- Render a block around the content
+      let netBlock := Block.double.withTitle "Network" |>.withBorderStyle (Style.fgColor Color.yellow)
+      f := f.render netBlock contentArea
+      let inner := netBlock.innerArea contentArea
+
+      -- Split into rows for different spinner demos
+      let rows := vsplit inner [.fixed 1, .fixed 1, .fixed 1, .fixed 1, .fixed 1, .fixed 1, .fill]
+
+      -- Spinner demos with different styles
+      if hr : 0 < rows.length then
+        let spinner := Spinner.dots.withFrame (state.tick / 4)
+          |>.withLabel "Connecting to server..."
+          |>.withStyle (Style.fgColor Color.cyan)
+        f := f.render spinner rows[0]
+
+      if hr : 1 < rows.length then
+        let spinner := Spinner.line.withFrame (state.tick / 6)
+          |>.withLabel "Fetching network stats..."
+          |>.withStyle (Style.fgColor Color.green)
+        f := f.render spinner rows[1]
+
+      if hr : 2 < rows.length then
+        let spinner := Spinner.arc.withFrame (state.tick / 5)
+          |>.withLabel "Scanning ports..."
+          |>.withStyle (Style.fgColor Color.magenta)
+        f := f.render spinner rows[2]
+
+      if hr : 3 < rows.length then
+        let spinner := Spinner.arrows.withFrame (state.tick / 4)
+          |>.withLabel "Downloading updates..."
+          |>.withStyle (Style.fgColor Color.yellow)
+        f := f.render spinner rows[3]
+
+      if hr : 4 < rows.length then
+        let spinner := Spinner.blocks.withFrame (state.tick / 5)
+          |>.withLabel "Processing packets..."
+          |>.withStyle (Style.fgColor Color.blue)
+        f := f.render spinner rows[4]
+
+      if hr : 5 < rows.length then
+        let spinner := Spinner.growing.withFrame (state.tick / 3)
+          |>.withLabel "Loading..."
+          |>.withStyle (Style.fgColor Color.white)
+        f := f.render spinner rows[5]
 
   -- Status bar at the very bottom
   let statusY := area.height - 1
@@ -142,43 +175,47 @@ def draw (frame : Frame) (state : DashboardState) : Frame := Id.run do
 
   f
 
-def update (state : DashboardState) (key : KeyEvent) : DashboardState × Bool :=
-  match key.code with
-  | .char 'q' => (state, true)
-  | .tab =>
-    ({ state with activeTab := (state.activeTab + 1) % 3 }, false)
-  | .left =>
-    ({ state with activeTab := if state.activeTab == 0 then 2 else state.activeTab - 1 }, false)
-  | .right =>
-    ({ state with activeTab := (state.activeTab + 1) % 3 }, false)
-  | .up =>
-    if state.activeTab == 0 then
-      ({ state with selectedItem := if state.selectedItem == 0 then 0 else state.selectedItem - 1 }, false)
-    else if state.activeTab == 1 then
-      ({ state with selectedRow := if state.selectedRow == 0 then 0 else state.selectedRow - 1 }, false)
-    else
-      (state, false)
-  | .down =>
-    if state.activeTab == 0 then
-      ({ state with selectedItem := Nat.min (state.selectedItem + 1) (listItems.length - 1) }, false)
-    else if state.activeTab == 1 then
-      ({ state with selectedRow := Nat.min (state.selectedRow + 1) (tableData.length - 1) }, false)
-    else
-      (state, false)
-  | .char '1' => ({ state with activeTab := 0 }, false)
-  | .char '2' => ({ state with activeTab := 1 }, false)
-  | .char '3' => ({ state with activeTab := 2 }, false)
-  | _ =>
-    if key.isCtrlC || key.isCtrlQ then (state, true)
-    else
-      -- Simulate changing resource usage
-      let newState := { state with
-        tick := state.tick + 1
-        cpuUsage := 0.3 + 0.4 * (Float.sin (state.tick.toFloat * 0.1)).abs
-        memUsage := 0.6 + 0.2 * (Float.cos (state.tick.toFloat * 0.05)).abs
-        netUsage := 0.2 + 0.6 * (Float.sin (state.tick.toFloat * 0.15)).abs
-      }
-      (newState, false)
+def update (state : DashboardState) (key : Option KeyEvent) : DashboardState × Bool :=
+  -- Always increment tick for animations
+  let state := { state with
+    tick := state.tick + 1
+    cpuUsage := 0.3 + 0.4 * (Float.sin (state.tick.toFloat * 0.1)).abs
+    memUsage := 0.6 + 0.2 * (Float.cos (state.tick.toFloat * 0.05)).abs
+    netUsage := 0.2 + 0.6 * (Float.sin (state.tick.toFloat * 0.15)).abs
+  }
+
+  -- Handle key events if present
+  match key with
+  | none => (state, false)
+  | some k =>
+    match k.code with
+    | .char 'q' => (state, true)
+    | .tab =>
+      ({ state with activeTab := (state.activeTab + 1) % 3 }, false)
+    | .left =>
+      ({ state with activeTab := if state.activeTab == 0 then 2 else state.activeTab - 1 }, false)
+    | .right =>
+      ({ state with activeTab := (state.activeTab + 1) % 3 }, false)
+    | .up =>
+      if state.activeTab == 0 then
+        ({ state with selectedItem := if state.selectedItem == 0 then 0 else state.selectedItem - 1 }, false)
+      else if state.activeTab == 1 then
+        ({ state with selectedRow := if state.selectedRow == 0 then 0 else state.selectedRow - 1 }, false)
+      else
+        (state, false)
+    | .down =>
+      if state.activeTab == 0 then
+        ({ state with selectedItem := Nat.min (state.selectedItem + 1) (listItems.length - 1) }, false)
+      else if state.activeTab == 1 then
+        ({ state with selectedRow := Nat.min (state.selectedRow + 1) (tableData.length - 1) }, false)
+      else
+        (state, false)
+    | .char '1' => ({ state with activeTab := 0 }, false)
+    | .char '2' => ({ state with activeTab := 1 }, false)
+    | .char '3' => ({ state with activeTab := 2 }, false)
+    | _ =>
+      if k.isCtrlC || k.isCtrlQ then (state, true)
+      else (state, false)
 
 def main : IO Unit := do
   App.runApp ({} : DashboardState) draw update

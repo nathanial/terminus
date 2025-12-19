@@ -104,39 +104,42 @@ def draw (frame : Frame) (state : EditorState) : Frame := Id.run do
 
   f
 
-def update (state : EditorState) (key : KeyEvent) : EditorState × Bool :=
-  -- Global controls
-  if key.code == .escape then (state, true)
-  else match key.code with
-  -- Tab to switch focus
-  | .tab =>
-    let nextFocus := match state.focus with
-      | .filename => .content
-      | .content => .calendar
-      | .calendar => .filename
-    ({ state with focus := nextFocus }, false)
+def update (state : EditorState) (key : Option KeyEvent) : EditorState × Bool :=
+  match key with
+  | none => (state, false)
+  | some k =>
+    -- Global controls
+    if k.code == .escape then (state, true)
+    else match k.code with
+    -- Tab to switch focus
+    | .tab =>
+      let nextFocus := match state.focus with
+        | .filename => .content
+        | .content => .calendar
+        | .calendar => .filename
+      ({ state with focus := nextFocus }, false)
 
-  -- Handle input based on focus
-  | _ =>
-    match state.focus with
-    | .filename =>
-      let newFilename := state.filename.handleKey key
-      ({ state with filename := newFilename }, false)
+    -- Handle input based on focus
+    | _ =>
+      match state.focus with
+      | .filename =>
+        let newFilename := state.filename.handleKey k
+        ({ state with filename := newFilename }, false)
 
-    | .content =>
-      let newContent := state.content.handleKey key
-      ({ state with content := newContent }, false)
+      | .content =>
+        let newContent := state.content.handleKey k
+        ({ state with content := newContent }, false)
 
-    | .calendar =>
-      let newCalendar := match key.code with
-        | .left => state.calendar.prevDay
-        | .right => state.calendar.nextDay
-        | .up => state.calendar.prevWeek
-        | .down => state.calendar.nextWeek
-        | .char 'h' => state.calendar.prevMonth
-        | .char 'l' => state.calendar.nextMonth
-        | _ => state.calendar
-      ({ state with calendar := newCalendar }, false)
+      | .calendar =>
+        let newCalendar := match k.code with
+          | .left => state.calendar.prevDay
+          | .right => state.calendar.nextDay
+          | .up => state.calendar.prevWeek
+          | .down => state.calendar.nextWeek
+          | .char 'h' => state.calendar.prevMonth
+          | .char 'l' => state.calendar.nextMonth
+          | _ => state.calendar
+        ({ state with calendar := newCalendar }, false)
 
 def main : IO Unit := do
   let initialState : EditorState := {}
