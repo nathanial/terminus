@@ -131,7 +131,7 @@ def draw (frame : Frame) (state : DashboardState) : Frame := Id.run do
       -- Split into rows for different spinner demos
       let rows := vsplit inner [.fixed 1, .fixed 1, .fixed 1, .fixed 1, .fixed 1, .fixed 1, .fill]
 
-      -- Spinner demos with different styles
+      -- Spinner demos with different styles (divisor controls speed)
       if hr : 0 < rows.length then
         let spinner := Spinner.dots.withFrame (state.tick / 4)
           |>.withLabel "Connecting to server..."

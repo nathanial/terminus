@@ -35,9 +35,9 @@ LEAN_EXPORT lean_obj_res terminus_enable_raw_mode(lean_obj_arg world) {
     // Local flags: disable echo, canonical mode, signals, extended input
     raw.c_lflag &= ~(ECHO | ICANON | IEXTEN | ISIG);
 
-    // Control chars: read() returns after 0 bytes (non-blocking with timeout 0)
+    // Control chars: non-blocking read (VMIN=0, VTIME=0 means return immediately)
     raw.c_cc[VMIN] = 0;
-    raw.c_cc[VTIME] = 1; // 100ms timeout
+    raw.c_cc[VTIME] = 0; // No timeout - return immediately
 
     if (tcsetattr(STDIN_FILENO, TCSAFLUSH, &raw) == -1) {
         return lean_io_result_mk_error(lean_mk_io_user_error(lean_mk_string("Failed to set terminal to raw mode")));
