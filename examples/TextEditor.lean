@@ -9,6 +9,7 @@ open Terminus
 inductive Focus where
   | filename
   | content
+  | preview
   | calendar
   deriving BEq, Inhabited
 
@@ -29,7 +30,23 @@ structure EditorState where
   ] |>.showNumbers
   calendar : Calendar := Calendar.new 2025 1 |>.withSelectedDay 15
   focus : Focus := .content
+  previewOffsetX : Nat := 0
+  previewOffsetY : Nat := 0
   deriving Inhabited
+
+private def previewLines (state : EditorState) : List String := Id.run do
+  let mut i : Nat := 0
+  let mut out : List String := []
+  for line in state.content.lines.toList do
+    let num := s!"{i + 1}"
+    let padLen := if num.length >= 4 then 0 else 4 - num.length
+    let pad := String.ofList (List.replicate padLen ' ')
+    out := out ++ [s!"{pad}{num} │ {line}"]
+    i := i + 1
+  out
+
+private def maxLineLen (lines : List String) : Nat :=
+  lines.foldl (fun acc s => Nat.max acc s.length) 0
 
 def draw (frame : Frame) (state : EditorState) : Frame := Id.run do
   let area := frame.area
@@ -61,7 +78,7 @@ def draw (frame : Frame) (state : EditorState) : Frame := Id.run do
   -- Content area
   if h : 1 < sections.length then
     let contentSection := sections[1]
-    let panels := hsplit contentSection [.fill, .fixed 24]
+    let panels := hsplit contentSection [.fill, .fixed 32]
 
     -- Text area
     if hp : 0 < panels.length then
@@ -74,15 +91,50 @@ def draw (frame : Frame) (state : EditorState) : Frame := Id.run do
         |>.withBlock (Block.rounded.withTitle "Content" |>.withBorderStyle borderStyle)
       f := f.render editor textArea
 
-    -- Calendar
+    -- Preview + Calendar
     if hp : 1 < panels.length then
-      let calendarArea := panels[1]
-      let isFocused := state.focus == .calendar
-      let borderStyle := if isFocused then Style.fgColor Color.yellow else Style.fgColor Color.white
-      let cal := state.calendar
-        |>.withSelectedStyle (if isFocused then Style.reversed else Style.bold)
-        |>.withBlock (Block.rounded.withTitle "Date" |>.withBorderStyle borderStyle)
-      f := f.render cal calendarArea
+      let rightArea := panels[1]
+      let rightSections := (Layout.vertical [.fill, .fixed 10])
+        |>.withSpacing 1
+        |>.split rightArea
+
+      -- Preview (ScrollView)
+      if hr : 0 < rightSections.length then
+        let previewOuter := rightSections[0]
+        let isFocused := state.focus == .preview
+        let borderStyle := if isFocused then Style.fgColor Color.yellow else Style.fgColor Color.white
+        let previewBlock := Block.rounded.withTitle "Preview (ScrollView)" |>.withBorderStyle borderStyle
+        f := f.render previewBlock previewOuter
+        let previewInner := previewBlock.innerArea previewOuter
+        if !previewInner.isEmpty then
+          let previewPanels := hsplit previewInner [.fill, .fixed 1]
+          if hp2 : 0 < previewPanels.length then
+            let scrollArea := previewPanels[0]
+            let lines := previewLines state
+            let contentW := maxLineLen lines
+            let contentH := lines.length
+            let para := Paragraph.fromLines lines |>.withStyle Style.dim
+            let view := (ScrollView.new para)
+              |>.withContentSize contentW contentH
+              |>.withOffset state.previewOffsetX state.previewOffsetY
+            f := f.render view scrollArea
+
+            if hp2b : 1 < previewPanels.length then
+              let barArea := previewPanels[1]
+              let scroll := Scrollbar.vertical state.previewOffsetY contentH scrollArea.height
+                |>.withThumbStyle (Style.fgColor Color.cyan)
+                |>.withTrackStyle Style.dim
+              f := f.render scroll barArea
+
+      -- Calendar
+      if hr : 1 < rightSections.length then
+        let calendarArea := rightSections[1]
+        let isFocused := state.focus == .calendar
+        let borderStyle := if isFocused then Style.fgColor Color.yellow else Style.fgColor Color.white
+        let cal := state.calendar
+          |>.withSelectedStyle (if isFocused then Style.reversed else Style.bold)
+          |>.withBlock (Block.rounded.withTitle "Date" |>.withBorderStyle borderStyle)
+        f := f.render cal calendarArea
 
   -- Status bar
   if h : 2 < sections.length then
@@ -90,11 +142,12 @@ def draw (frame : Frame) (state : EditorState) : Frame := Id.run do
     let focusName := match state.focus with
       | .filename => "Filename"
       | .content => "Content"
+      | .preview => "Preview"
       | .calendar => "Calendar"
 
     let statusLeft := s!"Focus: {focusName}"
     let statusRight := s!"Ln {state.content.cursorRow + 1}, Col {state.content.cursorCol + 1}"
-    let statusMiddle := "Tab: Switch | Esc: Quit"
+    let statusMiddle := "Tab: Switch | Esc: Quit | Preview: arrows/pgup/pgdn/home/end"
 
     f := f.writeString statusArea.x statusArea.y statusLeft (Style.dim.withFg Color.cyan)
     let middleX := statusArea.x + (statusArea.width - statusMiddle.length) / 2
@@ -115,7 +168,8 @@ def update (state : EditorState) (key : Option KeyEvent) : EditorState × Bool :
     | .tab =>
       let nextFocus := match state.focus with
         | .filename => .content
-        | .content => .calendar
+        | .content => .preview
+        | .preview => .calendar
         | .calendar => .filename
       ({ state with focus := nextFocus }, false)
 
@@ -129,6 +183,19 @@ def update (state : EditorState) (key : Option KeyEvent) : EditorState × Bool :
       | .content =>
         let newContent := state.content.handleKey k
         ({ state with content := newContent }, false)
+
+      | .preview =>
+        let maxY := if state.content.lines.size == 0 then 0 else state.content.lines.size - 1
+        match k.code with
+        | .up => ({ state with previewOffsetY := state.previewOffsetY - 1 }, false)
+        | .down => ({ state with previewOffsetY := state.previewOffsetY + 1 }, false)
+        | .left => ({ state with previewOffsetX := state.previewOffsetX - 1 }, false)
+        | .right => ({ state with previewOffsetX := state.previewOffsetX + 1 }, false)
+        | .pageUp => ({ state with previewOffsetY := state.previewOffsetY - 10 }, false)
+        | .pageDown => ({ state with previewOffsetY := state.previewOffsetY + 10 }, false)
+        | .home => ({ state with previewOffsetX := 0, previewOffsetY := 0 }, false)
+        | .«end» => ({ state with previewOffsetY := maxY }, false)
+        | _ => (state, false)
 
       | .calendar =>
         let newCalendar := match k.code with

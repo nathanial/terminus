@@ -1,5 +1,5 @@
 -- KitchenSink: Combined demo showcasing all example widgets
--- Use F1-F9 or Tab/Shift+Tab to switch demos, q/Esc to quit
+-- Use F1-F10 or Tab/Shift+Tab to switch demos, q/Esc to quit
 
 import Terminus
 
@@ -587,6 +587,7 @@ namespace TextEditorDemo
 inductive Focus where
   | filename
   | content
+  | preview
   | calendar
   deriving BEq, Inhabited
 
@@ -607,7 +608,23 @@ structure State where
   ] |>.showNumbers
   calendar : Calendar := Calendar.new 2025 1 |>.withSelectedDay 15
   focus : Focus := .content
+  previewOffsetX : Nat := 0
+  previewOffsetY : Nat := 0
   deriving Inhabited
+
+private def previewLines (state : State) : List String := Id.run do
+  let mut i : Nat := 0
+  let mut out : List String := []
+  for line in state.content.lines.toList do
+    let num := s!"{i + 1}"
+    let padLen := if num.length >= 4 then 0 else 4 - num.length
+    let pad := String.ofList (List.replicate padLen ' ')
+    out := out ++ [s!"{pad}{num} │ {line}"]
+    i := i + 1
+  out
+
+private def maxLineLen (lines : List String) : Nat :=
+  lines.foldl (fun acc s => Nat.max acc s.length) 0
 
 def draw (frame : Frame) (state : State) : Frame := Id.run do
   let area := frame.area
@@ -635,7 +652,7 @@ def draw (frame : Frame) (state : State) : Frame := Id.run do
 
   if h : 1 < sections.length then
     let contentSection := sections[1]
-    let panels := hsplit contentSection [.fill, .fixed 24]
+    let panels := hsplit contentSection [.fill, .fixed 32]
 
     if hp : 0 < panels.length then
       let textArea := panels[0]
@@ -648,24 +665,58 @@ def draw (frame : Frame) (state : State) : Frame := Id.run do
       f := f.render editor textArea
 
     if hp : 1 < panels.length then
-      let calendarArea := panels[1]
-      let isFocused := state.focus == .calendar
-      let borderStyle := if isFocused then Style.fgColor Color.yellow else Style.fgColor Color.white
-      let cal := state.calendar
-        |>.withSelectedStyle (if isFocused then Style.reversed else Style.bold)
-        |>.withBlock (Block.rounded.withTitle "Date" |>.withBorderStyle borderStyle)
-      f := f.render cal calendarArea
+      let rightArea := panels[1]
+      let rightSections := (Layout.vertical [.fill, .fixed 10])
+        |>.withSpacing 1
+        |>.split rightArea
+
+      if hr : 0 < rightSections.length then
+        let previewOuter := rightSections[0]
+        let isFocused := state.focus == .preview
+        let borderStyle := if isFocused then Style.fgColor Color.yellow else Style.fgColor Color.white
+        let previewBlock := Block.rounded.withTitle "Preview (ScrollView)" |>.withBorderStyle borderStyle
+        f := f.render previewBlock previewOuter
+        let previewInner := previewBlock.innerArea previewOuter
+        if !previewInner.isEmpty then
+          let previewPanels := hsplit previewInner [.fill, .fixed 1]
+          if hp2 : 0 < previewPanels.length then
+            let scrollArea := previewPanels[0]
+            let lines := previewLines state
+            let contentW := maxLineLen lines
+            let contentH := lines.length
+            let para := Paragraph.fromLines lines |>.withStyle Style.dim
+            let view := (ScrollView.new para)
+              |>.withContentSize contentW contentH
+              |>.withOffset state.previewOffsetX state.previewOffsetY
+            f := f.render view scrollArea
+
+            if hp2b : 1 < previewPanels.length then
+              let barArea := previewPanels[1]
+              let scroll := Scrollbar.vertical state.previewOffsetY contentH scrollArea.height
+                |>.withThumbStyle (Style.fgColor Color.cyan)
+                |>.withTrackStyle Style.dim
+              f := f.render scroll barArea
+
+      if hr : 1 < rightSections.length then
+        let calendarArea := rightSections[1]
+        let isFocused := state.focus == .calendar
+        let borderStyle := if isFocused then Style.fgColor Color.yellow else Style.fgColor Color.white
+        let cal := state.calendar
+          |>.withSelectedStyle (if isFocused then Style.reversed else Style.bold)
+          |>.withBlock (Block.rounded.withTitle "Date" |>.withBorderStyle borderStyle)
+        f := f.render cal calendarArea
 
   if h : 2 < sections.length then
     let statusArea := sections[2]
     let focusName := match state.focus with
       | .filename => "Filename"
       | .content => "Content"
+      | .preview => "Preview"
       | .calendar => "Calendar"
 
     let statusLeft := s!"Focus: {focusName}"
     let statusRight := s!"Ln {state.content.cursorRow + 1}, Col {state.content.cursorCol + 1}"
-    let statusMiddle := "Tab: Switch | Esc: Quit"
+    let statusMiddle := "Tab: Switch | Esc: Quit | Preview: arrows/pgup/pgdn/home/end"
 
     f := f.writeString statusArea.x statusArea.y statusLeft (Style.dim.withFg Color.cyan)
     let middleX := statusArea.x + (statusArea.width - statusMiddle.length) / 2
@@ -684,7 +735,8 @@ def update (state : State) (key : Option KeyEvent) : State × Bool :=
     | .tab =>
       let nextFocus := match state.focus with
         | .filename => .content
-        | .content => .calendar
+        | .content => .preview
+        | .preview => .calendar
         | .calendar => .filename
       ({ state with focus := nextFocus }, false)
     | _ =>
@@ -695,6 +747,18 @@ def update (state : State) (key : Option KeyEvent) : State × Bool :=
       | .content =>
         let newContent := state.content.handleKey k
         ({ state with content := newContent }, false)
+      | .preview =>
+        let maxY := if state.content.lines.size == 0 then 0 else state.content.lines.size - 1
+        match k.code with
+        | .up => ({ state with previewOffsetY := state.previewOffsetY - 1 }, false)
+        | .down => ({ state with previewOffsetY := state.previewOffsetY + 1 }, false)
+        | .left => ({ state with previewOffsetX := state.previewOffsetX - 1 }, false)
+        | .right => ({ state with previewOffsetX := state.previewOffsetX + 1 }, false)
+        | .pageUp => ({ state with previewOffsetY := state.previewOffsetY - 10 }, false)
+        | .pageDown => ({ state with previewOffsetY := state.previewOffsetY + 10 }, false)
+        | .home => ({ state with previewOffsetX := 0, previewOffsetY := 0 }, false)
+        | .«end» => ({ state with previewOffsetY := maxY }, false)
+        | _ => (state, false)
       | .calendar =>
         let newCalendar := match k.code with
           | .left => state.calendar.prevDay
@@ -852,6 +916,92 @@ def update (state : State) (key : Option KeyEvent) : State × Bool :=
 
 end MenuDemo
 
+namespace ScrollViewDemo
+
+structure State where
+  offsetX : Nat := 0
+  offsetY : Nat := 0
+  deriving Inhabited
+
+private def maxLineLen (lines : List String) : Nat :=
+  lines.foldl (fun acc s => Nat.max acc s.length) 0
+
+private def contentLines : List String :=
+  let pattern := String.intercalate "" (List.replicate 12 "0123456789")
+  (List.range 200).map fun i =>
+    let row := s!"Row {i}"
+    s!"{row} │ {pattern} │ {row} end"
+
+def draw (frame : Frame) (state : State) : Frame := Id.run do
+  let area := frame.area
+  let mut f := frame
+
+  let mainBlock := Block.double
+    |>.withTitle "ScrollView"
+    |>.withTitleStyle (Style.bold.withFg Color.cyan)
+    |>.withBorderStyle (Style.fgColor Color.blue)
+  f := f.render mainBlock area
+
+  let inner := mainBlock.innerArea area
+  if inner.isEmpty then return f
+
+  let layout := (Layout.vertical [.fill, .fixed 1]).split inner
+  if h : 0 < layout.length then
+    let top := layout[0]
+
+    let topPanels := hsplit top [.fill, .fixed 1]
+    if hp : 0 < topPanels.length then
+      let scrollArea := topPanels[0]
+      let vbarArea := if hp2 : 1 < topPanels.length then topPanels[1] else { x := 0, y := 0, width := 0, height := 0 }
+
+      let lines := contentLines
+      let contentW := maxLineLen lines
+      let contentH := lines.length
+      let para := Paragraph.fromLines lines |>.withStyle Style.dim
+
+      let view := (ScrollView.new para)
+        |>.withContentSize contentW contentH
+        |>.withOffset state.offsetX state.offsetY
+      f := f.render view scrollArea
+
+      if !vbarArea.isEmpty then
+        let vscroll := Scrollbar.vertical state.offsetY contentH scrollArea.height
+          |>.withThumbStyle (Style.fgColor Color.cyan)
+          |>.withTrackStyle Style.dim
+        f := f.render vscroll vbarArea
+
+      if h2 : 1 < layout.length then
+        let bottom := layout[1]
+        if !bottom.isEmpty then
+          let bottomPanels := hsplit bottom [.fill, .fixed 1]
+          if hb : 0 < bottomPanels.length then
+            let hbarArea := bottomPanels[0]
+            let hscroll := Scrollbar.horizontal state.offsetX contentW scrollArea.width
+              |>.withThumbStyle (Style.fgColor Color.cyan)
+              |>.withTrackStyle Style.dim
+            f := f.render hscroll hbarArea
+
+  f
+
+def update (state : State) (key : Option KeyEvent) : State × Bool :=
+  match key with
+  | none => (state, false)
+  | some k =>
+    match k.code with
+    | .char 'q' => (state, true)
+    | .up => ({ state with offsetY := state.offsetY - 1 }, false)
+    | .down => ({ state with offsetY := state.offsetY + 1 }, false)
+    | .left => ({ state with offsetX := state.offsetX - 1 }, false)
+    | .right => ({ state with offsetX := state.offsetX + 1 }, false)
+    | .pageUp => ({ state with offsetY := state.offsetY - 10 }, false)
+    | .pageDown => ({ state with offsetY := state.offsetY + 10 }, false)
+    | .home => ({ state with offsetX := 0, offsetY := 0 }, false)
+    | .«end» => ({ state with offsetY := 1000000 }, false)
+    | _ =>
+      if k.isCtrlC || k.isCtrlQ then (state, true) else (state, false)
+
+end ScrollViewDemo
+
 namespace ControlsDemo
 
 inductive Focus where
@@ -990,6 +1140,7 @@ def demoTitles : Array String :=
     "Charts",
     "Counter",
     "Menu",
+    "ScrollView",
     "Controls",
     "Dashboard",
     "File Explorer",
@@ -1003,6 +1154,7 @@ structure KitchenState where
   charts : ChartsDemo.State := ChartsDemo.init
   counter : CounterDemo.State := {}
   menu : MenuDemo.State := {}
+  scrollView : ScrollViewDemo.State := {}
   controls : ControlsDemo.State := {}
   dashboard : DashboardDemo.State := {}
   explorer : FileExplorerDemo.State := {}
@@ -1121,9 +1273,10 @@ def renderActiveDemo (frame : Frame) (state : KitchenState) (area : Rect) : Fram
   | 2 => renderSubframe frame area ChartsDemo.draw state.charts
   | 3 => renderSubframe frame area CounterDemo.draw state.counter
   | 4 => renderSubframe frame area MenuDemo.draw state.menu
-  | 5 => renderSubframe frame area ControlsDemo.draw state.controls
-  | 6 => renderSubframe frame area DashboardDemo.draw state.dashboard
-  | 7 => renderSubframe frame area FileExplorerDemo.draw state.explorer
+  | 5 => renderSubframe frame area ScrollViewDemo.draw state.scrollView
+  | 6 => renderSubframe frame area ControlsDemo.draw state.controls
+  | 7 => renderSubframe frame area DashboardDemo.draw state.dashboard
+  | 8 => renderSubframe frame area FileExplorerDemo.draw state.explorer
   | _ => renderSubframe frame area TextEditorDemo.draw state.editor
 
 
@@ -1153,7 +1306,7 @@ def draw (frame : Frame) (state : KitchenState) : Frame := Id.run do
 
       let inner := headerBlock.innerArea headerArea
       if inner.height > 1 then
-        let help := "F1-F9: Switch | Tab/Shift+Tab: Switch | q/Esc: Quit"
+        let help := "F1-F10: Switch | Tab/Shift+Tab: Switch | q/Esc: Quit"
         let helpX := inner.x + 1
         let helpY := inner.y + 1
         f := f.writeString helpX helpY help Style.dim
@@ -1182,12 +1335,15 @@ def updateActive (state : KitchenState) (key : Option KeyEvent) : KitchenState �
     let (menu, quit) := MenuDemo.update state.menu key
     ({ state with menu := menu }, quit)
   | 5 =>
+    let (scrollView, quit) := ScrollViewDemo.update state.scrollView key
+    ({ state with scrollView := scrollView }, quit)
+  | 6 =>
     let (controls, quit) := ControlsDemo.update state.controls key
     ({ state with controls := controls }, quit)
-  | 6 =>
+  | 7 =>
     let (dashboard, quit) := DashboardDemo.update state.dashboard key
     ({ state with dashboard := dashboard }, quit)
-  | 7 =>
+  | 8 =>
     let (explorer, quit) := FileExplorerDemo.update state.explorer key
     ({ state with explorer := explorer }, quit)
   | _ =>
