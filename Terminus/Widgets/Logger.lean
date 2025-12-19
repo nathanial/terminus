@@ -2,6 +2,7 @@
 
 import Terminus.Widgets.Widget
 import Terminus.Widgets.Block
+import Terminus.Widgets.Scrollbar
 
 namespace Terminus
 
@@ -96,6 +97,15 @@ def allows (f : LogLevelFilter) (lvl : LogLevel) : Bool :=
 
 end LogLevelFilter
 
+/-- Scrollbar configuration for the logger. -/
+structure LoggerScrollbar where
+  enabled : Bool := true
+  trackChar : Char := '░'
+  thumbChar : Char := '█'
+  trackStyle : Style := Style.dim
+  thumbStyle : Style := (Style.fgColor Color.cyan)
+  deriving Repr, Inhabited
+
 /-- Logger widget: renders a scrollable list of log entries with optional follow mode. -/
 structure Logger where
   entries : List LogEntry := []
@@ -108,6 +118,7 @@ structure Logger where
   timestampWidth : Nat := 8      -- e.g. "12:03:45"
   style : Style := {}
   styles : LoggerStyles := {}
+  scrollbar : LoggerScrollbar := {}
   block : Option Block := none
   deriving Repr, Inhabited
 
@@ -130,6 +141,8 @@ def withShowTimestamp (l : Logger) (b : Bool) : Logger := { l with showTimestamp
 def withShowLevel (l : Logger) (b : Bool) : Logger := { l with showLevel := b }
 def withLevelWidth (l : Logger) (w : Nat) : Logger := { l with levelWidth := w }
 def withTimestampWidth (l : Logger) (w : Nat) : Logger := { l with timestampWidth := w }
+def withScrollbar (l : Logger) (sb : LoggerScrollbar) : Logger := { l with scrollbar := sb }
+def withShowScrollbar (l : Logger) (b : Bool) : Logger := { l with scrollbar := { l.scrollbar with enabled := b } }
 
 def add (l : Logger) (e : LogEntry) : Logger := { l with entries := l.entries ++ [e] }
 def extend (l : Logger) (es : List LogEntry) : Logger := { l with entries := l.entries ++ es }
@@ -177,18 +190,36 @@ instance : Widget Logger where
 
     if contentArea.isEmpty then return result
 
+    let (logArea, scrollbarArea?) :=
+      if l.scrollbar.enabled && contentArea.width >= 2 then
+        let barArea : Rect := {
+          x := contentArea.x + contentArea.width - 1
+          y := contentArea.y
+          width := 1
+          height := contentArea.height
+        }
+        let logs : Rect := {
+          x := contentArea.x
+          y := contentArea.y
+          width := contentArea.width - 1
+          height := contentArea.height
+        }
+        (logs, some barArea)
+      else
+        (contentArea, none)
+
     let entries := l.filteredEntries
     let total := entries.length
-    let visible := contentArea.height
+    let visible := logArea.height
 
     let maxScroll := if total > visible then total - visible else 0
     let scroll := if l.follow then maxScroll else min l.scroll maxScroll
 
-    let mut row := contentArea.y
+    let mut row := logArea.y
     for i in [0 : visible] do
       let idx := scroll + i
       if idx >= total then break
-      if row >= contentArea.y + visible then break
+      if row >= logArea.y + visible then break
 
       let entry := entries.getD idx ({ level := .info, message := "" } : LogEntry)
 
@@ -208,8 +239,18 @@ instance : Widget Logger where
 
       segs := segs ++ [(entry.message, msgStyle)]
 
-      result := Logger.writeSegments result contentArea.x row contentArea.width segs
+      result := Logger.writeSegments result logArea.x row logArea.width segs
       row := row + 1
+
+    match scrollbarArea? with
+    | none => pure ()
+    | some barArea =>
+      let sb := (Scrollbar.vertical scroll total visible)
+        |>.withTrackChar l.scrollbar.trackChar
+        |>.withThumbChar l.scrollbar.thumbChar
+        |>.withTrackStyle l.scrollbar.trackStyle
+        |>.withThumbStyle l.scrollbar.thumbStyle
+      result := Widget.render sb barArea result
 
     result
 

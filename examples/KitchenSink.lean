@@ -1192,6 +1192,7 @@ def draw (frame : Frame) (state : State) : Frame := Id.run do
         "Controls:",
         "  ↑/↓/PgUp/PgDn : scroll",
         "  Home/End      : top/bottom",
+        "  (scrollbar is shown on the right)",
         "  f             : toggle follow",
         "  0-5           : min level",
         "  t             : timestamps",
