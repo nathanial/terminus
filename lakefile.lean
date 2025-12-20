@@ -4,8 +4,7 @@ open Lake DSL
 package «terminus» where
   precompileModules := true
 
-require LSpec from git
-  "https://github.com/argumentcomputer/LSpec" @ "main"
+require crucible from git "https://github.com/nathanial/crucible" @ "master"
 
 lean_lib «Terminus» where
   roots := #[`Terminus]

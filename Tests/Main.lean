@@ -1,257 +1,248 @@
--- Tests.Main: LSpec test suite for Terminus terminal library
+-- Tests.Main: Crucible test suite for Terminus terminal library
 
-import LSpec
+import Crucible
 import Terminus.Backend.TerminalEffect
 import Terminus.Backend.TerminalMock
 import Terminus.Input.Events
 import Terminus.Input.Key
 
 open Terminus
-open LSpec
-open Std (HashMap)
+open Crucible
+
+namespace Tests.Terminus
+
+testSuite "Terminus Tests"
 
 -- ============================================================================
 -- Raw Mode Tests
 -- ============================================================================
 
-def rawModeTests : TestSeq :=
-  group "Raw Mode" $
-    test "enableRawMode sets rawModeEnabled to true" (
-      let (_, state) := MockTerminal.run TerminalEffect.enableRawMode
-      state.rawModeEnabled == true
-    ) ++
-    test "disableRawMode sets rawModeEnabled to false" (
-      let initial : MockTerminalState := { rawModeEnabled := true }
-      let (_, state) := MockTerminal.run TerminalEffect.disableRawMode initial
-      state.rawModeEnabled == false
-    ) ++
-    test "withRawMode restores state after action" (
-      let action := TerminalEffect.withRawMode (pure ())
-      let (_, state) := MockTerminal.run action
-      state.rawModeEnabled == false
-    ) ++
-    test "withRawMode enables raw mode during action" (
-      let action := TerminalEffect.withRawMode do
-        let s ← get
-        pure s.rawModeEnabled
-      let (wasEnabled, _) := MockTerminal.run action
-      wasEnabled == true
-    )
+test "enableRawMode sets rawModeEnabled to true" := do
+  let (_, state) := MockTerminal.run TerminalEffect.enableRawMode
+  ensure (state.rawModeEnabled == true) "rawModeEnabled should be true"
+
+test "disableRawMode sets rawModeEnabled to false" := do
+  let initial : MockTerminalState := { rawModeEnabled := true }
+  let (_, state) := MockTerminal.run TerminalEffect.disableRawMode initial
+  ensure (state.rawModeEnabled == false) "rawModeEnabled should be false"
+
+test "withRawMode restores state after action" := do
+  let action := TerminalEffect.withRawMode (pure ())
+  let (_, state) := MockTerminal.run action
+  ensure (state.rawModeEnabled == false) "rawModeEnabled should be restored to false"
+
+test "withRawMode enables raw mode during action" := do
+  let action := TerminalEffect.withRawMode do
+    let s ← get
+    pure s.rawModeEnabled
+  let (wasEnabled, _) := MockTerminal.run action
+  ensure (wasEnabled == true) "rawModeEnabled should be true during action"
 
 -- ============================================================================
 -- Terminal Size Tests
 -- ============================================================================
 
-def sizeTests : TestSeq :=
-  group "Terminal Size" $
-    test "getTerminalSize returns default 80x24" (
-      let (size, _) := MockTerminal.run TerminalEffect.getTerminalSize
-      size == (80, 24)
-    ) ++
-    test "getTerminalSize returns configured size" (
-      let initial := MockTerminal.withSize 120 40
-      let (size, _) := MockTerminal.run TerminalEffect.getTerminalSize initial
-      size == (120, 40)
-    )
+test "getTerminalSize returns default 80x24" := do
+  let (size, _) := MockTerminal.run TerminalEffect.getTerminalSize
+  ensure (size == (80, 24)) "default size should be 80x24"
+
+test "getTerminalSize returns configured size" := do
+  let initial := MockTerminal.withSize 120 40
+  let (size, _) := MockTerminal.run TerminalEffect.getTerminalSize initial
+  ensure (size == (120, 40)) "size should be 120x40"
 
 -- ============================================================================
 -- Input Reading Tests
 -- ============================================================================
 
-def inputTests : TestSeq :=
-  group "Input Reading" $
-    test "readByte returns none when queue empty" (
-      let (result, _) := MockTerminal.run TerminalEffect.readByte
-      result == none
-    ) ++
-    test "readByte returns byte from queue" (
-      let initial := MockTerminal.withInput [65, 66, 67] -- 'A', 'B', 'C'
-      let (result, _) := MockTerminal.run TerminalEffect.readByte initial
-      result == some 65
-    ) ++
-    test "readByte consumes bytes in order" (
-      let initial := MockTerminal.withInput [65, 66]
-      let action := do
-        let _ ← TerminalEffect.readByte
-        TerminalEffect.readByte
-      let (result, _) := MockTerminal.run action initial
-      result == some 66
-    ) ++
-    test "readByte drains queue" (
-      let initial := MockTerminal.withInput [65]
-      let action := do
-        let _ ← TerminalEffect.readByte
-        TerminalEffect.readByte
-      let (result, _) := MockTerminal.run action initial
-      result == none
-    )
+test "readByte returns none when queue empty" := do
+  let (result, _) := MockTerminal.run TerminalEffect.readByte
+  ensure (result == none) "should return none when queue empty"
+
+test "readByte returns byte from queue" := do
+  let initial := MockTerminal.withInput [65, 66, 67] -- 'A', 'B', 'C'
+  let (result, _) := MockTerminal.run TerminalEffect.readByte initial
+  ensure (result == some 65) "should return first byte"
+
+test "readByte consumes bytes in order" := do
+  let initial := MockTerminal.withInput [65, 66]
+  let action := do
+    let _ ← TerminalEffect.readByte
+    TerminalEffect.readByte
+  let (result, _) := MockTerminal.run action initial
+  ensure (result == some 66) "should return second byte"
+
+test "readByte drains queue" := do
+  let initial := MockTerminal.withInput [65]
+  let action := do
+    let _ ← TerminalEffect.readByte
+    TerminalEffect.readByte
+  let (result, _) := MockTerminal.run action initial
+  ensure (result == none) "should return none after draining"
 
 -- ============================================================================
 -- Output Writing Tests
 -- ============================================================================
 
-def outputTests : TestSeq :=
-  group "Output Writing" $
-    test "writeStdout accumulates output" (
-      let action := do
-        TerminalEffect.writeStdout "Hello, "
-        TerminalEffect.writeStdout "World!"
-      let (_, state) := MockTerminal.run action
-      state.outputBuffer == "Hello, World!"
-    ) ++
-    test "writeStdout clears flushed flag" (
-      let action := TerminalEffect.writeStdout "test"
-      let (_, state) := MockTerminal.run action
-      state.flushed == false
-    ) ++
-    test "flushStdout sets flushed flag" (
-      let action := do
-        TerminalEffect.writeStdout "test"
-        TerminalEffect.flushStdout
-      let (_, state) := MockTerminal.run action
-      state.flushed == true
-    )
+test "writeStdout accumulates output" := do
+  let action := do
+    TerminalEffect.writeStdout "Hello, "
+    TerminalEffect.writeStdout "World!"
+  let (_, state) := MockTerminal.run action
+  ensure (state.outputBuffer == "Hello, World!") "output should accumulate"
+
+test "writeStdout clears flushed flag" := do
+  let action := TerminalEffect.writeStdout "test"
+  let (_, state) := MockTerminal.run action
+  ensure (state.flushed == false) "flushed should be false"
+
+test "flushStdout sets flushed flag" := do
+  let action := do
+    TerminalEffect.writeStdout "test"
+    TerminalEffect.flushStdout
+  let (_, state) := MockTerminal.run action
+  ensure (state.flushed == true) "flushed should be true"
 
 -- ============================================================================
 -- Key Parsing Tests
 -- ============================================================================
 
-def keyParsingTests : TestSeq :=
-  group "Key Parsing" $
-    test "parses regular character 'a'" (
-      let initial := MockTerminal.withInput []
-      let (key, _) := MockTerminal.run (Events.parseKey 97) initial -- 'a'
-      key.code == KeyCode.char 'a'
-    ) ++
-    test "parses Enter key (13)" (
-      let (key, _) := MockTerminal.run (Events.parseKey 13)
-      key.code == KeyCode.enter
-    ) ++
-    test "parses Tab key (9)" (
-      let (key, _) := MockTerminal.run (Events.parseKey 9)
-      key.code == KeyCode.tab
-    ) ++
-    test "parses Backspace key (127)" (
-      let (key, _) := MockTerminal.run (Events.parseKey 127)
-      key.code == KeyCode.backspace
-    ) ++
-    test "parses Space key (32)" (
-      let (key, _) := MockTerminal.run (Events.parseKey 32)
-      key.code == KeyCode.space
-    ) ++
-    test "parses Ctrl+C (3)" (
-      let (key, _) := MockTerminal.run (Events.parseKey 3)
-      key.code == KeyCode.char 'c' && key.modifiers.ctrl == true
-    ) ++
-    test "parses Ctrl+D (4)" (
-      let (key, _) := MockTerminal.run (Events.parseKey 4)
-      key.code == KeyCode.char 'd' && key.modifiers.ctrl == true
-    )
+test "parses regular character a" := do
+  let initial := MockTerminal.withInput []
+  let (key, _) := MockTerminal.run (Events.parseKey 97) initial -- 'a'
+  ensure (key.code == KeyCode.char 'a') "should parse 'a'"
+
+test "parses Enter key" := do
+  let (key, _) := MockTerminal.run (Events.parseKey 13)
+  ensure (key.code == KeyCode.enter) "should parse Enter"
+
+test "parses Tab key" := do
+  let (key, _) := MockTerminal.run (Events.parseKey 9)
+  ensure (key.code == KeyCode.tab) "should parse Tab"
+
+test "parses Backspace key" := do
+  let (key, _) := MockTerminal.run (Events.parseKey 127)
+  ensure (key.code == KeyCode.backspace) "should parse Backspace"
+
+test "parses Space key" := do
+  let (key, _) := MockTerminal.run (Events.parseKey 32)
+  ensure (key.code == KeyCode.space) "should parse Space"
+
+test "parses Ctrl C" := do
+  let (key, _) := MockTerminal.run (Events.parseKey 3)
+  ensure (key.code == KeyCode.char 'c' && key.modifiers.ctrl == true) "should parse Ctrl+C"
+
+test "parses Ctrl D" := do
+  let (key, _) := MockTerminal.run (Events.parseKey 4)
+  ensure (key.code == KeyCode.char 'd' && key.modifiers.ctrl == true) "should parse Ctrl+D"
 
 -- ============================================================================
 -- Escape Sequence Tests
 -- ============================================================================
 
-def escapeSequenceTests : TestSeq :=
-  group "Escape Sequences" $
-    test "parses Up arrow (ESC [ A)" (
-      let initial := MockTerminal.withInput [91, 65] -- '[', 'A'
-      let (key, _) := MockTerminal.run Events.parseEscapeSequence initial
-      key.code == KeyCode.up
-    ) ++
-    test "parses Down arrow (ESC [ B)" (
-      let initial := MockTerminal.withInput [91, 66] -- '[', 'B'
-      let (key, _) := MockTerminal.run Events.parseEscapeSequence initial
-      key.code == KeyCode.down
-    ) ++
-    test "parses Left arrow (ESC [ D)" (
-      let initial := MockTerminal.withInput [91, 68] -- '[', 'D'
-      let (key, _) := MockTerminal.run Events.parseEscapeSequence initial
-      key.code == KeyCode.left
-    ) ++
-    test "parses Right arrow (ESC [ C)" (
-      let initial := MockTerminal.withInput [91, 67] -- '[', 'C'
-      let (key, _) := MockTerminal.run Events.parseEscapeSequence initial
-      key.code == KeyCode.right
-    ) ++
-    test "parses Home key (ESC [ H)" (
-      let initial := MockTerminal.withInput [91, 72] -- '[', 'H'
-      let (key, _) := MockTerminal.run Events.parseEscapeSequence initial
-      key.code == KeyCode.home
-    ) ++
-    test "parses End key (ESC [ F)" (
-      let initial := MockTerminal.withInput [91, 70] -- '[', 'F'
-      let (key, _) := MockTerminal.run Events.parseEscapeSequence initial
-      key.code == KeyCode.«end»
-    ) ++
-    test "parses Delete key (ESC [ 3 ~)" (
-      let initial := MockTerminal.withInput [91, 51, 126] -- '[', '3', '~'
-      let (key, _) := MockTerminal.run Events.parseEscapeSequence initial
-      key.code == KeyCode.delete
-    ) ++
-    test "parses Page Up (ESC [ 5 ~)" (
-      let initial := MockTerminal.withInput [91, 53, 126] -- '[', '5', '~'
-      let (key, _) := MockTerminal.run Events.parseEscapeSequence initial
-      key.code == KeyCode.pageUp
-    ) ++
-    test "parses Page Down (ESC [ 6 ~)" (
-      let initial := MockTerminal.withInput [91, 54, 126] -- '[', '6', '~'
-      let (key, _) := MockTerminal.run Events.parseEscapeSequence initial
-      key.code == KeyCode.pageDown
-    ) ++
-    test "parses F1 (ESC O P)" (
-      let initial := MockTerminal.withInput [79, 80] -- 'O', 'P'
-      let (key, _) := MockTerminal.run Events.parseEscapeSequence initial
-      key.code == KeyCode.f 1
-    ) ++
-    test "parses F2 (ESC O Q)" (
-      let initial := MockTerminal.withInput [79, 81] -- 'O', 'Q'
-      let (key, _) := MockTerminal.run Events.parseEscapeSequence initial
-      key.code == KeyCode.f 2
-    ) ++
-    test "parses Alt+a" (
-      let initial := MockTerminal.withInput [97] -- 'a'
-      let (key, _) := MockTerminal.run Events.parseEscapeSequence initial
-      key.code == KeyCode.char 'a' && key.modifiers.alt == true
-    ) ++
-    test "parses bare escape when no following bytes" (
-      let initial := MockTerminal.withInput []
-      let (key, _) := MockTerminal.run Events.parseEscapeSequence initial
-      key.code == KeyCode.escape
-    )
+test "parses Up arrow" := do
+  let initial := MockTerminal.withInput [91, 65] -- '[', 'A'
+  let (key, _) := MockTerminal.run Events.parseEscapeSequence initial
+  ensure (key.code == KeyCode.up) "should parse Up arrow"
+
+test "parses Down arrow" := do
+  let initial := MockTerminal.withInput [91, 66] -- '[', 'B'
+  let (key, _) := MockTerminal.run Events.parseEscapeSequence initial
+  ensure (key.code == KeyCode.down) "should parse Down arrow"
+
+test "parses Left arrow" := do
+  let initial := MockTerminal.withInput [91, 68] -- '[', 'D'
+  let (key, _) := MockTerminal.run Events.parseEscapeSequence initial
+  ensure (key.code == KeyCode.left) "should parse Left arrow"
+
+test "parses Right arrow" := do
+  let initial := MockTerminal.withInput [91, 67] -- '[', 'C'
+  let (key, _) := MockTerminal.run Events.parseEscapeSequence initial
+  ensure (key.code == KeyCode.right) "should parse Right arrow"
+
+test "parses Home key" := do
+  let initial := MockTerminal.withInput [91, 72] -- '[', 'H'
+  let (key, _) := MockTerminal.run Events.parseEscapeSequence initial
+  ensure (key.code == KeyCode.home) "should parse Home"
+
+test "parses End key" := do
+  let initial := MockTerminal.withInput [91, 70] -- '[', 'F'
+  let (key, _) := MockTerminal.run Events.parseEscapeSequence initial
+  ensure (key.code == KeyCode.«end») "should parse End"
+
+test "parses Delete key" := do
+  let initial := MockTerminal.withInput [91, 51, 126] -- '[', '3', '~'
+  let (key, _) := MockTerminal.run Events.parseEscapeSequence initial
+  ensure (key.code == KeyCode.delete) "should parse Delete"
+
+test "parses Page Up" := do
+  let initial := MockTerminal.withInput [91, 53, 126] -- '[', '5', '~'
+  let (key, _) := MockTerminal.run Events.parseEscapeSequence initial
+  ensure (key.code == KeyCode.pageUp) "should parse Page Up"
+
+test "parses Page Down" := do
+  let initial := MockTerminal.withInput [91, 54, 126] -- '[', '6', '~'
+  let (key, _) := MockTerminal.run Events.parseEscapeSequence initial
+  ensure (key.code == KeyCode.pageDown) "should parse Page Down"
+
+test "parses F1" := do
+  let initial := MockTerminal.withInput [79, 80] -- 'O', 'P'
+  let (key, _) := MockTerminal.run Events.parseEscapeSequence initial
+  ensure (key.code == KeyCode.f 1) "should parse F1"
+
+test "parses F2" := do
+  let initial := MockTerminal.withInput [79, 81] -- 'O', 'Q'
+  let (key, _) := MockTerminal.run Events.parseEscapeSequence initial
+  ensure (key.code == KeyCode.f 2) "should parse F2"
+
+test "parses Alt a" := do
+  let initial := MockTerminal.withInput [97] -- 'a'
+  let (key, _) := MockTerminal.run Events.parseEscapeSequence initial
+  ensure (key.code == KeyCode.char 'a' && key.modifiers.alt == true) "should parse Alt+a"
+
+test "parses bare escape when no following bytes" := do
+  let initial := MockTerminal.withInput []
+  let (key, _) := MockTerminal.run Events.parseEscapeSequence initial
+  ensure (key.code == KeyCode.escape) "should parse bare Escape"
 
 -- ============================================================================
 -- Event Polling Tests
 -- ============================================================================
 
--- Helper to check if poll returned a key event with expected code
+/-- Helper to check if poll returned a key event with expected code -/
 def pollReturnsKeyCode (input : List UInt8) (expected : KeyCode) : Bool :=
   let (event, _) := MockTerminal.run Events.poll (MockTerminal.withInput input)
   match event with
   | Event.key k => k.code == expected
   | _ => false
 
-def pollTests : TestSeq :=
-  group "Event Polling" $
-    test "poll returns none when no input" (
-      let (event, _) := MockTerminal.run Events.poll
-      event == Event.none
-    ) ++
-    test "poll returns key event for character" (
-      pollReturnsKeyCode [97] (KeyCode.char 'a')  -- 'a'
-    ) ++
-    test "poll handles escape sequences" (
-      pollReturnsKeyCode [27, 91, 65] KeyCode.up  -- ESC [ A
-    )
+test "poll returns none when no input" := do
+  let (event, _) := MockTerminal.run Events.poll
+  ensure (event == Event.none) "should return none when no input"
 
--- ============================================================================
--- Main Test Runner
--- ============================================================================
+test "poll returns key event for character" := do
+  ensure (pollReturnsKeyCode [97] (KeyCode.char 'a')) "should return key event for 'a'"
 
-def allTests : HashMap String (List TestSeq) :=
-  let m : HashMap String (List TestSeq) := {}
-  m.insert "backend" [rawModeTests, sizeTests, inputTests, outputTests]
-    |>.insert "input" [keyParsingTests, escapeSequenceTests, pollTests]
+test "poll handles escape sequences" := do
+  ensure (pollReturnsKeyCode [27, 91, 65] KeyCode.up) "should parse ESC [ A as Up"
 
-def main (args : List String) : IO UInt32 :=
-  lspecIO allTests args
+#generate_tests
+
+end Tests.Terminus
+
+def main : IO UInt32 := do
+  IO.println "╔══════════════════════════════════════════════════════════════╗"
+  IO.println "║                    Terminus Test Suite                       ║"
+  IO.println "╚══════════════════════════════════════════════════════════════╝"
+  IO.println ""
+
+  let result ← Crucible.runTests "Terminus Tests" Tests.Terminus.cases
+
+  IO.println ""
+  let totalTests := Tests.Terminus.cases.length
+  if result == 0 then
+    IO.println s!"All {totalTests} tests passed!"
+  else
+    IO.println s!"{totalTests - result.toNat} passed, {result.toNat} failed"
+
+  return result
