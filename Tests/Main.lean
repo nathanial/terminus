@@ -236,13 +236,12 @@ def main : IO UInt32 := do
   IO.println "╚══════════════════════════════════════════════════════════════╝"
   IO.println ""
 
-  let result ← Crucible.runTests "Terminus Tests" Tests.Terminus.cases
+  let result ← runAllSuites
 
   IO.println ""
-  let totalTests := Tests.Terminus.cases.length
   if result == 0 then
-    IO.println s!"All {totalTests} tests passed!"
+    IO.println "All tests passed!"
   else
-    IO.println s!"{totalTests - result.toNat} passed, {result.toNat} failed"
+    IO.println "Some tests failed"
 
   return result
