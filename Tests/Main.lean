@@ -109,32 +109,46 @@ test "flushStdout sets flushed flag" := do
 
 test "parses regular character a" := do
   let initial := MockTerminal.withInput []
-  let (key, _) := MockTerminal.run (Events.parseKey 97) initial -- 'a'
-  ensure (key.code == KeyCode.char 'a') "should parse 'a'"
+  let (event, _) := MockTerminal.run (Events.parseInput 97) initial -- 'a'
+  match event with
+  | .key key => ensure (key.code == KeyCode.char 'a') "should parse 'a'"
+  | _ => ensure false "expected key event"
 
 test "parses Enter key" := do
-  let (key, _) := MockTerminal.run (Events.parseKey 13)
-  ensure (key.code == KeyCode.enter) "should parse Enter"
+  let (event, _) := MockTerminal.run (Events.parseInput 13)
+  match event with
+  | .key key => ensure (key.code == KeyCode.enter) "should parse Enter"
+  | _ => ensure false "expected key event"
 
 test "parses Tab key" := do
-  let (key, _) := MockTerminal.run (Events.parseKey 9)
-  ensure (key.code == KeyCode.tab) "should parse Tab"
+  let (event, _) := MockTerminal.run (Events.parseInput 9)
+  match event with
+  | .key key => ensure (key.code == KeyCode.tab) "should parse Tab"
+  | _ => ensure false "expected key event"
 
 test "parses Backspace key" := do
-  let (key, _) := MockTerminal.run (Events.parseKey 127)
-  ensure (key.code == KeyCode.backspace) "should parse Backspace"
+  let (event, _) := MockTerminal.run (Events.parseInput 127)
+  match event with
+  | .key key => ensure (key.code == KeyCode.backspace) "should parse Backspace"
+  | _ => ensure false "expected key event"
 
 test "parses Space key" := do
-  let (key, _) := MockTerminal.run (Events.parseKey 32)
-  ensure (key.code == KeyCode.space) "should parse Space"
+  let (event, _) := MockTerminal.run (Events.parseInput 32)
+  match event with
+  | .key key => ensure (key.code == KeyCode.space) "should parse Space"
+  | _ => ensure false "expected key event"
 
 test "parses Ctrl C" := do
-  let (key, _) := MockTerminal.run (Events.parseKey 3)
-  ensure (key.code == KeyCode.char 'c' && key.modifiers.ctrl == true) "should parse Ctrl+C"
+  let (event, _) := MockTerminal.run (Events.parseInput 3)
+  match event with
+  | .key key => ensure (key.code == KeyCode.char 'c' && key.modifiers.ctrl == true) "should parse Ctrl+C"
+  | _ => ensure false "expected key event"
 
 test "parses Ctrl D" := do
-  let (key, _) := MockTerminal.run (Events.parseKey 4)
-  ensure (key.code == KeyCode.char 'd' && key.modifiers.ctrl == true) "should parse Ctrl+D"
+  let (event, _) := MockTerminal.run (Events.parseInput 4)
+  match event with
+  | .key key => ensure (key.code == KeyCode.char 'd' && key.modifiers.ctrl == true) "should parse Ctrl+D"
+  | _ => ensure false "expected key event"
 
 -- ============================================================================
 -- Escape Sequence Tests
@@ -142,68 +156,94 @@ test "parses Ctrl D" := do
 
 test "parses Up arrow" := do
   let initial := MockTerminal.withInput [91, 65] -- '[', 'A'
-  let (key, _) := MockTerminal.run Events.parseEscapeSequence initial
-  ensure (key.code == KeyCode.up) "should parse Up arrow"
+  let (event, _) := MockTerminal.run Events.parseEscapeSequence initial
+  match event with
+  | .key key => ensure (key.code == KeyCode.up) "should parse Up arrow"
+  | _ => ensure false "expected key event"
 
 test "parses Down arrow" := do
   let initial := MockTerminal.withInput [91, 66] -- '[', 'B'
-  let (key, _) := MockTerminal.run Events.parseEscapeSequence initial
-  ensure (key.code == KeyCode.down) "should parse Down arrow"
+  let (event, _) := MockTerminal.run Events.parseEscapeSequence initial
+  match event with
+  | .key key => ensure (key.code == KeyCode.down) "should parse Down arrow"
+  | _ => ensure false "expected key event"
 
 test "parses Left arrow" := do
   let initial := MockTerminal.withInput [91, 68] -- '[', 'D'
-  let (key, _) := MockTerminal.run Events.parseEscapeSequence initial
-  ensure (key.code == KeyCode.left) "should parse Left arrow"
+  let (event, _) := MockTerminal.run Events.parseEscapeSequence initial
+  match event with
+  | .key key => ensure (key.code == KeyCode.left) "should parse Left arrow"
+  | _ => ensure false "expected key event"
 
 test "parses Right arrow" := do
   let initial := MockTerminal.withInput [91, 67] -- '[', 'C'
-  let (key, _) := MockTerminal.run Events.parseEscapeSequence initial
-  ensure (key.code == KeyCode.right) "should parse Right arrow"
+  let (event, _) := MockTerminal.run Events.parseEscapeSequence initial
+  match event with
+  | .key key => ensure (key.code == KeyCode.right) "should parse Right arrow"
+  | _ => ensure false "expected key event"
 
 test "parses Home key" := do
   let initial := MockTerminal.withInput [91, 72] -- '[', 'H'
-  let (key, _) := MockTerminal.run Events.parseEscapeSequence initial
-  ensure (key.code == KeyCode.home) "should parse Home"
+  let (event, _) := MockTerminal.run Events.parseEscapeSequence initial
+  match event with
+  | .key key => ensure (key.code == KeyCode.home) "should parse Home"
+  | _ => ensure false "expected key event"
 
 test "parses End key" := do
   let initial := MockTerminal.withInput [91, 70] -- '[', 'F'
-  let (key, _) := MockTerminal.run Events.parseEscapeSequence initial
-  ensure (key.code == KeyCode.«end») "should parse End"
+  let (event, _) := MockTerminal.run Events.parseEscapeSequence initial
+  match event with
+  | .key key => ensure (key.code == KeyCode.«end») "should parse End"
+  | _ => ensure false "expected key event"
 
 test "parses Delete key" := do
   let initial := MockTerminal.withInput [91, 51, 126] -- '[', '3', '~'
-  let (key, _) := MockTerminal.run Events.parseEscapeSequence initial
-  ensure (key.code == KeyCode.delete) "should parse Delete"
+  let (event, _) := MockTerminal.run Events.parseEscapeSequence initial
+  match event with
+  | .key key => ensure (key.code == KeyCode.delete) "should parse Delete"
+  | _ => ensure false "expected key event"
 
 test "parses Page Up" := do
   let initial := MockTerminal.withInput [91, 53, 126] -- '[', '5', '~'
-  let (key, _) := MockTerminal.run Events.parseEscapeSequence initial
-  ensure (key.code == KeyCode.pageUp) "should parse Page Up"
+  let (event, _) := MockTerminal.run Events.parseEscapeSequence initial
+  match event with
+  | .key key => ensure (key.code == KeyCode.pageUp) "should parse Page Up"
+  | _ => ensure false "expected key event"
 
 test "parses Page Down" := do
   let initial := MockTerminal.withInput [91, 54, 126] -- '[', '6', '~'
-  let (key, _) := MockTerminal.run Events.parseEscapeSequence initial
-  ensure (key.code == KeyCode.pageDown) "should parse Page Down"
+  let (event, _) := MockTerminal.run Events.parseEscapeSequence initial
+  match event with
+  | .key key => ensure (key.code == KeyCode.pageDown) "should parse Page Down"
+  | _ => ensure false "expected key event"
 
 test "parses F1" := do
   let initial := MockTerminal.withInput [79, 80] -- 'O', 'P'
-  let (key, _) := MockTerminal.run Events.parseEscapeSequence initial
-  ensure (key.code == KeyCode.f 1) "should parse F1"
+  let (event, _) := MockTerminal.run Events.parseEscapeSequence initial
+  match event with
+  | .key key => ensure (key.code == KeyCode.f 1) "should parse F1"
+  | _ => ensure false "expected key event"
 
 test "parses F2" := do
   let initial := MockTerminal.withInput [79, 81] -- 'O', 'Q'
-  let (key, _) := MockTerminal.run Events.parseEscapeSequence initial
-  ensure (key.code == KeyCode.f 2) "should parse F2"
+  let (event, _) := MockTerminal.run Events.parseEscapeSequence initial
+  match event with
+  | .key key => ensure (key.code == KeyCode.f 2) "should parse F2"
+  | _ => ensure false "expected key event"
 
 test "parses Alt a" := do
   let initial := MockTerminal.withInput [97] -- 'a'
-  let (key, _) := MockTerminal.run Events.parseEscapeSequence initial
-  ensure (key.code == KeyCode.char 'a' && key.modifiers.alt == true) "should parse Alt+a"
+  let (event, _) := MockTerminal.run Events.parseEscapeSequence initial
+  match event with
+  | .key key => ensure (key.code == KeyCode.char 'a' && key.modifiers.alt == true) "should parse Alt+a"
+  | _ => ensure false "expected key event"
 
 test "parses bare escape when no following bytes" := do
   let initial := MockTerminal.withInput []
-  let (key, _) := MockTerminal.run Events.parseEscapeSequence initial
-  ensure (key.code == KeyCode.escape) "should parse bare Escape"
+  let (event, _) := MockTerminal.run Events.parseEscapeSequence initial
+  match event with
+  | .key key => ensure (key.code == KeyCode.escape) "should parse bare Escape"
+  | _ => ensure false "expected key event"
 
 -- ============================================================================
 -- Event Polling Tests
@@ -225,6 +265,60 @@ test "poll returns key event for character" := do
 
 test "poll handles escape sequences" := do
   ensure (pollReturnsKeyCode [27, 91, 65] KeyCode.up) "should parse ESC [ A as Up"
+
+-- ============================================================================
+-- Mouse Event Parsing Tests
+-- ============================================================================
+
+/-- Helper to check if poll returned a mouse event with expected properties -/
+def pollReturnsMouse (input : List UInt8) (btn : MouseButton) (act : MouseAction) (x y : Nat) : Bool :=
+  let (event, _) := MockTerminal.run Events.poll (MockTerminal.withInput input)
+  match event with
+  | Event.mouse me => me.button == btn && me.action == act && me.x == x && me.y == y
+  | _ => false
+
+-- SGR mouse format: ESC [ < Cb ; Cx ; Cy M|m
+-- M = press, m = release
+-- Cb: 0=left, 1=middle, 2=right, 64=scrollUp, 65=scrollDown, +32=motion
+
+test "parses left click press" := do
+  -- ESC [ < 0 ; 10 ; 20 M
+  let input : List UInt8 := [27, 91, 60, 48, 59, 49, 48, 59, 50, 48, 77]
+  ensure (pollReturnsMouse input .left .press 10 20) "should parse left click at (10, 20)"
+
+test "parses right click release" := do
+  -- ESC [ < 2 ; 5 ; 15 m
+  let input : List UInt8 := [27, 91, 60, 50, 59, 53, 59, 49, 53, 109]
+  ensure (pollReturnsMouse input .right .release 5 15) "should parse right release at (5, 15)"
+
+test "parses middle click" := do
+  -- ESC [ < 1 ; 8 ; 12 M
+  let input : List UInt8 := [27, 91, 60, 49, 59, 56, 59, 49, 50, 77]
+  ensure (pollReturnsMouse input .middle .press 8 12) "should parse middle click at (8, 12)"
+
+test "parses scroll up" := do
+  -- ESC [ < 64 ; 1 ; 1 M
+  let input : List UInt8 := [27, 91, 60, 54, 52, 59, 49, 59, 49, 77]
+  ensure (pollReturnsMouse input .scrollUp .press 1 1) "should parse scroll up"
+
+test "parses scroll down" := do
+  -- ESC [ < 65 ; 25 ; 10 M
+  let input : List UInt8 := [27, 91, 60, 54, 53, 59, 50, 53, 59, 49, 48, 77]
+  ensure (pollReturnsMouse input .scrollDown .press 25 10) "should parse scroll down at (25, 10)"
+
+test "parses mouse motion" := do
+  -- ESC [ < 35 ; 50 ; 30 M (35 = button none + motion flag)
+  let input : List UInt8 := [27, 91, 60, 51, 53, 59, 53, 48, 59, 51, 48, 77]
+  ensure (pollReturnsMouse input .none .motion 50 30) "should parse motion at (50, 30)"
+
+test "parses mouse with ctrl modifier" := do
+  -- ESC [ < 16 ; 3 ; 7 M (16 = 0 + ctrl modifier)
+  let input : List UInt8 := [27, 91, 60, 49, 54, 59, 51, 59, 55, 77]
+  let (event, _) := MockTerminal.run Events.poll (MockTerminal.withInput input)
+  match event with
+  | Event.mouse me =>
+    ensure (me.button == .left && me.modifiers.ctrl) "should parse left click with ctrl"
+  | _ => ensure false "expected mouse event"
 
 #generate_tests
 

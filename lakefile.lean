@@ -53,6 +53,9 @@ lean_exe «image» where
 lean_exe «form» where
   root := `examples.Form
 
+lean_exe «mouse» where
+  root := `examples.MouseDemo
+
 @[test_driver]
 lean_exe «tests» where
   root := `Tests.Main

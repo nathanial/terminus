@@ -116,7 +116,7 @@ def draw (frame : Frame) (state : State) : Frame := Id.run do
 
   f
 
-def update (state : State) (key : Option KeyEvent) : State × Bool :=
+def update (state : State) (event : Option Event) : State × Bool :=
   let newTick := state.tick + 1
   let newValue1 := generateSparklineValue newTick 0
   let newValue2 := generateSparklineValue newTick 2.5
@@ -128,9 +128,9 @@ def update (state : State) (key : Option KeyEvent) : State × Bool :=
     sparklineData2 := newData2
   }
 
-  match key with
+  match event with
   | none => (state, false)
-  | some k =>
+  | some (.key k) =>
     match k.code with
     | .char 'q' => (state, true)
     | .tab =>
@@ -145,6 +145,7 @@ def update (state : State) (key : Option KeyEvent) : State × Bool :=
     | _ =>
       if k.isCtrlC || k.isCtrlQ then (state, true)
       else (state, false)
+  | _ => (state, false)
 
 def init : State :=
   let initialData := List.range 30 |>.map fun i => generateSparklineValue i 0
@@ -213,10 +214,10 @@ def draw (frame : Frame) (state : State) : Frame := Id.run do
 
   f
 
-def update (state : State) (key : Option KeyEvent) : State × Bool :=
-  match key with
+def update (state : State) (event : Option Event) : State × Bool :=
+  match event with
   | none => (state, false)
-  | some k =>
+  | some (.key k) =>
     match k.code with
     | .char 'q' => (state, true)
     | .char '+' | .up => ({ state with count := min (state.count + 1) state.maxCount }, false)
@@ -225,6 +226,7 @@ def update (state : State) (key : Option KeyEvent) : State × Bool :=
     | _ =>
       if k.isCtrlC || k.isCtrlQ then (state, true)
       else (state, false)
+  | _ => (state, false)
 
 end CounterDemo
 
@@ -385,7 +387,7 @@ def draw (frame : Frame) (state : State) : Frame := Id.run do
 
   f
 
-def update (state : State) (key : Option KeyEvent) : State × Bool :=
+def update (state : State) (event : Option Event) : State × Bool :=
   let state := { state with
     tick := state.tick + 1
     cpuUsage := 0.3 + 0.4 * (Float.sin (state.tick.toFloat * 0.1)).abs
@@ -393,9 +395,9 @@ def update (state : State) (key : Option KeyEvent) : State × Bool :=
     netUsage := 0.2 + 0.6 * (Float.sin (state.tick.toFloat * 0.15)).abs
   }
 
-  match key with
+  match event with
   | none => (state, false)
-  | some k =>
+  | some (.key k) =>
     match k.code with
     | .char 'q' => (state, true)
     | .tab =>
@@ -424,6 +426,7 @@ def update (state : State) (key : Option KeyEvent) : State × Bool :=
     | _ =>
       if k.isCtrlC || k.isCtrlQ then (state, true)
       else (state, false)
+  | _ => (state, false)
 
 end DashboardDemo
 
@@ -526,10 +529,10 @@ def draw (frame : Frame) (state : State) : Frame := Id.run do
 
   f
 
-def update (state : State) (key : Option KeyEvent) : State × Bool :=
-  match key with
+def update (state : State) (event : Option Event) : State × Bool :=
+  match event with
   | none => (state, false)
-  | some k =>
+  | some (.key k) =>
     if state.showPopup then
       match k.code with
       | .char 'y' | .char 'Y' | .enter =>
@@ -579,6 +582,7 @@ def update (state : State) (key : Option KeyEvent) : State × Bool :=
       | _ =>
         if k.isCtrlC || k.isCtrlQ then (state, true)
         else (state, false)
+  | _ => (state, false)
 
 end FileExplorerDemo
 
@@ -726,10 +730,10 @@ def draw (frame : Frame) (state : State) : Frame := Id.run do
 
   f
 
-def update (state : State) (key : Option KeyEvent) : State × Bool :=
-  match key with
+def update (state : State) (event : Option Event) : State × Bool :=
+  match event with
   | none => (state, false)
-  | some k =>
+  | some (.key k) =>
     if k.code == .escape then (state, true)
     else match k.code with
     | .tab =>
@@ -769,6 +773,7 @@ def update (state : State) (key : Option KeyEvent) : State × Bool :=
           | .char 'l' => state.calendar.nextMonth
           | _ => state.calendar
         ({ state with calendar := newCalendar }, false)
+  | _ => (state, false)
 
 end TextEditorDemo
 
@@ -900,10 +905,10 @@ def draw (frame : Frame) (state : State) : Frame := Id.run do
 
   f
 
-def update (state : State) (key : Option KeyEvent) : State × Bool :=
-  match key with
+def update (state : State) (event : Option Event) : State × Bool :=
+  match event with
   | none => (state, false)
-  | some k =>
+  | some (.key k) =>
     match k.code with
     | .char 'q' => (state, true)
     | .up => (moveSelection state false, false)
@@ -913,6 +918,7 @@ def update (state : State) (key : Option KeyEvent) : State × Bool :=
     | _ =>
       if k.isCtrlC || k.isCtrlQ then (state, true)
       else (state, false)
+  | _ => (state, false)
 
 end MenuDemo
 
@@ -983,10 +989,10 @@ def draw (frame : Frame) (state : State) : Frame := Id.run do
 
   f
 
-def update (state : State) (key : Option KeyEvent) : State × Bool :=
-  match key with
+def update (state : State) (event : Option Event) : State × Bool :=
+  match event with
   | none => (state, false)
-  | some k =>
+  | some (.key k) =>
     match k.code with
     | .char 'q' => (state, true)
     | .up => ({ state with offsetY := state.offsetY - 1 }, false)
@@ -999,6 +1005,7 @@ def update (state : State) (key : Option KeyEvent) : State × Bool :=
     | .«end» => ({ state with offsetY := 1000000 }, false)
     | _ =>
       if k.isCtrlC || k.isCtrlQ then (state, true) else (state, false)
+  | _ => (state, false)
 
 end ScrollViewDemo
 
@@ -1109,10 +1116,10 @@ def draw (frame : Frame) (state : State) : Frame := Id.run do
 
   f
 
-def update (state : State) (key : Option KeyEvent) : State × Bool :=
-  match key with
+def update (state : State) (event : Option Event) : State × Bool :=
+  match event with
   | none => (state, false)
-  | some k =>
+  | some (.key k) =>
     match k.code with
     | .char 'q' => (state, true)
     | .char 'c' => ({ state with focus := .checkboxes }, false)
@@ -1130,6 +1137,7 @@ def update (state : State) (key : Option KeyEvent) : State × Bool :=
       | .checkboxes => (toggleCheckbox state, false)
       | .radios => ({ state with radios := state.radios.selectNext }, false)
     | _ => (state, false)
+  | _ => (state, false)
 
 end ControlsDemo
 
@@ -1240,10 +1248,10 @@ def draw (frame : Frame) (state : State) : Frame := Id.run do
 
   f
 
-def update (state : State) (key : Option KeyEvent) : State × Bool :=
-  match key with
+def update (state : State) (event : Option Event) : State × Bool :=
+  match event with
   | none => (state, false)
-  | some k =>
+  | some (.key k) =>
     match k.code with
     | .up => ({ state with focus := focusPrev state.focus }, false)
     | .down => ({ state with focus := focusNext state.focus }, false)
@@ -1257,6 +1265,7 @@ def update (state : State) (key : Option KeyEvent) : State × Bool :=
       | .email => ({ state with email := state.email.handleKey k }, false)
       | .age => ({ state with age := state.age.handleKey k }, false)
       | .subscribe => (state, false)
+  | _ => (state, false)
 
 end FormWidgetDemo
 
@@ -1340,7 +1349,7 @@ def draw (frame : Frame) (state : State) : Frame := Id.run do
 
   f
 
-def update (state : State) (key : Option KeyEvent) : State × Bool :=
+def update (state : State) (event : Option Event) : State × Bool :=
   let tick := state.tick + 1
   let state := { state with tick := tick }
 
@@ -1352,9 +1361,9 @@ def update (state : State) (key : Option KeyEvent) : State × Bool :=
     else
       state
 
-  match key with
+  match event with
   | none => (state, false)
-  | some k =>
+  | some (.key k) =>
     match k.code with
     | .up => ({ state with logger := state.logger.scrollUp }, false)
     | .down => ({ state with logger := state.logger.scrollDown }, false)
@@ -1373,6 +1382,7 @@ def update (state : State) (key : Option KeyEvent) : State × Bool :=
     | .char '4' => ({ state with logger := state.logger.withMinLevel (some .warn) }, false)
     | .char '5' => ({ state with logger := state.logger.withMinLevel (some .error) }, false)
     | _ => (state, false)
+  | _ => (state, false)
 
 end LoggerDemo
 
@@ -1427,13 +1437,14 @@ def draw (frame : Frame) (state : State) : Frame := Id.run do
 
   f
 
-def update (state : State) (key : Option KeyEvent) : State × Bool :=
-  match key with
+def update (state : State) (event : Option Event) : State × Bool :=
+  match event with
   | none => (state, false)
-  | some k =>
+  | some (.key k) =>
     match k.code with
     | .char 'p' => ({ state with preserve := !state.preserve }, false)
     | _ => (state, false)
+  | _ => (state, false)
 
 end ImageDemo
 
@@ -1633,51 +1644,51 @@ def draw (frame : Frame) (state : KitchenState) : Frame := Id.run do
   f
 
 
-def updateActive (state : KitchenState) (key : Option KeyEvent) : KitchenState × Bool :=
+def updateActive (state : KitchenState) (event : Option Event) : KitchenState × Bool :=
   match clampDemo state.active with
   | 0 =>
     (state, false)
   | 1 =>
     (state, false)
   | 2 =>
-    let (charts, quit) := ChartsDemo.update state.charts key
+    let (charts, quit) := ChartsDemo.update state.charts event
     ({ state with charts := charts }, quit)
   | 3 =>
-    let (counter, quit) := CounterDemo.update state.counter key
+    let (counter, quit) := CounterDemo.update state.counter event
     ({ state with counter := counter }, quit)
   | 4 =>
-    let (menu, quit) := MenuDemo.update state.menu key
+    let (menu, quit) := MenuDemo.update state.menu event
     ({ state with menu := menu }, quit)
   | 5 =>
-    let (scrollView, quit) := ScrollViewDemo.update state.scrollView key
+    let (scrollView, quit) := ScrollViewDemo.update state.scrollView event
     ({ state with scrollView := scrollView }, quit)
   | 6 =>
-    let (controls, quit) := ControlsDemo.update state.controls key
+    let (controls, quit) := ControlsDemo.update state.controls event
     ({ state with controls := controls }, quit)
   | 7 =>
-    let (logger, quit) := LoggerDemo.update state.logger key
+    let (logger, quit) := LoggerDemo.update state.logger event
     ({ state with logger := logger }, quit)
   | 8 =>
-    let (image, quit) := ImageDemo.update state.image key
+    let (image, quit) := ImageDemo.update state.image event
     ({ state with image := image }, quit)
   | 9 =>
-    let (dashboard, quit) := DashboardDemo.update state.dashboard key
+    let (dashboard, quit) := DashboardDemo.update state.dashboard event
     ({ state with dashboard := dashboard }, quit)
   | 10 =>
-    let (explorer, quit) := FileExplorerDemo.update state.explorer key
+    let (explorer, quit) := FileExplorerDemo.update state.explorer event
     ({ state with explorer := explorer }, quit)
   | 11 =>
-    let (editor, quit) := TextEditorDemo.update state.editor key
+    let (editor, quit) := TextEditorDemo.update state.editor event
     ({ state with editor := editor }, quit)
   | _ =>
-    let (form, quit) := FormWidgetDemo.update state.form key
+    let (form, quit) := FormWidgetDemo.update state.form event
     ({ state with form := form }, quit)
 
 
-def handleGlobalKeys (state : KitchenState) (key : Option KeyEvent) : KitchenState × Option KeyEvent × Bool :=
-  match key with
+def handleGlobalKeys (state : KitchenState) (event : Option Event) : KitchenState × Option Event × Bool :=
+  match event with
   | none => (state, none, false)
-  | some k =>
+  | some (.key k) =>
     if k.isCtrlC || k.isCtrlQ || k.code == .escape then
       (state, none, true)
     else
@@ -1686,19 +1697,21 @@ def handleGlobalKeys (state : KitchenState) (key : Option KeyEvent) : KitchenSta
         if n >= 1 && n <= demoCount then
           ({ state with active := n - 1 }, none, false)
         else
-          (state, some k, false)
+          (state, some (.key k), false)
       | .tab =>
         ({ state with active := selectNext state.active }, none, false)
       | _ =>
-        (state, some k, false)
+        (state, some (.key k), false)
+  | other =>
+    (state, other, false)
 
 
-def update (state : KitchenState) (key : Option KeyEvent) : KitchenState × Bool :=
-  let (state, key, quit) := handleGlobalKeys state key
+def update (state : KitchenState) (event : Option Event) : KitchenState × Bool :=
+  let (state, event, quit) := handleGlobalKeys state event
   if quit then
     (state, true)
   else
-    updateActive state key
+    updateActive state event
 
 
 def main : IO Unit := do

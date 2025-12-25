@@ -123,7 +123,7 @@ def draw (frame : Frame) (state : ChartsState) : Frame := Id.run do
 
   f
 
-def update (state : ChartsState) (key : Option KeyEvent) : ChartsState × Bool :=
+def update (state : ChartsState) (event : Option Event) : ChartsState × Bool :=
   -- Always update sparkline data for animation
   let newTick := state.tick + 1
   let newValue1 := generateSparklineValue newTick 0
@@ -137,9 +137,9 @@ def update (state : ChartsState) (key : Option KeyEvent) : ChartsState × Bool :
   }
 
   -- Handle key events
-  match key with
+  match event with
   | none => (state, false)
-  | some k =>
+  | some (.key k) =>
     match k.code with
     | .char 'q' => (state, true)
     | .tab =>
@@ -154,6 +154,7 @@ def update (state : ChartsState) (key : Option KeyEvent) : ChartsState × Bool :
     | _ =>
       if k.isCtrlC || k.isCtrlQ then (state, true)
       else (state, false)
+  | _ => (state, false)
 
 def main : IO Unit := do
   -- Initialize with some sparkline data

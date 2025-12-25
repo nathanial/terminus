@@ -172,4 +172,14 @@ def modifierCodes (m : Modifier) : String := Id.run do
 def styleCodes (st : Style) : String :=
   resetAll ++ fgColor st.fg ++ bgColor st.bg ++ modifierCodes st.modifier
 
+-- Mouse tracking (SGR extended mode)
+-- Mode 1003: Report all motion events (not just when button pressed)
+-- Mode 1006: SGR extended format (supports coordinates > 223, uses M/m for press/release)
+
+/-- Enable mouse tracking with all motion events in SGR extended format -/
+def enableMouse : String := csi ++ "?1003h" ++ csi ++ "?1006h"
+
+/-- Disable mouse tracking -/
+def disableMouse : String := csi ++ "?1003l" ++ csi ++ "?1006l"
+
 end Terminus.Ansi

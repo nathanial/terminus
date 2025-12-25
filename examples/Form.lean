@@ -106,10 +106,10 @@ def draw (frame : Frame) (state : State) : Frame := Id.run do
 
   f
 
-def update (state : State) (key : Option KeyEvent) : State × Bool :=
-  match key with
+def update (state : State) (event : Option Event) : State × Bool :=
+  match event with
   | none => (state, false)
-  | some k =>
+  | some (.key k) =>
     match k.code with
     | .char 'q' | .escape => (state, true)
     | .tab | .down =>
@@ -129,6 +129,7 @@ def update (state : State) (key : Option KeyEvent) : State × Bool :=
       | .email => ({ state with email := state.email.handleKey k }, false)
       | .age => ({ state with age := state.age.handleKey k }, false)
       | .subscribe => (state, false)
+  | _ => (state, false)
 
 end FormDemo
 

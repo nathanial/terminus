@@ -109,10 +109,10 @@ def draw (frame : Frame) (state : FileExplorerState) : Frame := Id.run do
 
   f
 
-def update (state : FileExplorerState) (key : Option KeyEvent) : FileExplorerState × Bool :=
-  match key with
+def update (state : FileExplorerState) (event : Option Event) : FileExplorerState × Bool :=
+  match event with
   | none => (state, false)
-  | some k =>
+  | some (.key k) =>
     -- Handle popup mode
     if state.showPopup then
       match k.code with
@@ -167,6 +167,7 @@ def update (state : FileExplorerState) (key : Option KeyEvent) : FileExplorerSta
       | _ =>
         if k.isCtrlC || k.isCtrlQ then (state, true)
         else (state, false)
+  | _ => (state, false)
 
 def main : IO Unit := do
   let initialState : FileExplorerState := {}

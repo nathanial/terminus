@@ -175,7 +175,7 @@ def draw (frame : Frame) (state : DashboardState) : Frame := Id.run do
 
   f
 
-def update (state : DashboardState) (key : Option KeyEvent) : DashboardState × Bool :=
+def update (state : DashboardState) (event : Option Event) : DashboardState × Bool :=
   -- Always increment tick for animations
   let state := { state with
     tick := state.tick + 1
@@ -185,9 +185,9 @@ def update (state : DashboardState) (key : Option KeyEvent) : DashboardState × 
   }
 
   -- Handle key events if present
-  match key with
+  match event with
   | none => (state, false)
-  | some k =>
+  | some (.key k) =>
     match k.code with
     | .char 'q' => (state, true)
     | .tab =>
@@ -216,6 +216,7 @@ def update (state : DashboardState) (key : Option KeyEvent) : DashboardState × 
     | _ =>
       if k.isCtrlC || k.isCtrlQ then (state, true)
       else (state, false)
+  | _ => (state, false)
 
 def main : IO Unit := do
   App.runApp ({} : DashboardState) draw update

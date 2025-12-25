@@ -95,11 +95,76 @@ def isCtrlQ (e : KeyEvent) : Bool :=
 
 end KeyEvent
 
+/-- Mouse button identifiers -/
+inductive MouseButton where
+  | left
+  | middle
+  | right
+  | scrollUp
+  | scrollDown
+  | none  -- For motion-only events
+  deriving Repr, BEq, Inhabited
+
+/-- Mouse event action type -/
+inductive MouseAction where
+  | press
+  | release
+  | motion  -- Movement while button held (drag) or no button (hover)
+  deriving Repr, BEq, Inhabited
+
+/-- A mouse event with position, button, and modifiers -/
+structure MouseEvent where
+  x         : Nat            -- 1-based column
+  y         : Nat            -- 1-based row
+  button    : MouseButton
+  action    : MouseAction
+  modifiers : KeyModifiers   -- Reuse keyboard modifiers (Ctrl, Alt, Shift)
+  deriving Repr, BEq, Inhabited
+
+namespace MouseEvent
+
+/-- Create a click event -/
+def click (x y : Nat) (button : MouseButton := .left) : MouseEvent :=
+  { x, y, button, action := .press, modifiers := {} }
+
+/-- Create a release event -/
+def release (x y : Nat) (button : MouseButton := .left) : MouseEvent :=
+  { x, y, button, action := .release, modifiers := {} }
+
+/-- Check if this is a left click -/
+def isLeftClick (e : MouseEvent) : Bool :=
+  e.button == .left && e.action == .press
+
+/-- Check if this is a right click -/
+def isRightClick (e : MouseEvent) : Bool :=
+  e.button == .right && e.action == .press
+
+/-- Check if this is a scroll event -/
+def isScroll (e : MouseEvent) : Bool :=
+  e.button == .scrollUp || e.button == .scrollDown
+
+end MouseEvent
+
 /-- Input event types -/
 inductive Event where
   | key (event : KeyEvent)
+  | mouse (event : MouseEvent)
   | resize (width height : Nat)
   | none
   deriving Repr, BEq, Inhabited
+
+namespace Event
+
+/-- Extract KeyEvent if this is a keyboard event -/
+def toKeyEvent? : Event → Option KeyEvent
+  | .key ke => some ke
+  | _ => Option.none
+
+/-- Extract MouseEvent if this is a mouse event -/
+def toMouseEvent? : Event → Option MouseEvent
+  | .mouse me => some me
+  | _ => Option.none
+
+end Event
 
 end Terminus

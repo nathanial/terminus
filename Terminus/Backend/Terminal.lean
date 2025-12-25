@@ -176,10 +176,12 @@ def setup : IO Unit := do
   TerminalEffect.enableRawMode
   enterAltScreen
   hideCursor
+  TerminalEffect.writeStdout Ansi.enableMouse
   clear
 
 /-- Standard terminal teardown -/
 def teardown : IO Unit := do
+  TerminalEffect.writeStdout Ansi.disableMouse
   showCursor
   leaveAltScreen
   TerminalEffect.disableRawMode

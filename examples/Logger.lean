@@ -90,7 +90,7 @@ def draw (frame : Frame) (state : State) : Frame := Id.run do
 
   f
 
-def update (state : State) (key : Option KeyEvent) : State × Bool :=
+def update (state : State) (event : Option Event) : State × Bool :=
   let tick := state.tick + 1
   let state := { state with tick := tick }
 
@@ -102,9 +102,9 @@ def update (state : State) (key : Option KeyEvent) : State × Bool :=
     else
       state
 
-  match key with
+  match event with
   | none => (state, false)
-  | some k =>
+  | some (.key k) =>
     if k.isCtrlC || k.isCtrlQ then (state, true)
     else
       match k.code with
@@ -126,6 +126,7 @@ def update (state : State) (key : Option KeyEvent) : State × Bool :=
       | .char '4' => ({ state with logger := state.logger.withMinLevel (some .warn) }, false)
       | .char '5' => ({ state with logger := state.logger.withMinLevel (some .error) }, false)
       | _ => (state, false)
+  | _ => (state, false)
 
 end LoggerDemo
 

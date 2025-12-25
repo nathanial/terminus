@@ -105,21 +105,21 @@ def area (app : App State) : Rect := app.terminal.area
 /-- Draw function type -/
 abbrev DrawFn (State : Type) := Frame → State → Frame
 
-/-- Update function type - called every frame with optional key event -/
-abbrev UpdateFn (State : Type) := State → Option KeyEvent → State × Bool  -- Bool = shouldQuit
+/-- Update function type - called every frame with optional event (keyboard or mouse) -/
+abbrev UpdateFn (State : Type) := State → Option Event → State × Bool  -- Bool = shouldQuit
 
 /-- Run a single frame: poll input, update state, render -/
 def tick (app : App State) (draw : DrawFn State) (update : UpdateFn State) : IO (App State) := do
   -- Poll for input
   let event ← Events.poll
 
-  -- Convert event to optional key event
-  let keyEvent := match event with
-    | .key k => some k
-    | _ => none
+  -- Convert Event.none to Option none, otherwise wrap in some
+  let optEvent := match event with
+    | .none => none
+    | e => some e
 
-  -- Always call update (every frame) with optional key event
-  let (newState, shouldQuit) := update app.state keyEvent
+  -- Always call update (every frame) with optional event
+  let (newState, shouldQuit) := update app.state optEvent
 
   let app := { app with state := newState, shouldQuit := app.shouldQuit || shouldQuit }
 

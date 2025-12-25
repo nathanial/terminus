@@ -53,15 +53,16 @@ def draw (frame : Frame) (_ : State) : Frame := Id.run do
 
   f
 
-def update (state : State) (key : Option KeyEvent) : State × Bool :=
-  match key with
+def update (state : State) (event : Option Event) : State × Bool :=
+  match event with
   | none => (state, false)
-  | some k =>
+  | some (.key k) =>
     match k.code with
     | .char 'q' => (state, true)
     | _ =>
       if k.isCtrlC || k.isCtrlQ then (state, true)
       else (state, false)
+  | _ => (state, false)
 
 end PieChartDemo
 

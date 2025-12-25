@@ -63,10 +63,10 @@ def draw (frame : Frame) (state : State) : Frame := Id.run do
 
   f
 
-def update (state : State) (key : Option KeyEvent) : State × Bool :=
-  match key with
+def update (state : State) (event : Option Event) : State × Bool :=
+  match event with
   | none => (state, false)
-  | some k =>
+  | some (.key k) =>
     if k.isCtrlC || k.isCtrlQ then (state, true)
     else
       match k.code with
@@ -74,6 +74,7 @@ def update (state : State) (key : Option KeyEvent) : State × Bool :=
       | .char 'q' => (state, true)
       | .char 'p' => ({ state with preserve := !state.preserve }, false)
       | _ => (state, false)
+  | _ => (state, false)
 
 end ImageDemo
 

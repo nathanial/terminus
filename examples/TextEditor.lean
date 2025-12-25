@@ -157,10 +157,10 @@ def draw (frame : Frame) (state : EditorState) : Frame := Id.run do
 
   f
 
-def update (state : EditorState) (key : Option KeyEvent) : EditorState × Bool :=
-  match key with
+def update (state : EditorState) (event : Option Event) : EditorState × Bool :=
+  match event with
   | none => (state, false)
-  | some k =>
+  | some (.key k) =>
     -- Global controls
     if k.code == .escape then (state, true)
     else match k.code with
@@ -207,6 +207,7 @@ def update (state : EditorState) (key : Option KeyEvent) : EditorState × Bool :
           | .char 'l' => state.calendar.nextMonth
           | _ => state.calendar
         ({ state with calendar := newCalendar }, false)
+  | _ => (state, false)
 
 def main : IO Unit := do
   let initialState : EditorState := {}
