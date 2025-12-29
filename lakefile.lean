@@ -4,7 +4,7 @@ open Lake DSL
 package «terminus» where
   precompileModules := true
 
-require crucible from ".." / "crucible"
+require crucible from git "https://github.com/nathanial/crucible" @ "v0.0.1"
 
 lean_lib «Terminus» where
   roots := #[`Terminus]
