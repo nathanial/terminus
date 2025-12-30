@@ -1,6 +1,4 @@
 # Lake build artifacts
-.lake/
-lake-manifest.json
 
 # Editor files
 .vscode/
@@ -15,3 +13,5 @@ Thumbs.db
 
 # Lean build outputs
 build/
+.lake
+lake-manifest.json
