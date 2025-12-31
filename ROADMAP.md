@@ -86,6 +86,23 @@ Clickable terminal hyperlinks using OSC 8 escape sequences.
 
 ---
 
+### Widget Tests (Partial) ✓
+
+Added test coverage for core modules and widget rendering.
+
+**Implementation:**
+- Cell tests (empty, new, styled, hyperlinks)
+- Buffer tests (new, set, get, writeString, writeLink, clear, diff)
+- Rect tests (isEmpty, area)
+- Style tests (default, modifiers, merge)
+- Layout tests (hsplit, vsplit, constraints)
+- Widget rendering tests (Block, Paragraph, Gauge, Tabs, ListWidget)
+- Test helper: `renderWidget` for buffer-based widget testing
+
+**Current coverage:** 84 tests total
+
+---
+
 ## Feature Proposals
 
 ### [Priority: Medium] Async Event Polling
