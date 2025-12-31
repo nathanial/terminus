@@ -4,42 +4,74 @@ This document outlines potential improvements, new features, code cleanup opport
 
 ---
 
+## Completed Features
+
+### Mouse Support ✓
+
+Full mouse event handling implemented including click, scroll, and drag operations.
+
+**Implementation:**
+- `MouseEvent`, `MouseButton`, `MouseAction` types in `Terminus/Input/Key.lean`
+- SGR mouse protocol parsing in `Terminus/Input/Events.lean`
+- Demo application: `examples/MouseDemo.lean`
+
+---
+
+### Window Resize Events ✓
+
+Terminal resize events are now supported via the `Event.resize` variant.
+
+**Implementation:**
+- `Event.resize (width height : Nat)` in `Terminus/Input/Key.lean`
+
+---
+
+### Spinner Widget ✓
+
+Animated loading indicator with multiple built-in styles.
+
+**Implementation:**
+- `Terminus/Widgets/Spinner.lean` with styles: dots, line, arc, arrows, blocks, growing, ascii
+
+---
+
+### Progress Bar Variants ✓
+
+Multiple progress indicator styles are now available.
+
+**Implementation:**
+- `Gauge` - standard horizontal progress bar
+- `LineGauge` - minimal line-based gauge
+- `Spinner` - animated loading indicators
+
+---
+
+### Image Widget ✓
+
+Terminal image display using iTerm2 inline images protocol.
+
+**Implementation:**
+- `Terminus/Widgets/Image.lean` with `fromBytes` and `fromPath` constructors
+- Demo: `examples/Image.lean`
+
+---
+
+### Additional Widgets ✓
+
+Many new widgets have been added since the initial release:
+
+- **BigText** - Large ASCII art text rendering (`Terminus/Widgets/BigText.lean`)
+- **Checkbox** - Toggle checkbox widget (`Terminus/Widgets/Checkbox.lean`)
+- **Clear** - Area clearing widget (`Terminus/Widgets/Clear.lean`)
+- **Form** - Form container with field management (`Terminus/Widgets/Form.lean`)
+- **Logger** - Scrolling log display (`Terminus/Widgets/Logger.lean`)
+- **Menu** - Dropdown/context menu (`Terminus/Widgets/Menu.lean`)
+- **PieChart** - Pie and donut charts (`Terminus/Widgets/PieChart.lean`)
+- **ScrollView** - Scrollable content container (`Terminus/Widgets/ScrollView.lean`)
+
+---
+
 ## Feature Proposals
-
-### [Priority: High] Mouse Support
-
-**Description:** Add mouse event handling for click, scroll, and drag operations. This would enable interactive widgets like buttons, clickable lists, and drag-to-resize panels.
-
-**Rationale:** Modern terminal UI libraries like ratatui and crossterm provide mouse support. This is essential for building rich interactive applications and would significantly enhance the user experience of terminus-based applications.
-
-**Affected Files:**
-- `/Users/Shared/Projects/lean-workspace/terminus/Terminus/Input/Events.lean` (add MouseEvent type)
-- `/Users/Shared/Projects/lean-workspace/terminus/Terminus/Input/Key.lean` (extend Event type)
-- `/Users/Shared/Projects/lean-workspace/terminus/ffi/terminus.c` (enable mouse tracking)
-- `/Users/Shared/Projects/lean-workspace/terminus/Terminus/Backend/Ansi.lean` (mouse escape sequences)
-
-**Estimated Effort:** Medium
-
-**Dependencies:** None
-
----
-
-### [Priority: High] Window Resize Events
-
-**Description:** Detect and handle terminal window resize events (SIGWINCH) so applications can dynamically adapt to size changes.
-
-**Rationale:** Currently, applications must poll for size changes. Native resize event support would make applications more responsive and efficient.
-
-**Affected Files:**
-- `/Users/Shared/Projects/lean-workspace/terminus/ffi/terminus.c` (SIGWINCH handler)
-- `/Users/Shared/Projects/lean-workspace/terminus/Terminus/Input/Events.lean` (ResizeEvent type)
-- `/Users/Shared/Projects/lean-workspace/terminus/Terminus/Backend/TerminalEffect.lean`
-
-**Estimated Effort:** Medium
-
-**Dependencies:** None
-
----
 
 ### [Priority: Medium] Async Event Polling
 
@@ -48,9 +80,9 @@ This document outlines potential improvements, new features, code cleanup opport
 **Rationale:** The current synchronous polling model blocks the main thread. Async support would enable more sophisticated applications with background tasks.
 
 **Affected Files:**
-- `/Users/Shared/Projects/lean-workspace/terminus/ffi/terminus.c` (select/poll-based reading)
-- `/Users/Shared/Projects/lean-workspace/terminus/Terminus/Input/Events.lean`
-- `/Users/Shared/Projects/lean-workspace/terminus/Terminus/Backend/TerminalEffect.lean`
+- `ffi/terminus.c` (select/poll-based reading)
+- `Terminus/Input/Events.lean`
+- `Terminus/Backend/TerminalEffect.lean`
 
 **Estimated Effort:** Large
 
@@ -65,9 +97,9 @@ This document outlines potential improvements, new features, code cleanup opport
 **Rationale:** Currently terminus only works on Unix-like systems. Windows support would significantly expand the library's utility.
 
 **Affected Files:**
-- `/Users/Shared/Projects/lean-workspace/terminus/ffi/terminus.c` (add Windows conditionals)
+- `ffi/terminus.c` (add Windows conditionals)
 - New file: `ffi/terminus_win.c` (Windows-specific implementation)
-- `/Users/Shared/Projects/lean-workspace/terminus/lakefile.lean` (conditional compilation)
+- `lakefile.lean` (conditional compilation)
 
 **Estimated Effort:** Large
 
@@ -85,7 +117,7 @@ This document outlines potential improvements, new features, code cleanup opport
 - Widget introspection
 
 **Affected Files:**
-- `/Users/Shared/Projects/lean-workspace/terminus/Terminus/Widgets/Widget.lean`
+- `Terminus/Widgets/Widget.lean`
 - All widget files would need to implement new methods
 
 **Estimated Effort:** Large
@@ -102,7 +134,7 @@ This document outlines potential improvements, new features, code cleanup opport
 
 **Affected Files:**
 - New file: `Terminus/Core/Focus.lean`
-- `/Users/Shared/Projects/lean-workspace/terminus/Terminus/Widgets/Widget.lean` (focusable trait)
+- `Terminus/Widgets/Widget.lean` (focusable trait)
 - Interactive widgets (TextInput, TextArea, etc.)
 
 **Estimated Effort:** Medium
@@ -118,9 +150,9 @@ This document outlines potential improvements, new features, code cleanup opport
 **Rationale:** Copy/paste functionality is essential for text input widgets. The TextArea and TextInput widgets would greatly benefit from clipboard integration.
 
 **Affected Files:**
-- `/Users/Shared/Projects/lean-workspace/terminus/Terminus/Backend/Ansi.lean` (OSC 52 sequences)
-- `/Users/Shared/Projects/lean-workspace/terminus/Terminus/Widgets/TextInput.lean`
-- `/Users/Shared/Projects/lean-workspace/terminus/Terminus/Widgets/TextArea.lean`
+- `Terminus/Backend/Ansi.lean` (OSC 52 sequences)
+- `Terminus/Widgets/TextInput.lean`
+- `Terminus/Widgets/TextArea.lean`
 
 **Estimated Effort:** Medium
 
@@ -135,9 +167,9 @@ This document outlines potential improvements, new features, code cleanup opport
 **Rationale:** Modern terminals support hyperlinks (iTerm2, Windows Terminal, GNOME Terminal). This would enhance the utility of text widgets.
 
 **Affected Files:**
-- `/Users/Shared/Projects/lean-workspace/terminus/Terminus/Backend/Ansi.lean`
-- `/Users/Shared/Projects/lean-workspace/terminus/Terminus/Core/Cell.lean` (hyperlink attribute)
-- `/Users/Shared/Projects/lean-workspace/terminus/Terminus/Core/Style.lean`
+- `Terminus/Backend/Ansi.lean`
+- `Terminus/Core/Cell.lean` (hyperlink attribute)
+- `Terminus/Core/Style.lean`
 
 **Estimated Effort:** Small
 
@@ -152,8 +184,8 @@ This document outlines potential improvements, new features, code cleanup opport
 **Rationale:** The current Paragraph implementation has basic text handling. Proper word wrapping would improve text display quality.
 
 **Affected Files:**
-- `/Users/Shared/Projects/lean-workspace/terminus/Terminus/Widgets/Paragraph.lean`
-- `/Users/Shared/Projects/lean-workspace/terminus/Terminus/Core/` (new text utilities)
+- `Terminus/Widgets/Paragraph.lean`
+- `Terminus/Core/` (new text utilities)
 
 **Estimated Effort:** Medium
 
@@ -169,7 +201,7 @@ This document outlines potential improvements, new features, code cleanup opport
 
 **Affected Files:**
 - New file: `Terminus/Widgets/Markdown.lean`
-- `/Users/Shared/Projects/lean-workspace/terminus/Terminus/Core/Style.lean` (for styling)
+- `Terminus/Core/Style.lean` (for styling)
 
 **Estimated Effort:** Medium
 
@@ -192,21 +224,6 @@ This document outlines potential improvements, new features, code cleanup opport
 
 ---
 
-### [Priority: Low] Progress Bar Variants
-
-**Description:** Add additional progress bar styles: spinner with text, indeterminate progress, multi-step progress.
-
-**Rationale:** The current Gauge widget is good for determinate progress. Additional variants would cover more use cases.
-
-**Affected Files:**
-- `/Users/Shared/Projects/lean-workspace/terminus/Terminus/Widgets/Gauge.lean` (or new file)
-
-**Estimated Effort:** Small
-
-**Dependencies:** None
-
----
-
 ### [Priority: Low] Sixel Graphics Support
 
 **Description:** Add Sixel graphics protocol support for displaying images in compatible terminals.
@@ -215,7 +232,7 @@ This document outlines potential improvements, new features, code cleanup opport
 
 **Affected Files:**
 - New file: `Terminus/Widgets/Sixel.lean` or extend Image widget
-- `/Users/Shared/Projects/lean-workspace/terminus/Terminus/Core/Base64.lean` (encoding utilities)
+- `Terminus/Core/Base64.lean` (encoding utilities)
 
 **Estimated Effort:** Medium
 
@@ -227,14 +244,14 @@ This document outlines potential improvements, new features, code cleanup opport
 
 ### [Priority: High] Type-Safe Buffer Indexing
 
-**Current State:** Buffer access in `/Users/Shared/Projects/lean-workspace/terminus/Terminus/Core/Buffer.lean` uses `cells[idx]!` which can panic on out-of-bounds access.
+**Current State:** Buffer access in `Terminus/Core/Buffer.lean` uses `cells[idx]!` which can panic on out-of-bounds access.
 
 **Proposed Change:** Use bounds-checked access with proper error handling or proof-carrying code to ensure safe indexing.
 
 **Benefits:** Prevents runtime panics, improves reliability.
 
 **Affected Files:**
-- `/Users/Shared/Projects/lean-workspace/terminus/Terminus/Core/Buffer.lean`
+- `Terminus/Core/Buffer.lean`
 
 **Estimated Effort:** Medium
 
@@ -249,8 +266,8 @@ This document outlines potential improvements, new features, code cleanup opport
 **Benefits:** Correct display of international text and emoji.
 
 **Affected Files:**
-- `/Users/Shared/Projects/lean-workspace/terminus/Terminus/Core/Cell.lean`
-- `/Users/Shared/Projects/lean-workspace/terminus/Terminus/Core/Buffer.lean`
+- `Terminus/Core/Cell.lean`
+- `Terminus/Core/Buffer.lean`
 - New file: `Terminus/Core/Unicode.lean`
 
 **Estimated Effort:** Medium
@@ -259,14 +276,14 @@ This document outlines potential improvements, new features, code cleanup opport
 
 ### [Priority: Medium] Style Merging Improvements
 
-**Current State:** `Style.merge` in `/Users/Shared/Projects/lean-workspace/terminus/Terminus/Core/Style.lean` has simple override semantics that may not match user expectations.
+**Current State:** `Style.merge` in `Terminus/Core/Style.lean` has simple override semantics that may not match user expectations.
 
 **Proposed Change:** Implement more nuanced style merging with explicit inheritance rules, possibly using a `StyleDiff` type.
 
 **Benefits:** More predictable style composition for complex UIs.
 
 **Affected Files:**
-- `/Users/Shared/Projects/lean-workspace/terminus/Terminus/Core/Style.lean`
+- `Terminus/Core/Style.lean`
 
 **Estimated Effort:** Small
 
@@ -281,7 +298,7 @@ This document outlines potential improvements, new features, code cleanup opport
 **Benefits:** Reduced rendering overhead for large terminals.
 
 **Affected Files:**
-- `/Users/Shared/Projects/lean-workspace/terminus/Terminus/Core/Buffer.lean`
+- `Terminus/Core/Buffer.lean`
 
 **Estimated Effort:** Medium
 
@@ -289,15 +306,15 @@ This document outlines potential improvements, new features, code cleanup opport
 
 ### [Priority: Medium] Layout Algorithm Optimization
 
-**Current State:** The layout algorithm in `/Users/Shared/Projects/lean-workspace/terminus/Terminus/Layout/Layout.lean` recalculates constraints on every split.
+**Current State:** The layout algorithm in `Terminus/Layout/Layout.lean` recalculates constraints on every split.
 
 **Proposed Change:** Cache constraint calculations and implement incremental layout updates.
 
 **Benefits:** Better performance for complex nested layouts.
 
 **Affected Files:**
-- `/Users/Shared/Projects/lean-workspace/terminus/Terminus/Layout/Layout.lean`
-- `/Users/Shared/Projects/lean-workspace/terminus/Terminus/Layout/Constraint.lean`
+- `Terminus/Layout/Layout.lean`
+- `Terminus/Layout/Constraint.lean`
 
 **Estimated Effort:** Medium
 
@@ -305,14 +322,14 @@ This document outlines potential improvements, new features, code cleanup opport
 
 ### [Priority: Medium] Escape Sequence Parser State Machine
 
-**Current State:** Escape sequence parsing in `/Users/Shared/Projects/lean-workspace/terminus/Terminus/Input/Events.lean` uses nested pattern matching which is hard to extend.
+**Current State:** Escape sequence parsing in `Terminus/Input/Events.lean` uses nested pattern matching which is hard to extend.
 
 **Proposed Change:** Implement a proper state machine parser that can handle arbitrary escape sequences, including CSI parameters.
 
 **Benefits:** More robust input handling, easier to add new key sequences.
 
 **Affected Files:**
-- `/Users/Shared/Projects/lean-workspace/terminus/Terminus/Input/Events.lean`
+- `Terminus/Input/Events.lean`
 
 **Estimated Effort:** Medium
 
@@ -328,8 +345,8 @@ This document outlines potential improvements, new features, code cleanup opport
 
 **Affected Files:**
 - New file: `Terminus/Core/Error.lean`
-- `/Users/Shared/Projects/lean-workspace/terminus/Terminus/Backend/Raw.lean`
-- `/Users/Shared/Projects/lean-workspace/terminus/ffi/terminus.c`
+- `Terminus/Backend/Raw.lean`
+- `ffi/terminus.c`
 
 **Estimated Effort:** Small
 
@@ -344,7 +361,7 @@ This document outlines potential improvements, new features, code cleanup opport
 **Benefits:** Smoother lines in charts and canvas drawings.
 
 **Affected Files:**
-- `/Users/Shared/Projects/lean-workspace/terminus/Terminus/Widgets/Canvas.lean`
+- `Terminus/Widgets/Canvas.lean`
 
 **Estimated Effort:** Medium
 
@@ -359,7 +376,7 @@ This document outlines potential improvements, new features, code cleanup opport
 **Benefits:** Better performance for animated UIs.
 
 **Affected Files:**
-- `/Users/Shared/Projects/lean-workspace/terminus/examples/KitchenSink.lean`
+- `examples/KitchenSink.lean`
 - Chart widgets
 
 **Estimated Effort:** Small
@@ -373,7 +390,7 @@ This document outlines potential improvements, new features, code cleanup opport
 **Issue:** Tests only cover backend/input functionality. Widget rendering is untested.
 
 **Location:**
-- `/Users/Shared/Projects/lean-workspace/terminus/Tests/Main.lean`
+- `Tests/Main.lean`
 
 **Action Required:**
 1. Add test utilities for comparing buffer output
@@ -389,9 +406,9 @@ This document outlines potential improvements, new features, code cleanup opport
 **Issue:** Various widgets use different patterns for Float to Nat conversion: `toUInt32.toNat`, `Int.ofNat`, direct `.toNat`. This is inconsistent and some conversions may lose precision or behave unexpectedly with negative values.
 
 **Location:**
-- `/Users/Shared/Projects/lean-workspace/terminus/Terminus/Widgets/Canvas.lean` (lines 250-275)
-- `/Users/Shared/Projects/lean-workspace/terminus/Terminus/Widgets/LineChart.lean` (lines 227-230)
-- `/Users/Shared/Projects/lean-workspace/terminus/Terminus/Widgets/BarChart.lean` (line 96)
+- `Terminus/Widgets/Canvas.lean` (lines 250-275)
+- `Terminus/Widgets/LineChart.lean` (lines 227-230)
+- `Terminus/Widgets/BarChart.lean` (line 96)
 
 **Action Required:**
 1. Define a consistent helper function for Float to Nat conversion
@@ -406,7 +423,7 @@ This document outlines potential improvements, new features, code cleanup opport
 
 **Issue:** Every widget has the same boilerplate for handling optional blocks and computing inner areas.
 
-**Location:** All widget files in `/Users/Shared/Projects/lean-workspace/terminus/Terminus/Widgets/`
+**Location:** All widget files in `Terminus/Widgets/`
 
 **Action Required:**
 1. Extract common pattern into a helper function
@@ -421,9 +438,9 @@ This document outlines potential improvements, new features, code cleanup opport
 **Issue:** Several widgets contain hardcoded numbers without explanation.
 
 **Location:**
-- `/Users/Shared/Projects/lean-workspace/terminus/Terminus/Widgets/LineChart.lean` (line 102: `height < 3`)
-- `/Users/Shared/Projects/lean-workspace/terminus/Terminus/Widgets/PieChart.lean` (line 55: donut ratio 0.9 max)
-- `/Users/Shared/Projects/lean-workspace/terminus/Terminus/Widgets/BarChart.lean` (line 141: label width 10)
+- `Terminus/Widgets/LineChart.lean` (line 102: `height < 3`)
+- `Terminus/Widgets/PieChart.lean` (line 55: donut ratio 0.9 max)
+- `Terminus/Widgets/BarChart.lean` (line 141: label width 10)
 
 **Action Required:**
 1. Replace magic numbers with named constants
@@ -439,8 +456,8 @@ This document outlines potential improvements, new features, code cleanup opport
 
 **Location:**
 - Most widget files
-- `/Users/Shared/Projects/lean-workspace/terminus/Terminus/Core/Buffer.lean`
-- `/Users/Shared/Projects/lean-workspace/terminus/Terminus/Layout/Layout.lean`
+- `Terminus/Core/Buffer.lean`
+- `Terminus/Layout/Layout.lean`
 
 **Action Required:**
 1. Add doc-strings to all public functions and types
@@ -486,7 +503,7 @@ This document outlines potential improvements, new features, code cleanup opport
 **Issue:** KitchenSink.lean is very large (~1700 lines) and could be split into separate files.
 
 **Location:**
-- `/Users/Shared/Projects/lean-workspace/terminus/examples/KitchenSink.lean`
+- `examples/KitchenSink.lean`
 
 **Action Required:**
 1. Split into separate demo modules
@@ -512,9 +529,9 @@ This document outlines potential improvements, new features, code cleanup opport
 - Output writing
 
 **Affected Files:**
-- `/Users/Shared/Projects/lean-workspace/terminus/Terminus/Backend/Terminal.lean`
-- `/Users/Shared/Projects/lean-workspace/terminus/Terminus/Backend/TerminalIO.lean`
-- `/Users/Shared/Projects/lean-workspace/terminus/Terminus/Backend/TerminalMock.lean`
+- `Terminus/Backend/Terminal.lean`
+- `Terminus/Backend/TerminalIO.lean`
+- `Terminus/Backend/TerminalMock.lean`
 
 ---
 

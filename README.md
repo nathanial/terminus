@@ -8,9 +8,11 @@ Terminus provides widgets, layouts, and styling for building terminal user inter
 
 - **Full Color Support**: 16 ANSI colors, 256 indexed colors, and RGB true color
 - **Raw Terminal Mode**: Character-by-character input via FFI to termios
-- **Widget System**: 16 widgets including charts, inputs, trees, and more
+- **Mouse Support**: Click, scroll, and drag events with modifier key detection
+- **Widget System**: 25+ widgets including charts, inputs, trees, forms, and more
 - **Flexible Layouts**: Constraints (fixed, percent, ratio, fill) with vertical/horizontal splits
 - **Efficient Rendering**: Buffer diffing for minimal terminal updates
+- **Image Support**: Display images via iTerm2 inline images protocol
 
 ## Requirements
 
@@ -74,6 +76,14 @@ lake exe dashboard    # Multi-widget layout demo
 lake exe charts       # Data visualization with charts
 lake exe fileexplorer # Tree view with scrollbar and popups
 lake exe texteditor   # Text input and editing widgets
+lake exe form         # Form widgets with validation
+lake exe menu         # Dropdown menu widget
+lake exe piechart     # Pie and donut charts
+lake exe image        # Image display (iTerm2/WezTerm)
+lake exe mouse        # Mouse event handling demo
+lake exe bigtext      # Large ASCII art text
+lake exe logger       # Scrolling log widget
+lake exe kitchensink  # Comprehensive widget showcase
 ```
 
 ### HelloWorld
@@ -151,6 +161,29 @@ lake exe texteditor
 
 **Controls:** `Tab` to switch focus, type to edit, arrow keys to navigate, `Esc` to quit
 
+### MouseDemo
+
+Interactive mouse event demonstration:
+- Click, scroll, and drag detection
+- Modifier key tracking (Ctrl, Alt, Shift)
+- Event history display
+
+```bash
+lake exe mouse
+```
+
+**Controls:** Click, scroll, or drag anywhere to see events, `q` to quit
+
+### KitchenSink
+
+Comprehensive demo showcasing all widgets with tab-based navigation through different categories.
+
+```bash
+lake exe kitchensink
+```
+
+**Controls:** `Tab` to switch categories, widget-specific controls within each section
+
 ## Architecture
 
 ### Core Types
@@ -178,23 +211,36 @@ Available widgets:
 - `ListWidget` - Selectable list with scrolling
 - `Table` - Data table with headers
 - `Gauge` - Horizontal progress bar
+- `LineGauge` - Minimal line-based progress indicator
 - `Tabs` - Tab bar for navigation
+- `BigText` - Large ASCII art text rendering
+- `Clear` - Area clearing widget
 
 **Chart Widgets:**
 - `Sparkline` - Inline mini-chart using Unicode blocks (`▁▂▃▄▅▆▇█`)
 - `BarChart` - Vertical/horizontal bar chart with labels
 - `LineChart` - Line graph with axes (Braille rendering)
+- `PieChart` - Pie and donut charts
 - `Canvas` - Free-form drawing with Braille sub-cell resolution
 
 **Input Widgets:**
 - `TextInput` - Single-line text input with cursor
 - `TextArea` - Multi-line text editor with line numbers
+- `Checkbox` - Toggle checkbox widget
+- `Form` - Form container with field management
 
 **Navigation Widgets:**
 - `Tree` - Hierarchical tree view with expand/collapse
+- `Menu` - Dropdown/context menu
 - `Calendar` - Monthly calendar with date selection
 - `Scrollbar` - Visual scroll position indicator
+- `ScrollView` - Scrollable content container
 - `Popup` - Centered overlay dialog box
+
+**Feedback Widgets:**
+- `Spinner` - Animated loading indicator (7 built-in styles)
+- `Logger` - Scrolling log display
+- `Image` - Terminal image display (iTerm2 protocol)
 
 ### Layout
 
@@ -218,16 +264,20 @@ Constraint types:
 ### Input
 
 ```lean
--- Non-blocking poll
+-- Non-blocking poll for keyboard and mouse events
 let event ← Events.poll
 match event with
 | .key keyEvent => handleKey keyEvent
+| .mouse mouseEvent => handleMouse mouseEvent
+| .resize w h => handleResize w h
 | .none => pure ()
 
--- Blocking read
+-- Blocking read (keyboard only)
 let key ← Events.read
 if key.isCtrlQ then quit
 ```
+
+Mouse events include button (left/middle/right/scroll), action (press/release/motion), position, and modifier keys.
 
 ### App Framework
 
@@ -253,45 +303,69 @@ terminus/
 │   │   ├── Style.lean      # Colors, modifiers, Orientation
 │   │   ├── Cell.lean       # Styled character
 │   │   ├── Rect.lean       # Rectangular regions
-│   │   └── Buffer.lean     # Cell grid
+│   │   ├── Buffer.lean     # Cell grid
+│   │   └── Base64.lean     # Base64 encoding (for images)
 │   ├── Backend/
 │   │   ├── Ansi.lean       # ANSI escape codes
 │   │   ├── Raw.lean        # FFI bindings
-│   │   └── Terminal.lean   # Terminal I/O
+│   │   ├── Terminal.lean   # Terminal I/O
+│   │   ├── TerminalEffect.lean  # Terminal effect typeclass
+│   │   └── TerminalMock.lean    # Mock for testing
 │   ├── Input/
-│   │   ├── Key.lean        # Key event types
-│   │   └── Events.lean     # Event polling
+│   │   ├── Key.lean        # Key and mouse event types
+│   │   └── Events.lean     # Event polling and parsing
 │   ├── Layout/
 │   │   ├── Constraint.lean # Layout constraints
 │   │   └── Layout.lean     # Layout solver
-│   ├── Widgets/
+│   ├── Widgets/            # 25+ widgets
 │   │   ├── Widget.lean     # Widget typeclass
 │   │   ├── Block.lean      # Border container
 │   │   ├── Paragraph.lean  # Text widget
 │   │   ├── List.lean       # Selectable list
 │   │   ├── Table.lean      # Data table
 │   │   ├── Gauge.lean      # Progress bar
+│   │   ├── LineGauge.lean  # Line progress indicator
 │   │   ├── Tabs.lean       # Tab bar
+│   │   ├── BigText.lean    # ASCII art text
 │   │   ├── Sparkline.lean  # Mini inline chart
-│   │   ├── Scrollbar.lean  # Scroll indicator
-│   │   ├── Popup.lean      # Dialog overlay
 │   │   ├── BarChart.lean   # Bar chart
-│   │   ├── Tree.lean       # Tree view
-│   │   ├── Calendar.lean   # Calendar widget
-│   │   ├── TextInput.lean  # Single-line input
-│   │   ├── Canvas.lean     # Braille drawing
 │   │   ├── LineChart.lean  # Line graph
-│   │   └── TextArea.lean   # Multi-line editor
+│   │   ├── PieChart.lean   # Pie/donut chart
+│   │   ├── Canvas.lean     # Braille drawing
+│   │   ├── TextInput.lean  # Single-line input
+│   │   ├── TextArea.lean   # Multi-line editor
+│   │   ├── Checkbox.lean   # Toggle checkbox
+│   │   ├── Form.lean       # Form container
+│   │   ├── Tree.lean       # Tree view
+│   │   ├── Menu.lean       # Dropdown menu
+│   │   ├── Calendar.lean   # Calendar widget
+│   │   ├── Scrollbar.lean  # Scroll indicator
+│   │   ├── ScrollView.lean # Scrollable container
+│   │   ├── Popup.lean      # Dialog overlay
+│   │   ├── Spinner.lean    # Loading indicator
+│   │   ├── Logger.lean     # Log display
+│   │   ├── Image.lean      # Image display
+│   │   └── Clear.lean      # Area clearing
 │   └── Frame.lean          # Rendering frame
 ├── ffi/
 │   └── terminus.c          # C termios bindings
+├── Tests/
+│   └── Main.lean           # Test suite
 └── examples/
     ├── HelloWorld.lean     # Basic example
     ├── Counter.lean        # Interactive counter
     ├── Dashboard.lean      # Multi-widget demo
     ├── Charts.lean         # Chart widgets demo
     ├── FileExplorer.lean   # Tree/popup demo
-    └── TextEditor.lean     # Input widgets demo
+    ├── TextEditor.lean     # Input widgets demo
+    ├── Form.lean           # Form widgets demo
+    ├── Menu.lean           # Menu widget demo
+    ├── PieChart.lean       # Pie chart demo
+    ├── Image.lean          # Image display demo
+    ├── MouseDemo.lean      # Mouse events demo
+    ├── BigText.lean        # ASCII art demo
+    ├── Logger.lean         # Logger widget demo
+    └── KitchenSink.lean    # Comprehensive showcase
 ```
 
 ## License
