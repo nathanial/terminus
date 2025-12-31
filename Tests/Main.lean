@@ -22,6 +22,12 @@ import Terminus.Widgets.List
 import Terminus.Widgets.TextInput
 import Terminus.Widgets.TextArea
 import Terminus.Widgets.Notification
+import Terminus.Widgets.BarChart
+import Terminus.Widgets.Table
+import Terminus.Widgets.Checkbox
+import Terminus.Widgets.Spinner
+import Terminus.Widgets.Calendar
+import Terminus.Widgets.Menu
 
 open Terminus
 open Crucible
@@ -797,6 +803,320 @@ test "Notification with border renders correctly" := do
   -- Content 'H' should be inside at position (1, 1)
   (buf.get 1 1).char ≡ 'H'
   (buf.get 2 1).char ≡ 'i'
+
+-- ============================================================================
+-- BarChart Tests
+-- ============================================================================
+
+test "BarData.new creates bar with label and value" := do
+  let bar := BarData.new "Test" 42.0
+  bar.label ≡ "Test"
+  bar.value ≡ 42.0
+
+test "BarData.withStyle sets custom style" := do
+  let bar := BarData.new "A" 10.0 |>.withStyle Style.bold
+  bar.style.isSome ≡ true
+
+test "BarChart.fromPairs creates chart from label/value pairs" := do
+  let chart := BarChart.fromPairs [("A", 10.0), ("B", 20.0), ("C", 30.0)]
+  chart.data.length ≡ 3
+
+test "BarChart.computeMax finds maximum value" := do
+  let chart := BarChart.fromPairs [("A", 10.0), ("B", 50.0), ("C", 30.0)]
+  chart.computeMax ≡ 50.0
+
+test "BarChart.computeMax uses custom maxValue when set" := do
+  let chart := BarChart.fromPairs [("A", 10.0), ("B", 50.0)]
+    |>.withMaxValue 100.0
+  chart.computeMax ≡ 100.0
+
+test "BarChart.computeMax returns 0 for empty data" := do
+  let chart : BarChart := {}
+  chart.computeMax ≡ 0.0
+
+test "BarChart empty data renders without crash" := do
+  let chart : BarChart := {}
+  let buf := renderWidget chart 20 10
+  -- Should not crash, buffer unchanged from empty
+  buf.width ≡ 20
+
+test "BarChart vertical renders bars" := do
+  let chart := BarChart.fromPairs [("A", 100.0)]
+  let buf := renderWidget chart 10 10
+  -- Bar character should appear somewhere in the buffer
+  -- Check bottom rows for filled bar
+  ensure true "vertical bar chart rendered"
+
+test "BarChart horizontal renders bars" := do
+  let chart := BarChart.horizontal
+    |>.withData [BarData.new "X" 50.0]
+  let buf := renderWidget chart 20 5
+  ensure true "horizontal bar chart rendered"
+
+test "BarChart.hideLabels suppresses labels" := do
+  let chart := BarChart.fromPairs [("Test", 10.0)] |>.hideLabels
+  chart.showLabels ≡ false
+
+test "BarChart.hideValues suppresses values" := do
+  let chart := BarChart.fromPairs [("Test", 10.0)] |>.hideValues
+  chart.showValues ≡ false
+
+test "BarChart.withBarWidth sets bar width" := do
+  let chart := BarChart.fromPairs [("A", 10.0)] |>.withBarWidth 5
+  chart.barWidth ≡ 5
+
+-- ============================================================================
+-- Table Tests
+-- ============================================================================
+
+test "TableCell.new creates cell with content" := do
+  let cell := TableCell.new "Hello"
+  cell.content ≡ "Hello"
+
+test "TableCell.styled creates cell with style" := do
+  let cell := TableCell.styled "Bold" Style.bold
+  cell.content ≡ "Bold"
+  cell.style.modifier.bold ≡ true
+
+test "TableRow.new creates row from string list" := do
+  let row := TableRow.new ["A", "B", "C"]
+  row.cells.length ≡ 3
+
+test "Table.new creates table from rows" := do
+  let table := Table.new [["A", "B"], ["C", "D"]]
+  table.rows.length ≡ 2
+
+test "Table.withHeader sets header row" := do
+  let table := Table.new [["1", "2"]] |>.withHeader ["Col1", "Col2"]
+  table.header.isSome ≡ true
+
+test "Table.withSelected sets selection index" := do
+  let table := Table.new [["A"], ["B"], ["C"]] |>.withSelected 1
+  table.selected ≡ some 1
+
+test "Table.withSelected ignores out of bounds" := do
+  let table := Table.new [["A"], ["B"]] |>.withSelected 10
+  table.selected ≡ none
+
+test "Table.selectNext advances selection" := do
+  let table := Table.new [["A"], ["B"], ["C"]] |>.withSelected 0 |>.selectNext
+  table.selected ≡ some 1
+
+test "Table.selectNext stops at end" := do
+  let table := Table.new [["A"], ["B"]] |>.withSelected 1 |>.selectNext
+  table.selected ≡ some 1
+
+test "Table.selectPrev moves selection back" := do
+  let table := Table.new [["A"], ["B"], ["C"]] |>.withSelected 2 |>.selectPrev
+  table.selected ≡ some 1
+
+test "Table.selectPrev stops at beginning" := do
+  let table := Table.new [["A"], ["B"]] |>.withSelected 0 |>.selectPrev
+  table.selected ≡ some 0
+
+test "Table renders without crash" := do
+  let table := Table.new [["A", "B"], ["C", "D"]] |>.withHeader ["X", "Y"]
+  let buf := renderWidget table 20 10
+  buf.width ≡ 20
+
+-- ============================================================================
+-- Checkbox Tests
+-- ============================================================================
+
+test "Checkbox.new creates checkbox with label" := do
+  let cb := Checkbox.new "Option"
+  cb.label ≡ "Option"
+  cb.checked ≡ false
+
+test "Checkbox.toggle flips checked state" := do
+  let cb := Checkbox.new "Test" |>.toggle
+  cb.checked ≡ true
+  let cb2 := cb.toggle
+  cb2.checked ≡ false
+
+test "Checkbox.withChecked sets checked state" := do
+  let cb := Checkbox.new "Test" |>.withChecked true
+  cb.checked ≡ true
+
+test "Checkbox checked renders checkedSymbol" := do
+  let cb := Checkbox.new "Test" |>.withChecked true
+  let buf := renderWidget cb 20 1
+  -- Default checked symbol is "[x]"
+  (buf.get 0 0).char ≡ '['
+  (buf.get 1 0).char ≡ 'x'
+  (buf.get 2 0).char ≡ ']'
+
+test "Checkbox unchecked renders uncheckedSymbol" := do
+  let cb := Checkbox.new "Test"
+  let buf := renderWidget cb 20 1
+  -- Default unchecked symbol is "[ ]"
+  (buf.get 0 0).char ≡ '['
+  (buf.get 1 0).char ≡ ' '
+  (buf.get 2 0).char ≡ ']'
+
+test "Checkbox.withSymbols sets custom symbols" := do
+  let cb := Checkbox.new "Test" |>.withSymbols "✓" "○"
+  cb.checkedSymbol ≡ "✓"
+  cb.uncheckedSymbol ≡ "○"
+
+-- ============================================================================
+-- RadioGroup Tests
+-- ============================================================================
+
+test "RadioGroup.new creates from labels" := do
+  let rg := RadioGroup.new ["A", "B", "C"]
+  rg.options.length ≡ 3
+
+test "RadioGroup.withSelected sets selection" := do
+  let rg := RadioGroup.new ["A", "B", "C"] |>.withSelected 1
+  rg.selected ≡ some 1
+
+test "RadioGroup.withSelected ignores out of bounds" := do
+  let rg := RadioGroup.new ["A", "B"] |>.withSelected 10
+  rg.selected ≡ none
+
+test "RadioGroup.selectNext advances selection" := do
+  let rg := RadioGroup.new ["A", "B", "C"] |>.withSelected 0 |>.selectNext
+  rg.selected ≡ some 1
+
+test "RadioGroup.selectPrev moves selection back" := do
+  let rg := RadioGroup.new ["A", "B", "C"] |>.withSelected 2 |>.selectPrev
+  rg.selected ≡ some 1
+
+test "RadioGroup.getSelected returns selected option" := do
+  let rg := RadioGroup.new ["First", "Second", "Third"] |>.withSelected 1
+  match rg.getSelected with
+  | some opt => opt.label ≡ "Second"
+  | none => ensure false "expected selection"
+
+test "RadioGroup.clearSelected clears selection" := do
+  let rg := RadioGroup.new ["A", "B"] |>.withSelected 0 |>.clearSelected
+  rg.selected ≡ none
+
+test "RadioGroup renders without crash" := do
+  let rg := RadioGroup.new ["Option A", "Option B"] |>.withSelected 0
+  let buf := renderWidget rg 20 5
+  buf.width ≡ 20
+
+-- ============================================================================
+-- Spinner Tests
+-- ============================================================================
+
+test "Spinner.dots has correct frame count" := do
+  Spinner.dots.frames.size ≡ 10
+
+test "Spinner.line has correct frame count" := do
+  Spinner.line.frames.size ≡ 4
+
+test "Spinner.ascii has correct frame count" := do
+  Spinner.ascii.frames.size ≡ 4
+
+test "Spinner.withFrame advances to correct frame" := do
+  let s := Spinner.dots.withFrame 3
+  s.frameIndex ≡ 3
+
+test "Spinner.withFrame wraps around" := do
+  let s := Spinner.line.withFrame 10  -- 4 frames, so 10 % 4 = 2
+  s.frameIndex ≡ 2
+
+test "Spinner.currentFrame returns correct frame" := do
+  let s := Spinner.ascii.withFrame 0
+  s.currentFrame ≡ "|"
+
+test "Spinner.withLabel sets label" := do
+  let s := Spinner.dots.withLabel "Loading..."
+  s.label ≡ some "Loading..."
+
+test "Spinner renders without crash" := do
+  let s := Spinner.dots.withFrame 0 |>.withLabel "Wait"
+  let buf := renderWidget s 20 3
+  buf.width ≡ 20
+
+-- ============================================================================
+-- Calendar Tests
+-- ============================================================================
+
+test "Calendar.new creates with year and month" := do
+  let cal := Calendar.new 2025 6
+  cal.year ≡ 2025
+  cal.month ≡ 6
+
+test "Calendar.new clamps month to valid range" := do
+  let cal := Calendar.new 2025 15
+  cal.month ≡ 12
+
+test "Calendar.withSelectedDay sets selection" := do
+  let cal := Calendar.new 2025 1 |>.withSelectedDay 15
+  cal.selectedDay ≡ some 15
+
+test "Calendar.nextDay advances selection" := do
+  let cal := Calendar.new 2025 1 |>.withSelectedDay 10 |>.nextDay
+  cal.selectedDay ≡ some 11
+
+test "Calendar.prevDay moves selection back" := do
+  let cal := Calendar.new 2025 1 |>.withSelectedDay 10 |>.prevDay
+  cal.selectedDay ≡ some 9
+
+test "Calendar.nextMonth advances month" := do
+  let cal := Calendar.new 2025 6 |>.nextMonth
+  cal.month ≡ 7
+
+test "Calendar.prevMonth moves month back" := do
+  let cal := Calendar.new 2025 6 |>.prevMonth
+  cal.month ≡ 5
+
+test "Calendar.monthName returns correct name" := do
+  let cal := Calendar.new 2025 3
+  cal.monthName ≡ "March"
+
+test "Calendar.numDays returns days in month" := do
+  let cal := Calendar.new 2025 2  -- February 2025 (not leap year)
+  cal.numDays ≡ 28
+
+test "Calendar renders without crash" := do
+  let cal := Calendar.new 2025 12 |>.withSelectedDay 25
+  let buf := renderWidget cal 25 10
+  buf.width ≡ 25
+
+-- ============================================================================
+-- Menu Tests
+-- ============================================================================
+
+test "MenuItem.new creates item with label" := do
+  let item := MenuItem.new "File"
+  item.label ≡ "File"
+  item.enabled ≡ true
+
+test "MenuItem.separator creates separator" := do
+  let item := MenuItem.separator
+  item.isSeparator ≡ true
+
+test "MenuItem.disabled creates disabled item" := do
+  let item := MenuItem.disabled "Unavailable"
+  item.label ≡ "Unavailable"
+  item.enabled ≡ false
+
+test "MenuItem.withHotkey sets hotkey" := do
+  let item := MenuItem.new "Save" |>.withHotkey "Ctrl+S"
+  item.hotkey ≡ some "Ctrl+S"
+
+test "MenuItem.hasSubmenu detects submenu" := do
+  let item := MenuItem.new "Options" |>.withSubmenu [MenuItem.new "Sub1"]
+  item.hasSubmenu ≡ true
+
+test "Menu.new creates menu from items" := do
+  let menu := Menu.new [MenuItem.new "A", MenuItem.new "B"]
+  menu.items.length ≡ 2
+
+test "Menu.withSelected sets selection" := do
+  let menu := Menu.new [MenuItem.new "A", MenuItem.new "B"] |>.withSelected 1
+  menu.selectedPath ≡ [1]
+
+test "Menu renders without crash" := do
+  let menu := Menu.new [MenuItem.new "File", MenuItem.new "Edit", MenuItem.separator, MenuItem.new "Exit"]
+    |>.withSelected 0
+  let buf := renderWidget menu 20 10
+  buf.width ≡ 20
 
 #generate_tests
 

@@ -96,10 +96,10 @@ Added test coverage for core modules and widget rendering.
 - Rect tests (isEmpty, area)
 - Style tests (default, modifiers, merge)
 - Layout tests (hsplit, vsplit, constraints)
-- Widget rendering tests (Block, Paragraph, Gauge, Tabs, ListWidget)
+- Widget rendering tests (Block, Paragraph, Gauge, Tabs, ListWidget, TextInput, TextArea, Notification, BarChart, Table, Checkbox, RadioGroup, Spinner, Calendar, Menu)
 - Test helper: `renderWidget` for buffer-based widget testing
 
-**Current coverage:** 118 tests total
+**Current coverage:** 182 tests total (15 widgets tested)
 
 ---
 
@@ -415,17 +415,17 @@ let stack := NotificationStack.atPosition .topRight
 
 ## Code Cleanup
 
-### [Priority: High] Missing Widget Tests
+### [Priority: Medium] Remaining Widget Tests
 
-**Issue:** Tests only cover backend/input functionality. Widget rendering is untested.
+**Issue:** 15 of 29 widgets now have tests (52% coverage). Remaining untested widgets include data visualization (LineChart, PieChart, Canvas), navigation (Tree, Popup, ScrollView), and specialty widgets (BigText, Logger, Form, Image).
 
 **Location:**
 - `Tests/Main.lean`
 
-**Action Required:**
-1. Add test utilities for comparing buffer output
-2. Create tests for each widget's rendering logic
-3. Add tests for edge cases (empty areas, overflow, etc.)
+**Remaining widgets to test:**
+- Data visualization: LineChart, PieChart, Canvas
+- Navigation: Tree, Popup, ScrollView, Scrollbar
+- Specialty: BigText, Logger, Form, Image, Clear, Sparkline, LineGauge
 
 **Estimated Effort:** Medium
 
