@@ -1426,14 +1426,29 @@ def draw (frame : Frame) (state : State) : Frame := Id.run do
     f := f.render img sections[0]
 
   if h : 1 < sections.length then
-    let help := Paragraph.fromLines [
-      "This uses the iTerm2 inline image protocol.",
-      "If you don't see an image, try iTerm2 or WezTerm.",
-      "",
-      "p: toggle preserve aspect ratio"
-    ] |>.withStyle Style.dim
-      |>.withBlock (Block.rounded.withTitle "Help" |>.withBorderStyle (Style.fgColor Color.cyan))
-    f := f.render help sections[1]
+    let helpArea := sections[1]
+    let helpBlock := Block.rounded.withTitle "Help" |>.withBorderStyle (Style.fgColor Color.cyan)
+    f := f.render helpBlock helpArea
+
+    let inner := helpBlock.innerArea helpArea
+    if !inner.isEmpty then
+      -- Line 1: protocol info
+      f := f.writeString inner.x inner.y "This uses the iTerm2 inline image protocol." Style.dim
+      -- Line 2: "If you don't see an image, try "
+      if inner.height > 1 then
+        let prefixText := "If you don't see an image, try "
+        f := f.writeString inner.x (inner.y + 1) prefixText Style.dim
+        -- Add clickable links for terminal names
+        let iterm2X := inner.x + prefixText.length
+        f := f.writeLink iterm2X (inner.y + 1) "iTerm2" "https://iterm2.com" (Style.underline.withFg Color.cyan)
+        let orX := iterm2X + 6
+        f := f.writeString orX (inner.y + 1) " or " Style.dim
+        let wezX := orX + 4
+        f := f.writeLink wezX (inner.y + 1) "WezTerm" "https://wezfurlong.org/wezterm" (Style.underline.withFg Color.cyan)
+        f := f.writeString (wezX + 7) (inner.y + 1) "." Style.dim
+      -- Line 4: key binding
+      if inner.height > 3 then
+        f := f.writeString inner.x (inner.y + 3) "p: toggle preserve aspect ratio" Style.dim
 
   f
 
@@ -1532,10 +1547,19 @@ def drawHello (frame : Frame) (_ : Unit) : Frame := Id.run do
   let blockArea : Rect := { x := blockX, y := blockY, width := blockWidth, height := blockHeight }
   f := f.render greeting blockArea
 
-  let subtitle := "KitchenSink demo"
-  if area.height >= blockHeight + 2 then
+  -- Clickable hyperlink to GitHub (works in iTerm2, Windows Terminal, etc.)
+  let linkText := "github.com/nathanial/terminus"
+  let linkUrl := "https://github.com/nathanial/terminus"
+  let linkStyle := Style.underline.withFg Color.cyan
+  if area.height >= blockHeight + 3 then
+    let linkX := if area.width > linkText.length then (area.width - linkText.length) / 2 else 0
+    let linkY := blockY + blockHeight + 1
+    f := f.writeLink linkX linkY linkText linkUrl linkStyle
+
+  let subtitle := "A ratatui-style TUI library for Lean 4"
+  if area.height >= blockHeight + 5 then
     let subX := if area.width > subtitle.length then (area.width - subtitle.length) / 2 else 0
-    let subY := min (area.height - 1) (blockY + blockHeight + 1)
+    let subY := blockY + blockHeight + 3
     f := f.writeString subX subY subtitle Style.dim
 
   f
