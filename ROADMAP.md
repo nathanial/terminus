@@ -96,10 +96,10 @@ Added test coverage for core modules and widget rendering.
 - Rect tests (isEmpty, area)
 - Style tests (default, modifiers, merge)
 - Layout tests (hsplit, vsplit, constraints)
-- Widget rendering tests (Block, Paragraph, Gauge, Tabs, ListWidget, TextInput, TextArea, Notification, BarChart, Table, Checkbox, RadioGroup, Spinner, Calendar, Menu)
+- Widget rendering tests (Block, Paragraph, Gauge, Tabs, ListWidget, TextInput, TextArea, Notification, BarChart, Table, Checkbox, RadioGroup, Spinner, Calendar, Menu, LineChart, PieChart, Tree, Popup, Sparkline, LineGauge)
 - Test helper: `renderWidget` for buffer-based widget testing
 
-**Current coverage:** 182 tests total (15 widgets tested)
+**Current coverage:** 234 tests total (21 widgets tested)
 
 ---
 
@@ -415,19 +415,19 @@ let stack := NotificationStack.atPosition .topRight
 
 ## Code Cleanup
 
-### [Priority: Medium] Remaining Widget Tests
+### [Priority: Low] Remaining Widget Tests
 
-**Issue:** 15 of 29 widgets now have tests (52% coverage). Remaining untested widgets include data visualization (LineChart, PieChart, Canvas), navigation (Tree, Popup, ScrollView), and specialty widgets (BigText, Logger, Form, Image).
+**Issue:** 21 of 29 widgets now have tests (72% coverage). Remaining untested widgets include Canvas, ScrollView, Scrollbar, BigText, Logger, Form, Image, and Clear.
 
 **Location:**
 - `Tests/Main.lean`
 
 **Remaining widgets to test:**
-- Data visualization: LineChart, PieChart, Canvas
-- Navigation: Tree, Popup, ScrollView, Scrollbar
-- Specialty: BigText, Logger, Form, Image, Clear, Sparkline, LineGauge
+- Data visualization: Canvas
+- Navigation: ScrollView, Scrollbar
+- Specialty: BigText, Logger, Form, Image, Clear
 
-**Estimated Effort:** Medium
+**Estimated Effort:** Small
 
 ---
 

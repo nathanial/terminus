@@ -28,6 +28,12 @@ import Terminus.Widgets.Checkbox
 import Terminus.Widgets.Spinner
 import Terminus.Widgets.Calendar
 import Terminus.Widgets.Menu
+import Terminus.Widgets.LineChart
+import Terminus.Widgets.PieChart
+import Terminus.Widgets.Tree
+import Terminus.Widgets.Popup
+import Terminus.Widgets.Sparkline
+import Terminus.Widgets.LineGauge
 
 open Terminus
 open Crucible
@@ -1117,6 +1123,283 @@ test "Menu renders without crash" := do
     |>.withSelected 0
   let buf := renderWidget menu 20 10
   buf.width ≡ 20
+
+-- ============================================================================
+-- LineChart Tests
+-- ============================================================================
+
+test "DataSeries.new creates series from data" := do
+  let series := DataSeries.new [1.0, 2.0, 3.0]
+  series.data.length ≡ 3
+
+test "DataSeries.withLabel sets label" := do
+  let series := DataSeries.new [1.0] |>.withLabel "Sales"
+  series.label ≡ "Sales"
+
+test "DataSeries.min finds minimum value" := do
+  let series := DataSeries.new [5.0, 2.0, 8.0, 1.0]
+  series.min ≡ 1.0
+
+test "DataSeries.max finds maximum value" := do
+  let series := DataSeries.new [5.0, 2.0, 8.0, 1.0]
+  series.max ≡ 8.0
+
+test "LineChart.new creates empty chart" := do
+  let chart := LineChart.new
+  chart.series.isEmpty ≡ true
+
+test "LineChart.addSeries adds series to chart" := do
+  let chart := LineChart.new
+    |>.addSeries (DataSeries.new [1.0, 2.0])
+    |>.addSeries (DataSeries.new [3.0, 4.0])
+  chart.series.length ≡ 2
+
+test "LineChart.maxDataLength finds longest series" := do
+  let chart := LineChart.new
+    |>.addSeries (DataSeries.new [1.0, 2.0, 3.0])
+    |>.addSeries (DataSeries.new [1.0, 2.0])
+  chart.maxDataLength ≡ 3
+
+test "LineChart.withYRange sets Y axis bounds" := do
+  let chart := LineChart.new |>.withYRange 0.0 100.0
+  chart.yMin ≡ some 0.0
+  chart.yMax ≡ some 100.0
+
+test "LineChart.hideLegend disables legend" := do
+  let chart := LineChart.new |>.hideLegend
+  chart.showLegend ≡ false
+
+test "LineChart renders without crash" := do
+  let chart := LineChart.new
+    |>.addSeries (DataSeries.new [10.0, 20.0, 15.0, 25.0] |>.withLabel "Data")
+  let buf := renderWidget chart 40 20
+  buf.width ≡ 40
+
+-- ============================================================================
+-- PieChart Tests
+-- ============================================================================
+
+test "PieSlice.new creates slice with label and value" := do
+  let slice := PieSlice.new "Category" 50.0
+  slice.label ≡ "Category"
+  slice.value ≡ 50.0
+
+test "PieChart.new creates chart from slices" := do
+  let chart := PieChart.new [PieSlice.new "A" 30.0, PieSlice.new "B" 70.0]
+  chart.data.length ≡ 2
+
+test "PieChart.withDonutRatio clamps to valid range" := do
+  let chart := PieChart.new [] |>.withDonutRatio 0.5
+  chart.donutRatio ≡ 0.5
+  let chart2 := PieChart.new [] |>.withDonutRatio 1.5
+  -- Should be clamped to 0.9 max
+  ensure (chart2.donutRatio <= 0.9) "donut ratio clamped"
+
+test "PieChart.withStartAngle sets start angle" := do
+  let chart := PieChart.new [] |>.withStartAngle 45.0
+  chart.startAngle ≡ 45.0
+
+test "PieChart.withResolution sets resolution" := do
+  let chart := PieChart.new [] |>.withResolution .cell
+  chart.resolution ≡ PieChartResolution.cell
+
+test "PieChart renders without crash" := do
+  let chart := PieChart.new [
+    PieSlice.new "Red" 30.0 |>.withStyle (Style.fgColor .red),
+    PieSlice.new "Blue" 50.0 |>.withStyle (Style.fgColor .blue),
+    PieSlice.new "Green" 20.0 |>.withStyle (Style.fgColor .green)
+  ]
+  let buf := renderWidget chart 30 15
+  buf.width ≡ 30
+
+-- ============================================================================
+-- Tree Tests
+-- ============================================================================
+
+test "TreeNode.mkLeaf creates leaf node" := do
+  let node := TreeNode.mkLeaf "File.txt"
+  node.isLeaf ≡ true
+  node.label ≡ "File.txt"
+
+test "TreeNode.mkBranch creates branch node" := do
+  let node := TreeNode.mkBranch "Folder" [TreeNode.mkLeaf "Child"]
+  node.isBranch ≡ true
+  node.isExpanded ≡ true
+
+test "TreeNode.mkCollapsed creates collapsed branch" := do
+  let node := TreeNode.mkCollapsed "Folder" [TreeNode.mkLeaf "Child"]
+  node.isExpanded ≡ false
+
+test "TreeNode.toggle toggles expansion" := do
+  let node := TreeNode.mkBranch "Folder" [] |>.toggle
+  node.isExpanded ≡ false
+  let node2 := node.toggle
+  node2.isExpanded ≡ true
+
+test "TreeNode.children returns child nodes" := do
+  let child := TreeNode.mkLeaf "Child"
+  let node := TreeNode.mkBranch "Parent" [child]
+  node.children.length ≡ 1
+
+test "Tree.new creates tree from nodes" := do
+  let tree := Tree.new [TreeNode.mkLeaf "A", TreeNode.mkLeaf "B"]
+  tree.nodes.length ≡ 2
+
+test "Tree.selectNext advances selection" := do
+  let tree := Tree.new [TreeNode.mkLeaf "A", TreeNode.mkLeaf "B"]
+    |>.withSelected 0
+    |>.selectNext
+  tree.selected ≡ 1
+
+test "Tree.selectPrev moves selection back" := do
+  let tree := Tree.new [TreeNode.mkLeaf "A", TreeNode.mkLeaf "B"]
+    |>.withSelected 1
+    |>.selectPrev
+  tree.selected ≡ 0
+
+test "Tree.visibleCount counts visible lines" := do
+  let tree := Tree.new [
+    TreeNode.mkLeaf "A",
+    TreeNode.mkBranch "B" [TreeNode.mkLeaf "B1", TreeNode.mkLeaf "B2"]
+  ]
+  tree.visibleCount ≡ 4  -- A, B, B1, B2
+
+test "Tree renders without crash" := do
+  let tree := Tree.new [
+    TreeNode.mkBranch "Root" [
+      TreeNode.mkLeaf "File1",
+      TreeNode.mkBranch "SubFolder" [TreeNode.mkLeaf "File2"]
+    ]
+  ]
+  let buf := renderWidget tree 30 10
+  buf.width ≡ 30
+
+-- ============================================================================
+-- Popup Tests
+-- ============================================================================
+
+test "Popup.new creates popup from content" := do
+  let popup := Popup.new "Hello\nWorld"
+  popup.lines.length ≡ 2
+
+test "Popup.fromLines creates popup from line list" := do
+  let popup := Popup.fromLines ["Line 1", "Line 2", "Line 3"]
+  popup.lines.length ≡ 3
+
+test "Popup.withTitle sets title" := do
+  let popup := Popup.new "Content" |>.withTitle "My Dialog"
+  popup.title ≡ some "My Dialog"
+
+test "Popup.withSize sets dimensions" := do
+  let popup := Popup.new "Content" |>.withSize 40 20
+  popup.width ≡ some 40
+  popup.height ≡ some 20
+
+test "Popup.computeSize calculates size from content" := do
+  let popup := Popup.new "Short"
+  let (w, h) := popup.computeSize 100 100
+  -- Content + border + padding
+  ensure (w >= 7) "width includes content"
+  ensure (h >= 3) "height includes content"
+
+test "Popup renders without crash" := do
+  let popup := Popup.new "This is a popup message" |>.withTitle "Info"
+  let buf := renderWidget popup 50 20
+  buf.width ≡ 50
+
+test "ConfirmPopup.new creates confirmation dialog" := do
+  let popup := ConfirmPopup.new "Are you sure?"
+  popup.message ≡ "Are you sure?"
+  popup.selectedYes ≡ true
+
+test "ConfirmPopup.toggle switches selection" := do
+  let popup := ConfirmPopup.new "Confirm?" |>.toggle
+  popup.selectedYes ≡ false
+
+test "ConfirmPopup renders without crash" := do
+  let popup := ConfirmPopup.new "Delete this file?"
+  let buf := renderWidget popup 50 20
+  buf.width ≡ 50
+
+-- ============================================================================
+-- Sparkline Tests
+-- ============================================================================
+
+test "Sparkline.new creates sparkline from data" := do
+  let spark := Sparkline.new [1.0, 2.0, 3.0, 4.0]
+  spark.data.length ≡ 4
+
+test "Sparkline.fromNats creates sparkline from naturals" := do
+  let spark := Sparkline.fromNats [1, 2, 3]
+  spark.data.length ≡ 3
+
+test "Sparkline.fromInts creates sparkline from integers" := do
+  let spark := Sparkline.fromInts [1, 2, 3]
+  spark.data.length ≡ 3
+
+test "Sparkline.computeMax finds maximum" := do
+  let spark := Sparkline.new [5.0, 10.0, 3.0]
+  spark.computeMax ≡ 10.0
+
+test "Sparkline.computeMax uses custom max when set" := do
+  let spark := Sparkline.new [5.0, 10.0] |>.withMax 20.0
+  spark.computeMax ≡ 20.0
+
+test "Sparkline.appendData adds value" := do
+  let spark := Sparkline.new [1.0, 2.0] |>.appendData 3.0
+  spark.data.length ≡ 3
+
+test "Sparkline.pushData maintains max length" := do
+  let spark := Sparkline.new [1.0, 2.0, 3.0] |>.pushData 4.0 3
+  spark.data.length ≡ 3
+
+test "Sparkline renders without crash" := do
+  let spark := Sparkline.new [1.0, 4.0, 2.0, 8.0, 5.0, 3.0]
+  let buf := renderWidget spark 20 3
+  buf.width ≡ 20
+
+-- ============================================================================
+-- LineGauge Tests
+-- ============================================================================
+
+test "LineGauge.new creates gauge with ratio" := do
+  let gauge := LineGauge.new 0.5
+  gauge.ratio ≡ 0.5
+
+test "LineGauge.new clamps ratio to valid range" := do
+  let gauge1 := LineGauge.new (-0.5)
+  gauge1.ratio ≡ 0.0
+  let gauge2 := LineGauge.new 1.5
+  gauge2.ratio ≡ 1.0
+
+test "LineGauge.fromPercent creates from percentage" := do
+  let gauge := LineGauge.fromPercent 75
+  gauge.ratio ≡ 0.75
+
+test "LineGauge.percent returns percentage" := do
+  let gauge := LineGauge.new 0.5
+  gauge.percent ≡ 50
+
+test "LineGauge.withLabel sets label" := do
+  let gauge := LineGauge.new 0.5 |>.withLabel "Progress"
+  gauge.label ≡ some "Progress"
+
+test "LineGauge.setRatio updates ratio" := do
+  let gauge := LineGauge.new 0.3 |>.setRatio 0.7
+  gauge.ratio ≡ 0.7
+
+test "LineGauge.setPercent updates from percent" := do
+  let gauge := LineGauge.new 0.0 |>.setPercent 60
+  gauge.ratio ≡ 0.6
+
+test "LineGauge.withShowPercent enables percent display" := do
+  let gauge := LineGauge.new 0.5 |>.withShowPercent true
+  gauge.showPercent ≡ true
+
+test "LineGauge renders without crash" := do
+  let gauge := LineGauge.new 0.7 |>.withLabel "Loading" |>.withShowPercent true
+  let buf := renderWidget gauge 30 3
+  buf.width ≡ 30
 
 #generate_tests
 

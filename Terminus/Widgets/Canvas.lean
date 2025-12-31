@@ -111,7 +111,8 @@ def drawLine (g : BrailleGrid) (x0 y0 x1 y1 : Int) (style : Style) : BrailleGrid
   let sx : Int := if x0 < x1 then 1 else -1
   let sy : Int := if y0 < y1 then 1 else -1
 
-  let mut err := (if dx > dy then Int.ofNat dx else Int.ofNat dy) / 2
+  -- Standard Bresenham: err = dx - dy, use 2*err for comparisons
+  let mut err : Int := Int.ofNat dx - Int.ofNat dy
   let mut x := x0
   let mut y := y0
 
@@ -121,11 +122,13 @@ def drawLine (g : BrailleGrid) (x0 y0 x1 y1 : Int) (style : Style) : BrailleGrid
 
     if x == x1 && y == y1 then break
 
-    let e2 := err
-    if e2 > -(Int.ofNat dx) then
+    let e2 := 2 * err
+    -- Move in X direction if e2 > -dy (i.e., e2 >= -dy + 1)
+    if e2 > -(Int.ofNat dy) then
       err := err - Int.ofNat dy
       x := x + sx
-    if e2 < Int.ofNat dy then
+    -- Move in Y direction if e2 < dx (i.e., e2 <= dx - 1)
+    if e2 < Int.ofNat dx then
       err := err + Int.ofNat dx
       y := y + sy
 
