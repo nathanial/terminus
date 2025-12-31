@@ -182,4 +182,25 @@ def enableMouse : String := csi ++ "?1003h" ++ csi ++ "?1006h"
 /-- Disable mouse tracking -/
 def disableMouse : String := csi ++ "?1003l" ++ csi ++ "?1006l"
 
+-- Hyperlinks (OSC 8)
+-- Format: ESC ] 8 ; params ; uri ST
+-- Where ST (String Terminator) is ESC \ or BEL (\x07)
+
+/-- Operating System Command introducer -/
+def osc : String := esc ++ "]"
+
+/-- String Terminator (using BEL for broader compatibility) -/
+def st : String := "\x07"
+
+/-- Start a hyperlink. Text rendered after this will be clickable.
+    Supported by iTerm2, Windows Terminal, GNOME Terminal, and others. -/
+def hyperlinkStart (url : String) : String := s!"{osc}8;;{url}{st}"
+
+/-- End the current hyperlink -/
+def hyperlinkEnd : String := s!"{osc}8;;{st}"
+
+/-- Wrap text in a hyperlink (convenience for inline use) -/
+def hyperlink (url : String) (text : String) : String :=
+  hyperlinkStart url ++ text ++ hyperlinkEnd
+
 end Terminus.Ansi

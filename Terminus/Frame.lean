@@ -65,6 +65,11 @@ def writeString (f : Frame) (x y : Nat) (s : String) (style : Style := {}) : Fra
   f with buffer := f.buffer.writeString x y s style
 }
 
+/-- Write a hyperlinked string at the given position -/
+def writeLink (f : Frame) (x y : Nat) (s : String) (url : String) (style : Style := {}) : Frame := {
+  f with buffer := f.buffer.writeLink x y s url style
+}
+
 /-- Clear the frame buffer -/
 def clear (f : Frame) : Frame := { f with buffer := f.buffer.clear, commands := [] }
 

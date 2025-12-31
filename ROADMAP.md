@@ -71,6 +71,21 @@ Many new widgets have been added since the initial release:
 
 ---
 
+### Hyperlink Support ✓
+
+Clickable terminal hyperlinks using OSC 8 escape sequences.
+
+**Implementation:**
+- `Cell.hyperlink` field for per-cell URL storage
+- `Ansi.hyperlinkStart` / `Ansi.hyperlinkEnd` escape sequences
+- `Buffer.writeLink` / `Frame.writeLink` helper functions
+- Automatic hyperlink state tracking in `Terminal.draw` and `Terminal.flush`
+- Demo in `examples/HelloWorld.lean`
+
+**Supported terminals:** iTerm2, Windows Terminal, GNOME Terminal, WezTerm, and others.
+
+---
+
 ## Feature Proposals
 
 ### [Priority: Medium] Async Event Polling
@@ -155,23 +170,6 @@ Many new widgets have been added since the initial release:
 - `Terminus/Widgets/TextArea.lean`
 
 **Estimated Effort:** Medium
-
-**Dependencies:** None
-
----
-
-### [Priority: Medium] Hyperlink Support
-
-**Description:** Add support for terminal hyperlinks using OSC 8 escape sequences, allowing clickable links in terminal output.
-
-**Rationale:** Modern terminals support hyperlinks (iTerm2, Windows Terminal, GNOME Terminal). This would enhance the utility of text widgets.
-
-**Affected Files:**
-- `Terminus/Backend/Ansi.lean`
-- `Terminus/Core/Cell.lean` (hyperlink attribute)
-- `Terminus/Core/Style.lean`
-
-**Estimated Effort:** Small
 
 **Dependencies:** None
 

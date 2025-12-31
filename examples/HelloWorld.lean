@@ -34,6 +34,14 @@ def main : IO Unit := do
     let blockArea : Rect := { x := blockX, y := blockY, width := blockWidth, height := blockHeight }
     let frame := frame.render greeting blockArea
 
+    -- Show a clickable hyperlink (works in iTerm2, Windows Terminal, GNOME Terminal)
+    let linkText := "github.com/nathanial/terminus"
+    let linkUrl := "https://github.com/nathanial/terminus"
+    let linkX := (area.width - linkText.length) / 2
+    let linkY := blockY + blockHeight + 1
+    let linkStyle := Style.underline.withFg Color.cyan
+    let frame := frame.writeLink linkX linkY linkText linkUrl linkStyle
+
     -- Also show instructions at the bottom
     let instructions := "Press any key to exit..."
     let instrX := (area.width - instructions.length) / 2

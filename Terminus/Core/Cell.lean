@@ -8,6 +8,7 @@ namespace Terminus
 structure Cell where
   char : Char := ' '
   style : Style := {}
+  hyperlink : Option String := none
   deriving Repr, BEq, Inhabited
 
 namespace Cell
@@ -25,6 +26,13 @@ def withStyle (cell : Cell) (s : Style) : Cell := { cell with style := s }
 def setFg (cell : Cell) (c : Color) : Cell := { cell with style := cell.style.withFg c }
 
 def setBg (cell : Cell) (c : Color) : Cell := { cell with style := cell.style.withBg c }
+
+def withHyperlink (cell : Cell) (url : String) : Cell := { cell with hyperlink := some url }
+
+def clearHyperlink (cell : Cell) : Cell := { cell with hyperlink := none }
+
+/-- Create a styled cell with a hyperlink -/
+def link (c : Char) (s : Style) (url : String) : Cell := { char := c, style := s, hyperlink := some url }
 
 def reset : Cell := empty
 

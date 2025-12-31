@@ -73,10 +73,21 @@ def leaveAltScreen [Monad m] [TerminalEffect m] : m Unit := TerminalEffect.write
 def moveCursor [Monad m] [TerminalEffect m] (x y : Nat) : m Unit := TerminalEffect.writeStdout (Ansi.cursorToZero x y)
 
 /-- Render a cell at the given position -/
-private def renderCell [Monad m] [TerminalEffect m] (x y : Nat) (cell : Cell) : m Unit := do
+private def renderCell [Monad m] [TerminalEffect m] (x y : Nat) (cell : Cell) (prevLink : Option String := none) : m (Option String) := do
   TerminalEffect.writeStdout (Ansi.cursorToZero x y)
   TerminalEffect.writeStdout (Ansi.styleCodes cell.style)
+  -- Handle hyperlink transitions
+  let newLink := cell.hyperlink
+  if newLink != prevLink then
+    -- End previous hyperlink if any
+    if prevLink.isSome then
+      TerminalEffect.writeStdout Ansi.hyperlinkEnd
+    -- Start new hyperlink if any
+    match newLink with
+    | some url => TerminalEffect.writeStdout (Ansi.hyperlinkStart url)
+    | none => pure ()
   TerminalEffect.writeStdout cell.char.toString
+  pure newLink
 
 /-- Force redraw of a rectangular region from the current buffer.
 This is used to "erase" non-cell overlays (e.g. inline images) by overwriting with cells. -/
@@ -85,9 +96,13 @@ private def redrawRect [Monad m] [TerminalEffect m] (term : Terminal) (r : Rect)
   let y0 := r.y
   let x1 := min (r.x + r.width) term.width
   let y1 := min (r.y + r.height) term.height
+  let mut lastLink : Option String := none
   for y in [y0 : y1] do
     for x in [x0 : x1] do
-      renderCell x y (term.currentBuffer.get x y)
+      lastLink ← renderCell x y (term.currentBuffer.get x y) lastLink
+  -- End any active hyperlink
+  if lastLink.isSome then
+    TerminalEffect.writeStdout Ansi.hyperlinkEnd
 
 private def iterm2ImageEscape (payloadB64 : String) (nameB64 : Option String) (w h : Nat) (preserve : Bool) : String :=
   let esc := "\x1b]1337;File="
@@ -136,8 +151,12 @@ private def applyCommands [Monad m] [TerminalEffect m] (term : Terminal) (cmds :
 /-- Flush the current buffer to the terminal using differential updates -/
 def flush [Monad m] [TerminalEffect m] (term : Terminal) (commands : List TerminalCommand := []) : m Terminal := do
   let changes := Buffer.diff term.previousBuffer term.currentBuffer
+  let mut lastLink : Option String := none
   for (x, y, cell) in changes do
-    renderCell x y cell
+    lastLink ← renderCell x y cell lastLink
+  -- End any active hyperlink before reset
+  if lastLink.isSome then
+    TerminalEffect.writeStdout Ansi.hyperlinkEnd
   TerminalEffect.writeStdout Ansi.resetAll
   TerminalEffect.flushStdout
   let term := { term with previousBuffer := term.currentBuffer }
@@ -147,6 +166,7 @@ def flush [Monad m] [TerminalEffect m] (term : Terminal) (commands : List Termin
 def draw [Monad m] [TerminalEffect m] (term : Terminal) : m Terminal := do
   TerminalEffect.writeStdout Ansi.cursorHome
   let mut lastStyle : Style := {}
+  let mut lastLink : Option String := none
   TerminalEffect.writeStdout Ansi.resetAll
   for y in [0 : term.height] do
     TerminalEffect.writeStdout (Ansi.cursorToZero 0 y)
@@ -155,7 +175,18 @@ def draw [Monad m] [TerminalEffect m] (term : Terminal) : m Terminal := do
       if cell.style != lastStyle then
         TerminalEffect.writeStdout (Ansi.styleCodes cell.style)
         lastStyle := cell.style
+      -- Handle hyperlink transitions
+      if cell.hyperlink != lastLink then
+        if lastLink.isSome then
+          TerminalEffect.writeStdout Ansi.hyperlinkEnd
+        match cell.hyperlink with
+        | some url => TerminalEffect.writeStdout (Ansi.hyperlinkStart url)
+        | none => pure ()
+        lastLink := cell.hyperlink
       TerminalEffect.writeStdout cell.char.toString
+  -- End any active hyperlink before reset
+  if lastLink.isSome then
+    TerminalEffect.writeStdout Ansi.hyperlinkEnd
   TerminalEffect.writeStdout Ansi.resetAll
   TerminalEffect.flushStdout
   pure { term with previousBuffer := term.currentBuffer, previousCommandKeys := [], previousImageRects := [] }

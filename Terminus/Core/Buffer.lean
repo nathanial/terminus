@@ -88,6 +88,26 @@ def writeStringBounded (buf : Buffer) (x y : Nat) (maxWidth : Nat) (s : String) 
     col := col + 1
   result
 
+/-- Write a hyperlinked string starting at (x, y) -/
+def writeLink (buf : Buffer) (x y : Nat) (s : String) (url : String) (style : Style := {}) : Buffer := Id.run do
+  let mut result := buf
+  let mut col := x
+  for c in s.toList do
+    result := result.set col y (Cell.link c style url)
+    col := col + 1
+  result
+
+/-- Write a hyperlinked string within bounds, truncating if necessary -/
+def writeLinkBounded (buf : Buffer) (x y : Nat) (maxWidth : Nat) (s : String) (url : String) (style : Style := {}) : Buffer := Id.run do
+  let mut result := buf
+  let mut col := x
+  let endCol := min (x + maxWidth) buf.width
+  for c in s.toList do
+    if col >= endCol then break
+    result := result.set col y (Cell.link c style url)
+    col := col + 1
+  result
+
 /-- Clear the buffer (fill with empty cells) -/
 def clear (buf : Buffer) : Buffer := buf.fill Cell.empty
 
