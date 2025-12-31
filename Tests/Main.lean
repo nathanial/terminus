@@ -21,6 +21,7 @@ import Terminus.Widgets.Tabs
 import Terminus.Widgets.List
 import Terminus.Widgets.TextInput
 import Terminus.Widgets.TextArea
+import Terminus.Widgets.Notification
 
 open Terminus
 open Crucible
@@ -720,6 +721,82 @@ test "TerminalCommand.copyToClipboard creates clipboard command" := do
   match cmd with
   | .clipboard c => c.text ≡ "Hello"
   | _ => ensure false "wrong command type"
+
+-- Notification Tests
+test "NotificationLevel.toStyle returns cyan for info" := do
+  let style := NotificationLevel.info.toStyle
+  style.fg ≡ Color.ansi .cyan
+
+test "NotificationLevel.toStyle returns green for success" := do
+  let style := NotificationLevel.success.toStyle
+  style.fg ≡ Color.ansi .green
+
+test "NotificationLevel.toStyle returns yellow for warning" := do
+  let style := NotificationLevel.warning.toStyle
+  style.fg ≡ Color.ansi .yellow
+
+test "NotificationLevel.toStyle returns red for error" := do
+  let style := NotificationLevel.error.toStyle
+  style.fg ≡ Color.ansi .red
+
+test "Notification.message creates single-line notification" := do
+  let n := Notification.message "Hello"
+  n.lines.length ≡ 1
+
+test "Notification.multiline creates multi-line notification" := do
+  let n := Notification.multiline ["Line 1", "Line 2", "Line 3"]
+  n.lines.length ≡ 3
+
+test "Notification.computeSize respects maxWidth" := do
+  let n := Notification.message "A very long message that exceeds the max width"
+             |>.withMaxWidth 20
+             |>.noBorder
+  let (w, _) := n.computeSize 100 100
+  ensure (w <= 20) "width should be capped"
+
+test "Notification.computeSize includes border padding" := do
+  let n := Notification.message "Hi"  -- 2 chars
+  let (w, h) := n.computeSize 100 100
+  -- With default rounded border: 2 chars + 2 border = 4 width
+  -- 1 line + 2 border = 3 height
+  w ≡ 4
+  h ≡ 3
+
+test "NotificationStack.push adds notification" := do
+  let stack := NotificationStack.atPosition .topRight
+    |>.push (Notification.message "First")
+    |>.push (Notification.message "Second")
+  stack.size ≡ 2
+
+test "NotificationStack.pop removes oldest" := do
+  let stack := NotificationStack.atPosition .topRight
+    |>.push (Notification.message "First")
+    |>.push (Notification.message "Second")
+    |>.pop
+  stack.size ≡ 1
+
+test "NotificationStack.clear removes all" := do
+  let stack := NotificationStack.atPosition .topRight
+    |>.push (Notification.message "First")
+    |>.push (Notification.message "Second")
+    |>.clear
+  stack.isEmpty ≡ true
+
+test "Notification renders message text" := do
+  let n := Notification.message "Test" |>.noBorder
+  let buf := renderWidget n 10 3
+  (buf.get 0 0).char ≡ 'T'
+  (buf.get 1 0).char ≡ 'e'
+  (buf.get 2 0).char ≡ 's'
+  (buf.get 3 0).char ≡ 't'
+
+test "Notification with border renders correctly" := do
+  let n := Notification.message "Hi"
+  let buf := renderWidget n 10 5
+  -- Border should be present (rounded uses curves)
+  -- Content 'H' should be inside at position (1, 1)
+  (buf.get 1 1).char ≡ 'H'
+  (buf.get 2 1).char ≡ 'i'
 
 #generate_tests
 

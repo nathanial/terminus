@@ -99,7 +99,7 @@ Added test coverage for core modules and widget rendering.
 - Widget rendering tests (Block, Paragraph, Gauge, Tabs, ListWidget)
 - Test helper: `renderWidget` for buffer-based widget testing
 
-**Current coverage:** 105 tests total
+**Current coverage:** 118 tests total
 
 ---
 
@@ -119,6 +119,34 @@ Full clipboard support using OSC 52 escape sequences.
 - 21 clipboard-related tests
 
 **Supported terminals:** iTerm2, Windows Terminal, xterm, and others with OSC 52 support.
+
+---
+
+### Notification/Toast Widget ✓
+
+Toast-style notification widget for temporary messages with stacking support.
+
+**Implementation:**
+- `NotificationPosition` enum (topLeft, topCenter, topRight, bottomLeft, bottomCenter, bottomRight)
+- `NotificationLevel` enum (info, success, warning, error) with preset styles
+- `Notification` structure with multi-line support, auto-sizing, and configurable borders
+- `NotificationStack` for managing multiple stacked notifications
+- Corner-based positioning with margin and spacing configuration
+- Widget instances for both single notifications and stacks
+- 13 notification tests
+
+**Usage:**
+```lean
+-- Single notification
+let notif := Notification.success "File saved!"
+
+-- Stacked notifications
+let stack := NotificationStack.atPosition .topRight
+  |>.push (Notification.info "Processing...")
+  |>.push (Notification.warning "Low memory")
+```
+
+**Note:** Timeouts are managed by the application (widgets are stateless).
 
 ---
 
@@ -223,21 +251,6 @@ Full clipboard support using OSC 52 escape sequences.
 **Estimated Effort:** Medium
 
 **Dependencies:** Text Wrapping Modes
-
----
-
-### [Priority: Low] Notification/Toast Widget
-
-**Description:** Create a notification/toast widget that displays temporary messages with automatic timeout and stacking.
-
-**Rationale:** Common UI pattern for showing transient feedback to users.
-
-**Affected Files:**
-- New file: `Terminus/Widgets/Notification.lean`
-
-**Estimated Effort:** Small
-
-**Dependencies:** None
 
 ---
 
