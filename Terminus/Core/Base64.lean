@@ -43,6 +43,55 @@ def encode (bytes : ByteArray) : String := Id.run do
 
   String.ofList out
 
+/-- Encode a string as base64 -/
+def encodeString (s : String) : String :=
+  encode s.toUTF8
+
+/-- Decode base64 character to 6-bit value, returns none for invalid chars -/
+private def charToSextet (c : Char) : Option Nat :=
+  if c >= 'A' && c <= 'Z' then some (c.toNat - 'A'.toNat)
+  else if c >= 'a' && c <= 'z' then some (c.toNat - 'a'.toNat + 26)
+  else if c >= '0' && c <= '9' then some (c.toNat - '0'.toNat + 52)
+  else if c == '+' then some 62
+  else if c == '/' then some 63
+  else if c == '=' then some 0  -- Padding, value doesn't matter
+  else none
+
+/-- Decode base64 string to bytes (RFC 4648). Returns none on invalid input. -/
+def decode (s : String) : Option ByteArray := Id.run do
+  let chars := s.toList.filter fun c => c != '\n' && c != '\r' && c != ' '  -- Strip whitespace
+  if chars.length % 4 != 0 then return none
+
+  let mut out : ByteArray := ByteArray.empty
+  let mut i : Nat := 0
+
+  while i < chars.length do
+    let c0 := chars.getD i '='
+    let c1 := chars.getD (i + 1) '='
+    let c2 := chars.getD (i + 2) '='
+    let c3 := chars.getD (i + 3) '='
+
+    let some s0 := charToSextet c0 | return none
+    let some s1 := charToSextet c1 | return none
+    let some s2 := charToSextet c2 | return none
+    let some s3 := charToSextet c3 | return none
+
+    let triple := (s0 <<< 18) ||| (s1 <<< 12) ||| (s2 <<< 6) ||| s3
+
+    out := out.push ((triple >>> 16) &&& 0xFF).toUInt8
+    if c2 != '=' then out := out.push ((triple >>> 8) &&& 0xFF).toUInt8
+    if c3 != '=' then out := out.push (triple &&& 0xFF).toUInt8
+
+    i := i + 4
+
+  some out
+
+/-- Decode base64 string to a UTF-8 string. Returns none on invalid input. -/
+def decodeString (s : String) : Option String :=
+  match decode s with
+  | some bytes => some (String.fromUTF8! bytes)
+  | none => none
+
 end Base64
 
 end Terminus

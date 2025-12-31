@@ -6,6 +6,30 @@ import Terminus.Input.Key
 
 namespace Terminus
 
+/-- Position in a text area (row, col) -/
+structure TextPosition where
+  row : Nat
+  col : Nat
+  deriving BEq, Repr, Inhabited
+
+namespace TextPosition
+
+def compare (a b : TextPosition) : Ordering :=
+  match Ord.compare a.row b.row with
+  | .eq => Ord.compare a.col b.col
+  | other => other
+
+def le (a b : TextPosition) : Bool :=
+  a.compare b != .gt
+
+def lt (a b : TextPosition) : Bool :=
+  a.compare b == .lt
+
+instance : LE TextPosition where le a b := a.le b
+instance : LT TextPosition where lt a b := a.lt b
+
+end TextPosition
+
 /-- Multi-line text area widget -/
 structure TextArea where
   lines : Array String := #[""]
@@ -13,11 +37,13 @@ structure TextArea where
   cursorCol : Nat := 0
   scrollRow : Nat := 0
   scrollCol : Nat := 0
+  selectionAnchor : Option TextPosition := none  -- Start of selection (if any)
   focused : Bool := true
   showLineNumbers : Bool := false
   lineNumberWidth : Nat := 4
   style : Style := Style.default
   cursorStyle : Style := Style.reversed
+  selectionStyle : Style := Style.reversed.withBg Color.blue
   lineNumberStyle : Style := Style.dim
   currentLineStyle : Option Style := none  -- Highlight current line
   block : Option Block := none
@@ -203,22 +229,211 @@ def moveCursorEnd (t : TextArea) : TextArea :=
   let lineLen := (t.lines[t.cursorRow]?.getD "").length
   { t with cursorCol := lineLen }
 
-/-- Handle a key event -/
+/-- Get the current cursor position -/
+def cursorPosition (t : TextArea) : TextPosition :=
+  { row := t.cursorRow, col := t.cursorCol }
+
+/-- Check if there is an active selection -/
+def hasSelection (t : TextArea) : Bool :=
+  t.selectionAnchor.isSome
+
+/-- Clear the selection -/
+def clearSelection (t : TextArea) : TextArea :=
+  { t with selectionAnchor := none }
+
+/-- Start a selection at current cursor position -/
+def startSelection (t : TextArea) : TextArea :=
+  { t with selectionAnchor := some t.cursorPosition }
+
+/-- Get the selection range as (start, end) where start <= end -/
+def selectionRange (t : TextArea) : Option (TextPosition × TextPosition) :=
+  t.selectionAnchor.map fun anchor =>
+    let cursor := t.cursorPosition
+    if anchor.le cursor then (anchor, cursor)
+    else (cursor, anchor)
+
+/-- Check if a position is within the selection -/
+def isInSelection (t : TextArea) (pos : TextPosition) : Bool :=
+  match t.selectionRange with
+  | none => false
+  | some (start, «end») => start.le pos && pos.lt «end»
+
+/-- Get the selected text -/
+def selectedText (t : TextArea) : String :=
+  match t.selectionRange with
+  | none => ""
+  | some (start, «end») =>
+    if start.row == «end».row then
+      -- Single line selection
+      match t.lines[start.row]? with
+      | some line => line.drop start.col |>.take («end».col - start.col)
+      | none => ""
+    else
+      -- Multi-line selection
+      Id.run do
+        let mut result : List String := []
+        -- First line (from start.col to end of line)
+        match t.lines[start.row]? with
+        | some line => result := result ++ [line.drop start.col]
+        | none => pure ()
+        -- Middle lines (complete lines)
+        for row in [start.row + 1 : «end».row] do
+          match t.lines[row]? with
+          | some line => result := result ++ [line]
+          | none => pure ()
+        -- Last line (from start to end.col)
+        match t.lines[«end».row]? with
+        | some line => result := result ++ [line.take «end».col]
+        | none => pure ()
+        String.intercalate "\n" result
+
+/-- Delete the selected text -/
+def deleteSelection (t : TextArea) : TextArea :=
+  match t.selectionRange with
+  | none => t
+  | some (start, «end») =>
+    if start.row == «end».row then
+      -- Single line deletion
+      match t.lines[start.row]? with
+      | some line =>
+        let before := line.take start.col
+        let after := line.drop «end».col
+        { t with
+          lines := t.lines.set! start.row (before ++ after)
+          cursorRow := start.row
+          cursorCol := start.col
+          selectionAnchor := none
+        }
+      | none => { t with selectionAnchor := none }
+    else
+      -- Multi-line deletion
+      let firstLinePart := match t.lines[start.row]? with
+        | some line => line.take start.col
+        | none => ""
+      let lastLinePart := match t.lines[«end».row]? with
+        | some line => line.drop «end».col
+        | none => ""
+      let mergedLine := firstLinePart ++ lastLinePart
+      let beforeLines := t.lines.extract 0 start.row
+      let afterLines := t.lines.extract («end».row + 1) t.lines.size
+      let newLines := beforeLines.push mergedLine |>.append afterLines
+      { t with
+        lines := if newLines.isEmpty then #[""] else newLines
+        cursorRow := start.row
+        cursorCol := start.col
+        selectionAnchor := none
+      }
+
+/-- Select all text -/
+def selectAll (t : TextArea) : TextArea :=
+  let lastRow := t.lines.size - 1
+  let lastCol := (t.lines[lastRow]?.getD "").length
+  { t with
+    selectionAnchor := some { row := 0, col := 0 }
+    cursorRow := lastRow
+    cursorCol := lastCol
+  }
+
+/-- Copy selected text (returns the text to copy, or all text if no selection) -/
+def copy (t : TextArea) : String :=
+  if t.hasSelection then t.selectedText
+  else t.text
+
+/-- Cut selected text (returns new state and the cut text) -/
+def cut (t : TextArea) : TextArea × String :=
+  if t.hasSelection then
+    let text := t.selectedText
+    (t.deleteSelection, text)
+  else
+    let text := t.text
+    ({ t with lines := #[""], cursorRow := 0, cursorCol := 0, selectionAnchor := none }, text)
+
+/-- Paste text at cursor position (replaces selection if any) -/
+def paste (t : TextArea) (text : String) : TextArea :=
+  let t := if t.hasSelection then t.deleteSelection else t
+  let pasteLines := text.splitOn "\n"
+  match pasteLines with
+  | [] => t
+  | [single] =>
+    -- Single line paste: insert at cursor
+    match t.lines[t.cursorRow]? with
+    | some line =>
+      let before := line.take t.cursorCol
+      let after := line.drop t.cursorCol
+      { t with
+        lines := t.lines.set! t.cursorRow (before ++ single ++ after)
+        cursorCol := t.cursorCol + single.length
+      }
+    | none => t
+  | first :: rest =>
+    -- Multi-line paste
+    match t.lines[t.cursorRow]? with
+    | some line =>
+      let before := line.take t.cursorCol
+      let after := line.drop t.cursorCol
+      let lastPasteLine := rest.getLast!
+      let middleLines := rest.dropLast
+      let firstLine := before ++ first
+      let lastLine := lastPasteLine ++ after
+      let beforeLines := t.lines.extract 0 t.cursorRow
+      let afterLines := t.lines.extract (t.cursorRow + 1) t.lines.size
+      let newLines := beforeLines.push firstLine
+        |>.append (middleLines.toArray)
+        |>.push lastLine
+        |>.append afterLines
+      { t with
+        lines := newLines
+        cursorRow := t.cursorRow + rest.length
+        cursorCol := lastPasteLine.length
+      }
+    | none => t
+
+/-- Handle a key event with clipboard support, returning new state and optional text to copy -/
+def handleKeyWithClipboard (t : TextArea) (key : KeyEvent) : TextArea × Option String :=
+  if !t.focused then (t, none)
+  else
+    -- Handle Ctrl key combinations
+    if key.modifiers.ctrl then
+      match key.code with
+      | .char 'a' => (t.selectAll, none)
+      | .char 'c' => (t, some t.copy)
+      | .char 'x' =>
+        let (newT, text) := t.cut
+        (newT, some text)
+      | _ => (t, none)
+    else
+      -- Clear selection on most key presses (except navigation)
+      let t := match key.code with
+        | .left | .right | .up | .down | .home | .«end» => t  -- Keep selection for navigation
+        | _ => if t.hasSelection && key.code != .backspace && key.code != .delete then t.clearSelection else t
+
+      match key.code with
+      | .char c =>
+        let t := if t.hasSelection then t.deleteSelection else t
+        (t.insertChar c, none)
+      | .space =>
+        let t := if t.hasSelection then t.deleteSelection else t
+        (t.insertChar ' ', none)
+      | .enter =>
+        let t := if t.hasSelection then t.deleteSelection else t
+        (t.insertNewline, none)
+      | .backspace =>
+        if t.hasSelection then (t.deleteSelection, none)
+        else (t.deleteBackward, none)
+      | .delete =>
+        if t.hasSelection then (t.deleteSelection, none)
+        else (t.deleteForward, none)
+      | .left => (t.moveCursorLeft.clearSelection, none)
+      | .right => (t.moveCursorRight.clearSelection, none)
+      | .up => (t.moveCursorUp.clearSelection, none)
+      | .down => (t.moveCursorDown.clearSelection, none)
+      | .home => (t.moveCursorHome.clearSelection, none)
+      | .«end» => (t.moveCursorEnd.clearSelection, none)
+      | _ => (t, none)
+
+/-- Handle a key event (without clipboard support) -/
 def handleKey (t : TextArea) (key : KeyEvent) : TextArea :=
-  if !t.focused then t
-  else match key.code with
-  | .char c => t.insertChar c
-  | .space => t.insertChar ' '
-  | .enter => t.insertNewline
-  | .backspace => t.deleteBackward
-  | .delete => t.deleteForward
-  | .left => t.moveCursorLeft
-  | .right => t.moveCursorRight
-  | .up => t.moveCursorUp
-  | .down => t.moveCursorDown
-  | .home => t.moveCursorHome
-  | .«end» => t.moveCursorEnd
-  | _ => t
+  (t.handleKeyWithClipboard key).1
 
 /-- Adjust scroll to keep cursor visible -/
 def adjustScroll (t : TextArea) (visibleHeight visibleWidth : Nat) : TextArea :=
@@ -301,11 +516,24 @@ instance : Widget TextArea where
           | (true, some s) => s
           | _ => t.style
 
+        -- Get selection range for highlight checking
+        let selRange := t.selectionRange
+
         let visibleLineChars := visibleLine.toList
         for hc : col in [:visibleLineChars.length] do
           let x := textStartX + col
-          let isCursor := t.focused && isCurrentLine && (scrollCol + col) == t.cursorCol
-          let style := if isCursor then t.cursorStyle else baseStyle
+          let textCol := scrollCol + col  -- Actual column in the text
+          let pos : TextPosition := { row := lineIdx, col := textCol }
+          let isCursor := t.focused && isCurrentLine && textCol == t.cursorCol
+
+          -- Check if this position is within selection
+          let isSelected := match selRange with
+            | some (start, «end») => start.le pos && pos.lt «end»
+            | none => false
+
+          let style := if isCursor then t.cursorStyle
+                       else if isSelected then t.selectionStyle
+                       else baseStyle
           match visibleLineChars[col]? with
           | some c => result := result.setStyled x y c style
           | none => pure ()

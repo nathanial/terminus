@@ -144,6 +144,9 @@ private def applyCommands [Monad m] [TerminalEffect m] (term : Terminal) (cmds :
           | .iterm2 =>
             TerminalEffect.writeStdout (Ansi.cursorToZero ic.rect.x ic.rect.y)
             TerminalEffect.writeStdout (iterm2ImageEscape payloadB64 nameB64 ic.rect.width ic.rect.height ic.preserveAspectRatio)
+      | .clipboard cc =>
+        -- Write text to system clipboard using OSC 52
+        TerminalEffect.writeStdout (Ansi.clipboardWrite cc.text cc.selection.code)
 
     TerminalEffect.flushStdout
     pure { term with previousCommandKeys := keys, previousImageRects := imageRects }

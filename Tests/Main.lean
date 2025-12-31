@@ -3,12 +3,14 @@
 import Crucible
 import Terminus.Backend.TerminalEffect
 import Terminus.Backend.TerminalMock
+import Terminus.Backend.Commands
 import Terminus.Input.Events
 import Terminus.Input.Key
 import Terminus.Core.Cell
 import Terminus.Core.Buffer
 import Terminus.Core.Rect
 import Terminus.Core.Style
+import Terminus.Core.Base64
 import Terminus.Layout.Constraint
 import Terminus.Layout.Layout
 import Terminus.Widgets.Widget
@@ -17,6 +19,8 @@ import Terminus.Widgets.Paragraph
 import Terminus.Widgets.Gauge
 import Terminus.Widgets.Tabs
 import Terminus.Widgets.List
+import Terminus.Widgets.TextInput
+import Terminus.Widgets.TextArea
 
 open Terminus
 open Crucible
@@ -610,6 +614,112 @@ test "Paragraph.fromLines renders multiple lines" := do
   let buf := renderWidget para 10 3
   (buf.get 0 0).char ≡ 'O'
   (buf.get 0 1).char ≡ 'T'
+
+-- Base64 Tests
+test "Base64.encode encodes empty string" := do
+  Base64.encode "".toUTF8 ≡ ""
+
+test "Base64.encode encodes 'Hi'" := do
+  Base64.encode "Hi".toUTF8 ≡ "SGk="
+
+test "Base64.encode encodes 'Hello'" := do
+  Base64.encode "Hello".toUTF8 ≡ "SGVsbG8="
+
+test "Base64.decode decodes 'SGk='" := do
+  match Base64.decode "SGk=" with
+  | some bytes => String.fromUTF8! bytes ≡ "Hi"
+  | none => ensure false "decode failed"
+
+test "Base64.decode decodes 'SGVsbG8='" := do
+  match Base64.decode "SGVsbG8=" with
+  | some bytes => String.fromUTF8! bytes ≡ "Hello"
+  | none => ensure false "decode failed"
+
+test "Base64 roundtrip preserves text" := do
+  let original := "Test 123!"
+  let encoded := Base64.encode original.toUTF8
+  match Base64.decode encoded with
+  | some bytes => String.fromUTF8! bytes ≡ original
+  | none => ensure false "roundtrip failed"
+
+-- TextInput Selection Tests
+test "TextInput.selectAll selects entire text" := do
+  let input := TextInput.new.withValue "Hello"
+  let selected := input.selectAll
+  selected.hasSelection ≡ true
+  selected.selectedText ≡ "Hello"
+
+test "TextInput.copy returns text" := do
+  let input := TextInput.new.withValue "Test"
+  input.copy ≡ "Test"
+
+test "TextInput.copy with selection returns selected text" := do
+  let input := TextInput.new.withValue "Hello World"
+    |>.selectAll
+  input.copy ≡ "Hello World"
+
+test "TextInput.cut removes and returns text" := do
+  let input := (TextInput.new.withValue "Cut me").selectAll
+  let (newInput, cutText) := input.cut
+  cutText ≡ "Cut me"
+  newInput.value ≡ ""
+
+test "TextInput.paste inserts text at cursor" := do
+  let input := TextInput.new.withValue "Hello"
+    |>.moveCursorEnd
+    |>.paste " World"
+  input.value ≡ "Hello World"
+
+test "TextInput.paste replaces selection" := do
+  let input := TextInput.new.withValue "Hello World"
+    |>.selectAll
+    |>.paste "Goodbye"
+  input.value ≡ "Goodbye"
+
+-- TextArea Selection Tests
+test "TextArea.selectAll selects entire text" := do
+  let area := TextArea.fromString "Line 1\nLine 2"
+  let selected := area.selectAll
+  selected.hasSelection ≡ true
+
+test "TextArea.selectedText returns correct text single line" := do
+  let area := TextArea.fromString "Hello World"
+    |>.selectAll
+  area.selectedText ≡ "Hello World"
+
+test "TextArea.selectedText returns correct text multi-line" := do
+  let area := TextArea.fromString "Line 1\nLine 2\nLine 3"
+    |>.selectAll
+  area.selectedText ≡ "Line 1\nLine 2\nLine 3"
+
+test "TextArea.copy returns all text when no selection" := do
+  let area := TextArea.fromString "Full text"
+  area.copy ≡ "Full text"
+
+test "TextArea.cut removes and returns all text" := do
+  let area := (TextArea.fromString "Cut this").selectAll
+  let (newArea, cutText) := area.cut
+  cutText ≡ "Cut this"
+  newArea.text ≡ ""
+
+test "TextArea.paste inserts single line" := do
+  let area := TextArea.new.paste "Pasted"
+  area.text ≡ "Pasted"
+
+test "TextArea.paste inserts multi-line" := do
+  let area := TextArea.new.paste "Line 1\nLine 2"
+  area.lineCount ≡ 2
+
+-- ClipboardCommand Tests
+test "ClipboardCommand key generates unique key" := do
+  let cmd : ClipboardCommand := { text := "test" }
+  cmd.key.startsWith "clip:" ≡ true
+
+test "TerminalCommand.copyToClipboard creates clipboard command" := do
+  let cmd := TerminalCommand.copyToClipboard "Hello"
+  match cmd with
+  | .clipboard c => c.text ≡ "Hello"
+  | _ => ensure false "wrong command type"
 
 #generate_tests
 

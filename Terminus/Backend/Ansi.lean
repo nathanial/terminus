@@ -1,6 +1,7 @@
 -- Terminus.Backend.Ansi: ANSI escape code generation
 
 import Terminus.Core.Style
+import Terminus.Core.Base64
 
 namespace Terminus.Ansi
 
@@ -202,5 +203,28 @@ def hyperlinkEnd : String := s!"{osc}8;;{st}"
 /-- Wrap text in a hyperlink (convenience for inline use) -/
 def hyperlink (url : String) (text : String) : String :=
   hyperlinkStart url ++ text ++ hyperlinkEnd
+
+-- Clipboard (OSC 52)
+-- Format: ESC ] 52 ; <selection> ; <base64-data> ST
+-- Selection: c = clipboard, p = primary, s = select
+-- To query clipboard: use "?" as data
+
+/-- Write text to system clipboard using OSC 52.
+    The text is base64-encoded before sending.
+    Supported by iTerm2, Windows Terminal, xterm, and others.
+    Note: Some terminals require explicit opt-in for clipboard access. -/
+def clipboardWrite (text : String) (selection : String := "c") : String :=
+  let encoded := Terminus.Base64.encodeString text
+  s!"{osc}52;{selection};{encoded}{st}"
+
+/-- Request clipboard contents using OSC 52.
+    Terminal will respond with: ESC ] 52 ; <selection> ; <base64-data> ST
+    The application must parse this response from the input stream. -/
+def clipboardQuery (selection : String := "c") : String :=
+  s!"{osc}52;{selection};?{st}"
+
+/-- Clear the clipboard using OSC 52. -/
+def clipboardClear (selection : String := "c") : String :=
+  s!"{osc}52;{selection};{st}"
 
 end Terminus.Ansi

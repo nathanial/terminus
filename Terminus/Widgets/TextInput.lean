@@ -11,12 +11,14 @@ structure TextInput where
   value : String := ""
   cursor : Nat := 0
   scrollOffset : Nat := 0  -- For horizontal scrolling when text exceeds width
+  selectionStart : Option Nat := none  -- Start of selection (if any)
   placeholder : String := ""
   maxLength : Option Nat := none
   mask : Option Char := none  -- For password fields
   focused : Bool := true
   style : Style := Style.default
   cursorStyle : Style := Style.reversed
+  selectionStyle : Style := Style.reversed.withBg Color.blue
   placeholderStyle : Style := Style.dim
   block : Option Block := none
   deriving Repr, Inhabited
@@ -114,19 +116,102 @@ def setValue (t : TextInput) (v : String) : TextInput :=
     | none => v
   { t with value := value, cursor := value.length }
 
-/-- Handle a key event -/
+/-- Check if there is an active selection -/
+def hasSelection (t : TextInput) : Bool :=
+  t.selectionStart.isSome
+
+/-- Get the selection range as (start, end) where start <= end -/
+def selectionRange (t : TextInput) : Option (Nat × Nat) :=
+  t.selectionStart.map fun start =>
+    if start <= t.cursor then (start, t.cursor)
+    else (t.cursor, start)
+
+/-- Get the selected text -/
+def selectedText (t : TextInput) : String :=
+  match t.selectionRange with
+  | some (s, e) => t.value.drop s |>.take (e - s)
+  | none => ""
+
+/-- Clear the selection -/
+def clearSelection (t : TextInput) : TextInput :=
+  { t with selectionStart := none }
+
+/-- Start a selection at current cursor position -/
+def startSelection (t : TextInput) : TextInput :=
+  { t with selectionStart := some t.cursor }
+
+/-- Select all text -/
+def selectAll (t : TextInput) : TextInput :=
+  { t with selectionStart := some 0, cursor := t.value.length }
+
+/-- Delete the selected text -/
+def deleteSelection (t : TextInput) : TextInput :=
+  match t.selectionRange with
+  | some (s, e) =>
+    let before := t.value.take s
+    let after := t.value.drop e
+    { t with value := before ++ after, cursor := s, selectionStart := none }
+  | none => t
+
+/-- Copy selected text (returns the text to copy, or all text if no selection) -/
+def copy (t : TextInput) : String :=
+  if t.hasSelection then t.selectedText
+  else t.value
+
+/-- Cut selected text (returns new state and the cut text) -/
+def cut (t : TextInput) : TextInput × String :=
+  if t.hasSelection then
+    let text := t.selectedText
+    (t.deleteSelection, text)
+  else
+    (t.clear, t.value)
+
+/-- Paste text at cursor position (replaces selection if any) -/
+def paste (t : TextInput) (text : String) : TextInput :=
+  let t := if t.hasSelection then t.deleteSelection else t
+  t.insertString text
+
+/-- Handle a key event, returning new state and optional text to copy to clipboard -/
+def handleKeyWithClipboard (t : TextInput) (key : KeyEvent) : TextInput × Option String :=
+  if !t.focused then (t, none)
+  else
+    -- Handle Ctrl key combinations
+    if key.modifiers.ctrl then
+      match key.code with
+      | .char 'a' => (t.selectAll, none)
+      | .char 'c' => (t, some t.copy)
+      | .char 'x' =>
+        let (newT, text) := t.cut
+        (newT, some text)
+      | _ => (t, none)
+    else
+      -- Clear selection on most key presses
+      let t := match key.code with
+        | .left | .right | .home | .«end» => t  -- Keep selection for navigation
+        | _ => if t.hasSelection && key.code != .backspace && key.code != .delete then t.clearSelection else t
+
+      match key.code with
+      | .char c =>
+        let t := if t.hasSelection then t.deleteSelection else t
+        (t.insertChar c, none)
+      | .space =>
+        let t := if t.hasSelection then t.deleteSelection else t
+        (t.insertChar ' ', none)
+      | .backspace =>
+        if t.hasSelection then (t.deleteSelection, none)
+        else (t.deleteBackward, none)
+      | .delete =>
+        if t.hasSelection then (t.deleteSelection, none)
+        else (t.deleteForward, none)
+      | .left => (t.moveCursorLeft.clearSelection, none)
+      | .right => (t.moveCursorRight.clearSelection, none)
+      | .home => (t.moveCursorStart.clearSelection, none)
+      | .«end» => (t.moveCursorEnd.clearSelection, none)
+      | _ => (t, none)
+
+/-- Handle a key event (without clipboard support) -/
 def handleKey (t : TextInput) (key : KeyEvent) : TextInput :=
-  if !t.focused then t
-  else match key.code with
-  | .char c => t.insertChar c
-  | .space => t.insertChar ' '
-  | .backspace => t.deleteBackward
-  | .delete => t.deleteForward
-  | .left => t.moveCursorLeft
-  | .right => t.moveCursorRight
-  | .home => t.moveCursorStart
-  | .«end» => t.moveCursorEnd
-  | _ => t
+  (t.handleKeyWithClipboard key).1
 
 /-- Adjust scroll offset to keep cursor visible -/
 def adjustScroll (t : TextInput) (visibleWidth : Nat) : TextInput :=
@@ -167,6 +252,9 @@ instance : Widget TextInput where
                         else if t.cursor >= t.scrollOffset + visibleWidth then t.cursor - visibleWidth + 1
                         else t.scrollOffset
 
+    -- Get selection range (adjusted for scroll)
+    let selRange := t.selectionRange
+
     -- Get visible portion of text
     let visibleText := displayStr.drop scrollOffset |>.take visibleWidth
 
@@ -174,12 +262,20 @@ instance : Widget TextInput where
     let visibleChars := visibleText.toList
     for hi : i in [:visibleChars.length] do
       let x := contentArea.x + i
+      let textPos := scrollOffset + i  -- Position in the actual text
       let cursorPos := t.cursor - scrollOffset
       let isCursor := t.focused && !isEmpty && i == cursorPos
 
+      -- Check if this position is within selection
+      let isSelected := match selRange with
+        | some (s, e) => textPos >= s && textPos < e
+        | none => false
+
       match visibleChars[i]? with
       | some c =>
-        let charStyle := if isCursor then t.cursorStyle else style
+        let charStyle := if isCursor then t.cursorStyle
+                         else if isSelected then t.selectionStyle
+                         else style
         result := result.setStyled x y c charStyle
       | none => pure ()
 

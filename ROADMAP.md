@@ -99,7 +99,26 @@ Added test coverage for core modules and widget rendering.
 - Widget rendering tests (Block, Paragraph, Gauge, Tabs, ListWidget)
 - Test helper: `renderWidget` for buffer-based widget testing
 
-**Current coverage:** 84 tests total
+**Current coverage:** 105 tests total
+
+---
+
+### Clipboard Integration ✓
+
+Full clipboard support using OSC 52 escape sequences.
+
+**Implementation:**
+- OSC 52 escape sequences in `Terminus/Backend/Ansi.lean` (`clipboardWrite`, `clipboardQuery`, `clipboardClear`)
+- Base64 encode/decode in `Terminus/Core/Base64.lean`
+- `ClipboardCommand` and `ClipboardSelection` types in `Terminus/Backend/Commands.lean`
+- `TerminalCommand.clipboard` variant for clipboard operations
+- TextInput selection support: `selectAll`, `hasSelection`, `selectedText`, `copy`, `cut`, `paste`
+- TextArea multi-line selection support: `selectAll`, `selectionRange`, `selectedText`, `copy`, `cut`, `paste`
+- Selection highlighting in both TextInput and TextArea widgets
+- Ctrl+A (select all), Ctrl+C (copy), Ctrl+X (cut) keyboard shortcuts
+- 21 clipboard-related tests
+
+**Supported terminals:** iTerm2, Windows Terminal, xterm, and others with OSC 52 support.
 
 ---
 
@@ -172,23 +191,6 @@ Added test coverage for core modules and widget rendering.
 **Estimated Effort:** Medium
 
 **Dependencies:** Composable Widget Typeclass
-
----
-
-### [Priority: Medium] Clipboard Integration
-
-**Description:** Add clipboard read/write support using OSC 52 escape sequences or platform-specific APIs.
-
-**Rationale:** Copy/paste functionality is essential for text input widgets. The TextArea and TextInput widgets would greatly benefit from clipboard integration.
-
-**Affected Files:**
-- `Terminus/Backend/Ansi.lean` (OSC 52 sequences)
-- `Terminus/Widgets/TextInput.lean`
-- `Terminus/Widgets/TextArea.lean`
-
-**Estimated Effort:** Medium
-
-**Dependencies:** None
 
 ---
 

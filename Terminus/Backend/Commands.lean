@@ -57,22 +57,59 @@ def offset (c : ImageCommand) (dx dy : Nat) : ImageCommand :=
 
 end ImageCommand
 
+/-- Clipboard selection type for OSC 52. -/
+inductive ClipboardSelection where
+  | clipboard  -- System clipboard (c)
+  | primary    -- Primary selection (p) - X11
+  | secondary  -- Secondary selection (s)
+  deriving BEq, Inhabited
+
+namespace ClipboardSelection
+
+def code : ClipboardSelection → String
+  | .clipboard => "c"
+  | .primary => "p"
+  | .secondary => "s"
+
+end ClipboardSelection
+
+/-- Command to write text to the system clipboard. -/
+structure ClipboardCommand where
+  text : String
+  selection : ClipboardSelection := .clipboard
+  deriving Inhabited
+
+namespace ClipboardCommand
+
+def key (c : ClipboardCommand) : String :=
+  s!"clip:{c.selection.code}:{c.text.length}"
+
+end ClipboardCommand
+
 /-- Terminal commands emitted during rendering. -/
 inductive TerminalCommand where
   | image (cmd : ImageCommand)
+  | clipboard (cmd : ClipboardCommand)
   deriving Inhabited
 
 namespace TerminalCommand
 
 def key : TerminalCommand → String
   | .image c => c.key
+  | .clipboard c => c.key
 
 def offset (cmd : TerminalCommand) (dx dy : Nat) : TerminalCommand :=
   match cmd with
   | .image c => .image (c.offset dx dy)
+  | .clipboard c => .clipboard c  -- Clipboard doesn't need offset
 
 def rect? : TerminalCommand → Option Rect
   | .image c => some c.rect
+  | .clipboard _ => none
+
+/-- Create a clipboard write command -/
+def copyToClipboard (text : String) : TerminalCommand :=
+  .clipboard { text := text }
 
 end TerminalCommand
 
