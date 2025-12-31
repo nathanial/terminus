@@ -392,8 +392,8 @@ def paste (t : TextArea) (text : String) : TextArea :=
 def handleKeyWithClipboard (t : TextArea) (key : KeyEvent) : TextArea × Option String :=
   if !t.focused then (t, none)
   else
-    -- Handle Ctrl key combinations
-    if key.modifiers.ctrl then
+    -- Handle Alt key combinations (Alt used instead of Ctrl to avoid terminal signal conflicts)
+    if key.modifiers.alt then
       match key.code with
       | .char 'a' => (t.selectAll, none)
       | .char 'c' => (t, some t.copy)

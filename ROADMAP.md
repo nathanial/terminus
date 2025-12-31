@@ -115,7 +115,7 @@ Full clipboard support using OSC 52 escape sequences.
 - TextInput selection support: `selectAll`, `hasSelection`, `selectedText`, `copy`, `cut`, `paste`
 - TextArea multi-line selection support: `selectAll`, `selectionRange`, `selectedText`, `copy`, `cut`, `paste`
 - Selection highlighting in both TextInput and TextArea widgets
-- Ctrl+A (select all), Ctrl+C (copy), Ctrl+X (cut) keyboard shortcuts
+- Alt+A (select all), Alt+C (copy), Alt+X (cut) keyboard shortcuts
 - 21 clipboard-related tests
 
 **Supported terminals:** iTerm2, Windows Terminal, xterm, and others with OSC 52 support.
