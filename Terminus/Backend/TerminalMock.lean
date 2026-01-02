@@ -41,6 +41,9 @@ instance : TerminalEffect MockTerminal where
       set { s with inputQueue := rest }
       pure (some b)
 
+  unreadByte b := modify fun s =>
+    { s with inputQueue := b :: s.inputQueue }
+
   writeStdout str := modify fun s =>
     { s with outputBuffer := s.outputBuffer ++ str, flushed := false }
 

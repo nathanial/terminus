@@ -101,7 +101,7 @@ partial def flattenNodes (nodes : List TreeNode) (depth : Nat) (parentPrefix : S
   let mut result : List TreeLine := []
   let numNodes := nodes.length
 
-  for hi : i in [:numNodes] do
+  for i in [:numNodes] do
     match nodes[i]? with
     | some node =>
       let isLast := i == numNodes - 1
@@ -166,7 +166,7 @@ partial def toggleAtPath (nodes : List TreeNode) (path : List Nat) : List TreeNo
   | [] => nodes
   | [idx] =>
     let mut result : List TreeNode := []
-    for hi : i in [:nodes.length] do
+    for i in [:nodes.length] do
       match nodes[i]? with
       | some node =>
         if i == idx then result := result ++ [node.toggle]
@@ -175,7 +175,7 @@ partial def toggleAtPath (nodes : List TreeNode) (path : List Nat) : List TreeNo
     result
   | idx :: rest =>
     let mut result : List TreeNode := []
-    for hi : i in [:nodes.length] do
+    for i in [:nodes.length] do
       match nodes[i]? with
       | some node =>
         if i == idx then
@@ -255,7 +255,7 @@ instance : Widget Tree where
         -- Render the line
         let mut x := contentArea.x
         let displayChars := displayText.toList
-        for hc : c in displayChars do
+        for c in displayChars do
           if x >= contentArea.x + contentArea.width then break
           result := result.setStyled x y c baseStyle
           x := x + 1

@@ -169,7 +169,7 @@ instance : Widget Calendar where
     let header := s!"{c.monthName} {c.year}"
     let headerX := contentArea.x + (contentArea.width - header.length) / 2
     let headerChars := header.toList
-    for hi : i in [:headerChars.length] do
+    for i in [:headerChars.length] do
       match headerChars[i]? with
       | some ch => result := result.setStyled (headerX + i) contentArea.y ch c.headerStyle
       | none => pure ()
@@ -179,7 +179,7 @@ instance : Widget Calendar where
       let dayHeaders := "Su Mo Tu We Th Fr Sa"
       let y := contentArea.y + 1
       let dayHeaderChars := dayHeaders.toList
-      for hi : i in [:dayHeaderChars.length] do
+      for i in [:dayHeaderChars.length] do
         match dayHeaderChars[i]? with
         | some ch => result := result.setStyled (startX + i) y ch c.dayHeaderStyle
         | none => pure ()
@@ -211,7 +211,7 @@ instance : Widget Calendar where
           -- Format day number (right-aligned in 2 chars)
           let dayStr := if day < 10 then s!" {day}" else s!"{day}"
           let dayChars := dayStr.toList
-          for hj : j in [:dayChars.length] do
+          for j in [:dayChars.length] do
             if x + j < contentArea.x + contentArea.width then
               match dayChars[j]? with
               | some ch => result := result.setStyled (x + j) y ch style

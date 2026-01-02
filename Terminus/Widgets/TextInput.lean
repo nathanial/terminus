@@ -260,7 +260,7 @@ instance : Widget TextInput where
 
     -- Render text
     let visibleChars := visibleText.toList
-    for hi : i in [:visibleChars.length] do
+    for i in [:visibleChars.length] do
       let x := contentArea.x + i
       let textPos := scrollOffset + i  -- Position in the actual text
       let cursorPos := t.cursor - scrollOffset

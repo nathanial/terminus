@@ -74,7 +74,7 @@ instance : Widget Sparkline where
     let y := contentArea.y + contentArea.height / 2
     let dataToRender := s.data.take contentArea.width
 
-    for hi : i in [:dataToRender.length] do
+    for i in [:dataToRender.length] do
       match dataToRender[i]? with
       | some value =>
         let x := contentArea.x + i

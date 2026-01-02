@@ -10,6 +10,9 @@
 // Store original terminal settings for restoration
 static struct termios original_termios;
 static int raw_mode_enabled = 0;
+#define TERMINUS_UNREAD_BUF_SIZE 64
+static unsigned char unread_buf[TERMINUS_UNREAD_BUF_SIZE];
+static int unread_len = 0;
 
 // Enable raw mode - disable canonical mode, echo, and signals
 LEAN_EXPORT lean_obj_res terminus_enable_raw_mode(lean_obj_arg world) {
@@ -82,6 +85,12 @@ LEAN_EXPORT lean_obj_res terminus_get_size(lean_obj_arg world) {
 // Returns none if no byte available (non-blocking)
 LEAN_EXPORT lean_obj_res terminus_read_byte(lean_obj_arg world) {
     unsigned char c;
+    if (unread_len > 0) {
+        c = unread_buf[--unread_len];
+        lean_object* some = lean_alloc_ctor(1, 1, 0);
+        lean_ctor_set(some, 0, lean_box(c));
+        return lean_io_result_mk_ok(some);
+    }
     ssize_t nread = read(STDIN_FILENO, &c, 1);
 
     if (nread == 1) {
@@ -93,6 +102,14 @@ LEAN_EXPORT lean_obj_res terminus_read_byte(lean_obj_arg world) {
         // None
         return lean_io_result_mk_ok(lean_box(0));
     }
+}
+
+// Push a byte back onto the input stream
+LEAN_EXPORT lean_obj_res terminus_unread_byte(b_lean_obj_arg byte, lean_obj_arg world) {
+    if (unread_len < TERMINUS_UNREAD_BUF_SIZE) {
+        unread_buf[unread_len++] = (unsigned char)lean_unbox(byte);
+    }
+    return lean_io_result_mk_ok(lean_box(0));
 }
 
 // Write a string to stdout

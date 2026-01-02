@@ -29,7 +29,7 @@ def resolve (c : Constraint) (available : Nat) : Nat :=
   match c with
   | .fixed size => Nat.min size available
   | .percent pct => (available * (Nat.min pct 100)) / 100
-  | .min size => Nat.max size available
+  | .min size => Nat.min size available
   | .max size => Nat.min size available
   | .ratio num denom => if denom == 0 then 0 else (available * num) / denom
   | .fill => available

@@ -151,8 +151,8 @@ partial def run (app : App State) (draw : DrawFn State) (update : UpdateFn State
 
 /-- Run a TUI application with setup and teardown -/
 def runApp (initialState : State) (draw : DrawFn State) (update : UpdateFn State) : IO Unit := do
-  Terminal.setup
   try
+    Terminal.setup
     let app ← App.new initialState
     -- Initial draw
     let term ← app.terminal.draw

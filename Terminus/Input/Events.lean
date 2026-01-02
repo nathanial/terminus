@@ -216,7 +216,9 @@ partial def readKey : IO KeyEvent := do
 /-- Check if any input is available -/
 def available [Monad m] [TerminalEffect m] : m Bool := do
   match ← readByteOpt with
-  | some _ => pure true
+  | some b =>
+    TerminalEffect.unreadByte b
+    pure true
   | none => pure false
 
 end Events

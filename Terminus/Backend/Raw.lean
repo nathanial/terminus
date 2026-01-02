@@ -18,6 +18,10 @@ opaque getTerminalSize : IO (Nat × Nat)
 @[extern "terminus_read_byte"]
 opaque readByte : IO (Option UInt8)
 
+/-- Push a byte back onto the input stream. -/
+@[extern "terminus_unread_byte"]
+opaque unreadByte : UInt8 → IO Unit
+
 /-- Write a string directly to stdout -/
 @[extern "terminus_write_stdout"]
 opaque writeStdout : @&String → IO Unit

@@ -118,6 +118,13 @@ private def iterm2ImageEscape (payloadB64 : String) (nameB64 : Option String) (w
 private def applyCommands [Monad m] [TerminalEffect m] (term : Terminal) (cmds : List TerminalCommand) : m Terminal := do
   let keys := cmds.map TerminalCommand.key
   let imageRects := cmds.foldl (fun acc c => match c.rect? with | some r => r :: acc | none => acc) [] |>.reverse
+  let hasPathImages := cmds.any fun c =>
+    match c with
+    | .image ic =>
+      match ic.source with
+      | .path _ => true
+      | .bytes _ => false
+    | _ => false
 
   -- If any prior image rects disappeared (or changed), redraw those regions from the buffer to "erase" overlays.
   let removed := term.previousImageRects.filter (fun r => !imageRects.contains r)
@@ -125,7 +132,7 @@ private def applyCommands [Monad m] [TerminalEffect m] (term : Terminal) (cmds :
     redrawRect term r
 
   -- Avoid re-sending identical command sets every tick (large image payloads).
-  if keys == term.previousCommandKeys then
+  if !hasPathImages && keys == term.previousCommandKeys then
     pure { term with previousCommandKeys := keys, previousImageRects := imageRects }
   else
     for cmd in cmds do
@@ -208,10 +215,17 @@ def clearBuffer (term : Terminal) : Terminal :=
 /-- Standard terminal setup for TUI applications -/
 def setup : IO Unit := do
   TerminalEffect.enableRawMode
-  enterAltScreen
-  hideCursor
-  TerminalEffect.writeStdout Ansi.enableMouse
-  clear
+  try
+    enterAltScreen
+    hideCursor
+    TerminalEffect.writeStdout Ansi.enableMouse
+    clear
+  catch e =>
+    TerminalEffect.writeStdout Ansi.disableMouse
+    showCursor
+    leaveAltScreen
+    TerminalEffect.disableRawMode
+    throw e
 
 /-- Standard terminal teardown -/
 def teardown : IO Unit := do
@@ -223,8 +237,8 @@ def teardown : IO Unit := do
 /-- Run a TUI application with proper setup and teardown -/
 def withTerminal (app : Terminal → IO α) : IO α := do
   setup
-  let term ← Terminal.new
   try
+    let term ← Terminal.new
     app term
   finally
     teardown

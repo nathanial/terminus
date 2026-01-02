@@ -4,6 +4,17 @@ import Terminus.Core.Rect
 
 namespace Terminus
 
+/-- Simple FNV-1a hash for payload keys. -/
+private def fnv1a64 (bytes : ByteArray) : UInt64 := Id.run do
+  let mut h : UInt64 := 0xcbf29ce484222325
+  for b in bytes.data.toList do
+    h := h ^^^ (UInt64.ofNat b.toNat)
+    h := h * 0x00000100000001B3
+  h
+
+private def fnv1a64String (s : String) : UInt64 :=
+  fnv1a64 s.toUTF8
+
 /-- Binary source for an image payload. -/
 inductive ImageSource where
   | bytes (data : ByteArray)
@@ -11,13 +22,6 @@ inductive ImageSource where
   deriving Inhabited
 
 namespace ImageSource
-
-private def fnv1a64 (bytes : ByteArray) : UInt64 := Id.run do
-  let mut h : UInt64 := 0xcbf29ce484222325
-  for b in bytes.data.toList do
-    h := h ^^^ (UInt64.ofNat b.toNat)
-    h := h * 0x00000100000001B3
-  h
 
 def key : ImageSource → String
   | .path p => s!"path:{p}"
@@ -82,7 +86,7 @@ structure ClipboardCommand where
 namespace ClipboardCommand
 
 def key (c : ClipboardCommand) : String :=
-  s!"clip:{c.selection.code}:{c.text.length}"
+  s!"clip:{c.selection.code}:{c.text.length}:{fnv1a64String c.text}"
 
 end ClipboardCommand
 

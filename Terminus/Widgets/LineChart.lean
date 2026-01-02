@@ -135,7 +135,7 @@ instance : Widget LineChart where
       -- Top label
       let topLabelX := contentArea.x + yAxisWidth - topLabel.length - 1
       let topLabelChars := topLabel.toList
-      for hi : i in [:topLabelChars.length] do
+      for i in [:topLabelChars.length] do
         if topLabelX + i >= contentArea.x then
           match topLabelChars[i]? with
           | some ch => result := result.setStyled (topLabelX + i) chartY ch c.axisStyle
@@ -146,7 +146,7 @@ instance : Widget LineChart where
         let midY := chartY + chartHeight / 2
         let midLabelX := contentArea.x + yAxisWidth - midLabel.length - 1
         let midLabelChars := midLabel.toList
-        for hi : i in [:midLabelChars.length] do
+        for i in [:midLabelChars.length] do
           if midLabelX + i >= contentArea.x then
             match midLabelChars[i]? with
             | some ch => result := result.setStyled (midLabelX + i) midY ch c.axisStyle
@@ -156,7 +156,7 @@ instance : Widget LineChart where
       let botY := chartY + chartHeight - 1
       let botLabelX := contentArea.x + yAxisWidth - botLabel.length - 1
       let botLabelChars := botLabel.toList
-      for hi : i in [:botLabelChars.length] do
+      for i in [:botLabelChars.length] do
         if botLabelX + i >= contentArea.x then
           match botLabelChars[i]? with
           | some ch => result := result.setStyled (botLabelX + i) botY ch c.axisStyle
@@ -180,12 +180,12 @@ instance : Widget LineChart where
       if numLabels > 0 && contentArea.height > chartHeight then
         let labelY := axisY + 1
         let spacing := chartWidth / Nat.max 1 (numLabels - 1)
-        for hi : i in [:c.xLabels.length] do
+        for i in [:c.xLabels.length] do
           match c.xLabels[i]? with
           | some label =>
             let labelX := chartX + i * spacing
             let labelChars := label.take 4 |>.toList
-            for hj : j in [:labelChars.length] do
+            for j in [:labelChars.length] do
               if labelX + j < contentArea.x + contentArea.width then
                 match labelChars[j]? with
                 | some ch => result := result.setStyled (labelX + j) labelY ch c.axisStyle
@@ -209,7 +209,7 @@ instance : Widget LineChart where
       if dataLen < 2 then continue
 
       -- Draw lines between consecutive points
-      for hi : i in [:dataLen - 1] do
+      for i in [:dataLen - 1] do
         match (series.data[i]?, series.data[i + 1]?) with
         | (some v1, some v2) =>
           -- Map to pixel coordinates
@@ -255,7 +255,7 @@ instance : Widget LineChart where
 
           -- Draw label
           let labelChars := series.label.toList
-          for hj : j in [:labelChars.length] do
+          for j in [:labelChars.length] do
             if legendX + j < contentArea.x + contentArea.width then
               match labelChars[j]? with
               | some ch => result := result.setStyled (legendX + j) legendY ch c.legendStyle

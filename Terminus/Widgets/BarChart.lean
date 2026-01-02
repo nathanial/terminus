@@ -85,7 +85,7 @@ private def renderVerticalBarChart (c : BarChart) (area : Rect) (buf : Buffer) :
   let totalBarSpace := numBars * c.barWidth + (numBars - 1) * c.gap
   let startX := area.x + (area.width - totalBarSpace) / 2
 
-  for hi : i in [:c.data.length] do
+  for i in [:c.data.length] do
     match c.data[i]? with
     | some bar =>
       let barX := startX + i * (c.barWidth + c.gap)
@@ -109,7 +109,7 @@ private def renderVerticalBarChart (c : BarChart) (area : Rect) (buf : Buffer) :
         let valX := barX + (c.barWidth - valStr.length) / 2
         let valY := if barStartY > area.y then barStartY - 1 else area.y
         let valChars := valStr.toList
-        for hj : j in [:valChars.length] do
+        for j in [:valChars.length] do
           if valX + j < area.x + area.width then
             match valChars[j]? with
             | some ch => result := result.setStyled (valX + j) valY ch c.valueStyle
@@ -120,7 +120,7 @@ private def renderVerticalBarChart (c : BarChart) (area : Rect) (buf : Buffer) :
         let labelY := area.y + chartHeight
         let labelX := barX + (c.barWidth - bar.label.length) / 2
         let labelChars := bar.label.take c.barWidth |>.toList
-        for hj : j in [:labelChars.length] do
+        for j in [:labelChars.length] do
           if labelX + j >= area.x && labelX + j < area.x + area.width then
             match labelChars[j]? with
             | some ch => result := result.setStyled (labelX + j) labelY ch c.labelStyle
@@ -151,7 +151,7 @@ private def renderHorizontalBarChart (c : BarChart) (area : Rect) (buf : Buffer)
 
   let startY := area.y + (area.height - totalBarSpace) / 2
 
-  for hi : i in [:c.data.length] do
+  for i in [:c.data.length] do
     match c.data[i]? with
     | some bar =>
       let barY := startY + i * (c.barWidth + c.gap)
@@ -166,7 +166,7 @@ private def renderHorizontalBarChart (c : BarChart) (area : Rect) (buf : Buffer)
         let labelStr := bar.label.take labelWidth
         let labelX := area.x + labelWidth - labelStr.length
         let labelChars := labelStr.toList
-        for hj : j in [:labelChars.length] do
+        for j in [:labelChars.length] do
           match labelChars[j]? with
           | some ch => result := result.setStyled (labelX + j) barY ch c.labelStyle
           | none => pure ()
@@ -183,7 +183,7 @@ private def renderHorizontalBarChart (c : BarChart) (area : Rect) (buf : Buffer)
         let valStr := s!" {bar.value.toUInt32}"
         let valX := chartStartX + barLen
         let valChars := valStr.toList
-        for hj : j in [:valChars.length] do
+        for j in [:valChars.length] do
           if valX + j < area.x + area.width then
             match valChars[j]? with
             | some ch => result := result.setStyled (valX + j) barY ch c.valueStyle

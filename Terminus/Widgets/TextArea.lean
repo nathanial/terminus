@@ -495,9 +495,13 @@ instance : Widget TextArea where
       -- Render line number
       if t.showLineNumbers then
         let numStr := s!"{lineIdx + 1}"
-        let paddedNum := String.ofList (List.replicate (t.lineNumberWidth - numStr.length - 1) ' ') ++ numStr ++ "│"
+        let numWidth := if t.lineNumberWidth > 0 then t.lineNumberWidth - 1 else 0
+        let trimmedNum := if numStr.length > numWidth then numStr.drop (numStr.length - numWidth) else numStr
+        let padCount := numWidth - trimmedNum.length
+        let sep := if t.lineNumberWidth > 0 then "│" else ""
+        let paddedNum := String.ofList (List.replicate padCount ' ') ++ trimmedNum ++ sep
         let paddedNumChars := paddedNum.toList
-        for hi : i in [:paddedNumChars.length] do
+        for i in [:paddedNumChars.length] do
           let x := contentArea.x + i
           if x < textStartX then
             match paddedNumChars[i]? with
@@ -520,7 +524,7 @@ instance : Widget TextArea where
         let selRange := t.selectionRange
 
         let visibleLineChars := visibleLine.toList
-        for hc : col in [:visibleLineChars.length] do
+        for col in [:visibleLineChars.length] do
           let x := textStartX + col
           let textCol := scrollCol + col  -- Actual column in the text
           let pos : TextPosition := { row := lineIdx, col := textCol }

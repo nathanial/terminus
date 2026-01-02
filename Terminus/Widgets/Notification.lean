@@ -216,7 +216,7 @@ instance : Widget Notification where
 
     -- Render lines
     let style := n.textStyle
-    for hi : i in [:n.lines.length] do
+    for i in [:n.lines.length] do
       if i < contentArea.height then
         match n.lines[i]? with
         | some line =>
@@ -237,7 +237,7 @@ instance : Widget NotificationStack where
     let sizes := s.notifications.map fun n => n.computeSize area.width area.height
 
     -- Render each notification at its computed position
-    for hi : i in [:s.notifications.size] do
+    for i in [:s.notifications.size] do
       let pos := s.computePosition i area sizes
       match s.notifications[i]? with
       | some n => result := Widget.render n pos result

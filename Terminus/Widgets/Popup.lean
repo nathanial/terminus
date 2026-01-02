@@ -98,7 +98,7 @@ instance : Widget Popup where
 
     -- Render content lines centered
     let startY := contentArea.y
-    for hi : i in [:p.lines.length] do
+    for i in [:p.lines.length] do
       let y := startY + i
       if y >= contentArea.y + contentArea.height then break
       match p.lines[i]? with
@@ -110,7 +110,7 @@ instance : Widget Popup where
         let x := contentArea.x + xOffset
 
         -- Render the line
-        for hj : j in [:line.length] do
+        for j in [:line.length] do
           let cx := x + j
           if cx < contentArea.x + contentArea.width then
             match line.toList[j]? with
@@ -176,7 +176,7 @@ instance : Widget ConfirmPopup where
     -- Render message (centered)
     let msgX := contentArea.x + (contentArea.width - p.message.length) / 2
     let msgChars := p.message.toList
-    for hi : i in [:msgChars.length] do
+    for i in [:msgChars.length] do
       match msgChars[i]? with
       | some c => result := result.setStyled (msgX + i) contentArea.y c p.messageStyle
       | none => pure ()
@@ -193,7 +193,7 @@ instance : Widget ConfirmPopup where
 
     -- Render Yes button
     let yesChars := yesText.toList
-    for hi : i in [:yesChars.length] do
+    for i in [:yesChars.length] do
       match yesChars[i]? with
       | some c => result := result.setStyled (buttonStartX + i) buttonY c yesStyle
       | none => pure ()
@@ -201,7 +201,7 @@ instance : Widget ConfirmPopup where
     -- Render No button
     let noStartX := buttonStartX + yesText.length + 4
     let noChars := noText.toList
-    for hi : i in [:noChars.length] do
+    for i in [:noChars.length] do
       match noChars[i]? with
       | some c => result := result.setStyled (noStartX + i) buttonY c noStyle
       | none => pure ()

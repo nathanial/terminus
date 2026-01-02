@@ -103,45 +103,44 @@ private def computeColumnWidths (widths : List ColumnWidth) (numCols totalWidth 
     let colWidth := available / numCols
     return List.replicate numCols colWidth
 
-  -- Process constraints
+  let mut baseSizes : List Nat := []
+  let mut weights : List Nat := []
   let mut fixedTotal : Nat := 0
-  let mut fillCount : Nat := 0
-  let mut ratioSum : Nat := 0
-  let mut result : List Nat := []
+  let mut remainingForFixed : Nat := available
 
   for i in [0 : numCols] do
     let w := widths.getD i .fill
     match w with
     | .fixed size =>
-      let s := min size available
-      result := result ++ [s]
+      let s := min size remainingForFixed
+      baseSizes := baseSizes ++ [s]
+      weights := weights ++ [0]
       fixedTotal := fixedTotal + s
+      remainingForFixed := if remainingForFixed > s then remainingForFixed - s else 0
     | .percent pct =>
-      let s := (available * (min pct 100)) / 100
-      result := result ++ [s]
+      let desired := (available * (min pct 100)) / 100
+      let s := min desired remainingForFixed
+      baseSizes := baseSizes ++ [s]
+      weights := weights ++ [0]
       fixedTotal := fixedTotal + s
+      remainingForFixed := if remainingForFixed > s then remainingForFixed - s else 0
     | .ratio n =>
-      result := result ++ [n] -- Temporary
-      ratioSum := ratioSum + n
+      baseSizes := baseSizes ++ [0]
+      weights := weights ++ [n]
     | .fill =>
-      result := result ++ [0]
-      fillCount := fillCount + 1
+      baseSizes := baseSizes ++ [0]
+      weights := weights ++ [1]
 
   -- Distribute remaining space
   let remaining := if available > fixedTotal then available - fixedTotal else 0
-  let fillSize := if fillCount > 0 then remaining / fillCount else 0
+  let weightSum := weights.foldl (· + ·) 0
 
   let mut finalResult : List Nat := []
   for i in [0 : numCols] do
-    let w := widths.getD i .fill
-    match w with
-    | .ratio n =>
-      let size := if ratioSum == 0 then 0 else (remaining * n) / ratioSum
-      finalResult := finalResult ++ [size]
-    | .fill =>
-      finalResult := finalResult ++ [fillSize]
-    | _ =>
-      finalResult := finalResult ++ [result.getD i 0]
+    let base := baseSizes.getD i 0
+    let w := weights.getD i 0
+    let size := if w == 0 || weightSum == 0 then base else (remaining * w) / weightSum
+    finalResult := finalResult ++ [size]
 
   finalResult
 

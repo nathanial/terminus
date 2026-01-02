@@ -17,6 +17,9 @@ class TerminalEffect (m : Type → Type) where
   /-- Read a single byte from stdin (non-blocking) -/
   readByte : m (Option UInt8)
 
+  /-- Push a byte back onto the input stream (for non-destructive peeks). -/
+  unreadByte : UInt8 → m Unit
+
   /-- Write a string directly to stdout -/
   writeStdout : String → m Unit
 
@@ -29,11 +32,12 @@ class TerminalEffect (m : Type → Type) where
 namespace TerminalEffect
 
 /-- Run an action with raw mode enabled, restoring settings on exit -/
-def withRawMode [Monad m] [TerminalEffect m] (action : m α) : m α := do
+def withRawMode [Monad m] [MonadFinally m] [TerminalEffect m] (action : m α) : m α := do
   enableRawMode
-  let result ← action
-  disableRawMode
-  pure result
+  try
+    action
+  finally
+    disableRawMode
 
 end TerminalEffect
 

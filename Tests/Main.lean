@@ -582,7 +582,7 @@ test "Block.innerArea computes correct area" := do
 
 test "Gauge renders progress bar" := do
   let gauge := Gauge.new 0.5 |>.withLabel "Test"
-  let buf := renderWidget gauge 20 1
+  let _ := renderWidget gauge 20 1
   -- Should have some filled and unfilled chars
   -- Gauge uses different chars for filled vs unfilled
   ensure true "gauge rendered"
@@ -595,14 +595,14 @@ test "Gauge.new clamps ratio to 0..1" := do
 
 test "Tabs renders tab titles" := do
   let tabs := Tabs.new ["One", "Two", "Three"] |>.withSelected 0
-  let buf := renderWidget tabs 30 1
+  let _ := renderWidget tabs 30 1
   -- Check that tab titles appear
   -- Note: exact positions depend on rendering logic
   ensure true "tabs rendered"
 
 test "ListWidget renders items" := do
   let list := ListWidget.new ["Item A", "Item B", "Item C"] |>.withSelected 1
-  let buf := renderWidget list 15 5
+  let _ := renderWidget list 15 5
   -- Items should appear in buffer
   ensure true "list rendered"
 
@@ -848,7 +848,7 @@ test "BarChart empty data renders without crash" := do
 
 test "BarChart vertical renders bars" := do
   let chart := BarChart.fromPairs [("A", 100.0)]
-  let buf := renderWidget chart 10 10
+  let _ := renderWidget chart 10 10
   -- Bar character should appear somewhere in the buffer
   -- Check bottom rows for filled bar
   ensure true "vertical bar chart rendered"
@@ -856,7 +856,7 @@ test "BarChart vertical renders bars" := do
 test "BarChart horizontal renders bars" := do
   let chart := BarChart.horizontal
     |>.withData [BarData.new "X" 50.0]
-  let buf := renderWidget chart 20 5
+  let _ := renderWidget chart 20 5
   ensure true "horizontal bar chart rendered"
 
 test "BarChart.hideLabels suppresses labels" := do
