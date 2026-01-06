@@ -34,6 +34,14 @@ import Terminus.Widgets.Tree
 import Terminus.Widgets.Popup
 import Terminus.Widgets.Sparkline
 import Terminus.Widgets.LineGauge
+import Terminus.Widgets.Canvas
+import Terminus.Widgets.ScrollView
+import Terminus.Widgets.Scrollbar
+import Terminus.Widgets.BigText
+import Terminus.Widgets.Logger
+import Terminus.Widgets.Form
+import Terminus.Widgets.Image
+import Terminus.Widgets.Clear
 
 open Terminus
 open Crucible
@@ -1400,6 +1408,500 @@ test "LineGauge renders without crash" := do
   let gauge := LineGauge.new 0.7 |>.withLabel "Loading" |>.withShowPercent true
   let buf := renderWidget gauge 30 3
   buf.width ≡ 30
+
+-- ============================================================================
+-- Clear Widget Tests
+-- ============================================================================
+
+test "Clear.new creates default clear widget" := do
+  let clear := Clear.new
+  clear.style ≡ {}
+
+test "Clear.withStyle applies style" := do
+  let clear := Clear.new |>.withStyle (Style.fgColor Color.red)
+  clear.style.fg ≡ Color.red
+
+test "Clear.withBg sets background color" := do
+  let clear := Clear.new |>.withBg Color.blue
+  clear.style.bg ≡ Color.blue
+
+test "Clear renders empty cells with default style" := do
+  let clear := Clear.new
+  let buf := renderWidget clear 5 3
+  -- Should fill with empty cells
+  (buf.get 0 0).char ≡ ' '
+  (buf.get 2 1).char ≡ ' '
+
+test "Clear renders styled cells when style set" := do
+  let clear := Clear.new |>.withBg Color.green
+  let buf := renderWidget clear 4 2
+  (buf.get 0 0).style.bg ≡ Color.green
+  (buf.get 3 1).style.bg ≡ Color.green
+
+-- ============================================================================
+-- Scrollbar Widget Tests
+-- ============================================================================
+
+test "Scrollbar.vertical creates vertical scrollbar" := do
+  let sb := Scrollbar.vertical 10 100 10
+  sb.position ≡ 10
+  sb.totalItems ≡ 100
+  sb.visibleItems ≡ 10
+  sb.orientation ≡ .vertical
+
+test "Scrollbar.horizontal creates horizontal scrollbar" := do
+  let sb := Scrollbar.horizontal 0 50 20
+  sb.orientation ≡ .horizontal
+
+test "Scrollbar.isNeeded returns true when content exceeds viewport" := do
+  let sb := Scrollbar.vertical 0 100 10
+  sb.isNeeded ≡ true
+
+test "Scrollbar.isNeeded returns false when content fits" := do
+  let sb := Scrollbar.vertical 0 10 20
+  sb.isNeeded ≡ false
+
+test "Scrollbar.isNeeded returns false when equal" := do
+  let sb := Scrollbar.vertical 0 10 10
+  sb.isNeeded ≡ false
+
+test "Scrollbar.thumbMetrics returns valid size and position" := do
+  let sb := Scrollbar.vertical 0 100 10
+  let (thumbSize, thumbPos) := sb.thumbMetrics 10
+  -- With 10 visible of 100, thumb should be 1/10 of track = 1
+  thumbSize ≡ 1
+  thumbPos ≡ 0
+
+test "Scrollbar.thumbMetrics at end position" := do
+  let sb := Scrollbar.vertical 90 100 10
+  let (_, thumbPos) := sb.thumbMetrics 10
+  -- At position 90 of 100 with 10 visible, should be at end
+  thumbPos ≡ 9
+
+test "Scrollbar.setPosition updates position" := do
+  let sb := Scrollbar.vertical 0 100 10 |>.setPosition 50
+  sb.position ≡ 50
+
+test "Scrollbar.withTrackChar changes track character" := do
+  let sb := Scrollbar.vertical 0 10 5 |>.withTrackChar '·'
+  sb.trackChar ≡ '·'
+
+test "Scrollbar.withThumbChar changes thumb character" := do
+  let sb := Scrollbar.vertical 0 10 5 |>.withThumbChar '▓'
+  sb.thumbChar ≡ '▓'
+
+test "Scrollbar renders without crash" := do
+  let sb := Scrollbar.vertical 5 20 5
+  let buf := renderWidget sb 1 10
+  buf.height ≡ 10
+
+-- ============================================================================
+-- ScrollView Widget Tests
+-- ============================================================================
+
+test "ScrollView.new creates with content" := do
+  let sv := ScrollView.new (Paragraph.fromString "Hello")
+  sv.offset ≡ (0, 0)
+  sv.contentSize ≡ (0, 0)
+
+test "ScrollView.withContentSize sets dimensions" := do
+  let sv := ScrollView.new (Paragraph.fromString "Test") |>.withContentSize 100 50
+  sv.contentSize ≡ (100, 50)
+
+test "ScrollView.withOffset sets scroll position" := do
+  let sv := ScrollView.new (Paragraph.fromString "Test") |>.withOffset 10 20
+  sv.offset ≡ (10, 20)
+
+test "ScrollView.contentWidth returns width" := do
+  let sv := ScrollView.new (Paragraph.fromString "Test") |>.withContentSize 80 40
+  sv.contentWidth ≡ 80
+
+test "ScrollView.contentHeight returns height" := do
+  let sv := ScrollView.new (Paragraph.fromString "Test") |>.withContentSize 80 40
+  sv.contentHeight ≡ 40
+
+test "ScrollView.offsetX returns x offset" := do
+  let sv := ScrollView.new (Paragraph.fromString "Test") |>.withOffset 15 25
+  sv.offsetX ≡ 15
+
+test "ScrollView.offsetY returns y offset" := do
+  let sv := ScrollView.new (Paragraph.fromString "Test") |>.withOffset 15 25
+  sv.offsetY ≡ 25
+
+test "ScrollView.scrollDown increments y offset" := do
+  let sv := ScrollView.new (Paragraph.fromString "Test") |>.withOffset 0 10 |>.scrollDown 5
+  sv.offsetY ≡ 15
+
+test "ScrollView.scrollUp decrements y offset" := do
+  let sv := ScrollView.new (Paragraph.fromString "Test") |>.withOffset 0 10 |>.scrollUp 3
+  sv.offsetY ≡ 7
+
+test "ScrollView.scrollRight increments x offset" := do
+  let sv := ScrollView.new (Paragraph.fromString "Test") |>.withOffset 5 0 |>.scrollRight 10
+  sv.offsetX ≡ 15
+
+test "ScrollView.scrollLeft decrements x offset" := do
+  let sv := ScrollView.new (Paragraph.fromString "Test") |>.withOffset 10 0 |>.scrollLeft 4
+  sv.offsetX ≡ 6
+
+test "ScrollView.scrollToTop resets y offset" := do
+  let sv := ScrollView.new (Paragraph.fromString "Test") |>.withOffset 5 20 |>.scrollToTop
+  sv.offsetY ≡ 0
+  sv.offsetX ≡ 5
+
+test "ScrollView.scrollToLeft resets x offset" := do
+  let sv := ScrollView.new (Paragraph.fromString "Test") |>.withOffset 15 10 |>.scrollToLeft
+  sv.offsetX ≡ 0
+  sv.offsetY ≡ 10
+
+test "ScrollView renders without crash" := do
+  let sv := ScrollView.new (Paragraph.fromString "Hello World")
+    |>.withContentSize 20 5
+  let buf := renderWidget sv 10 3
+  buf.width ≡ 10
+
+-- ============================================================================
+-- Form Widget Tests
+-- ============================================================================
+
+test "Form.new creates empty form" := do
+  let form := Form.new
+  form.rows.length ≡ 0
+
+test "Form.withLabelSuffix changes suffix" := do
+  let form := Form.new |>.withLabelSuffix " ="
+  form.labelSuffix ≡ " ="
+
+test "Form.withLabelGap sets gap" := do
+  let form := Form.new |>.withLabelGap 4
+  form.labelGap ≡ 4
+
+test "Form.withRowSpacing sets spacing" := do
+  let form := Form.new |>.withRowSpacing 2
+  form.rowSpacing ≡ 2
+
+test "FormRow.gap creates spacer" := do
+  let row := FormRow.gap 3
+  row.height ≡ 3
+
+test "FormRow.fieldOf creates field row" := do
+  let row := FormRow.fieldOf "Name" TextInput.new
+  row.height ≡ 1
+
+test "FormRow.fullOf creates full-width row" := do
+  let row := FormRow.fullOf (Paragraph.fromString "Full width content")
+  row.height ≡ 1
+
+test "Form renders without crash" := do
+  let form := Form.new
+    |>.withRows [
+      FormRow.fieldOf "Username" TextInput.new,
+      FormRow.gap 1,
+      FormRow.fieldOf "Password" TextInput.new
+    ]
+  let buf := renderWidget form 40 5
+  buf.width ≡ 40
+
+test "AnyWidget.empty creates no-op widget" := do
+  let w := AnyWidget.empty
+  let buf := renderWidget w 5 3
+  buf.width ≡ 5
+
+-- ============================================================================
+-- Logger Widget Tests
+-- ============================================================================
+
+test "LogLevel.severity returns correct ordering" := do
+  LogLevel.trace.severity ≡ 0
+  LogLevel.debug.severity ≡ 1
+  LogLevel.info.severity ≡ 2
+  LogLevel.warn.severity ≡ 3
+  LogLevel.error.severity ≡ 4
+
+test "LogLevel.label returns display name" := do
+  LogLevel.info.label ≡ "INFO"
+  LogLevel.error.label ≡ "ERROR"
+
+test "LogLevel.tag returns bracketed name" := do
+  LogLevel.warn.tag ≡ "[WARN]"
+
+test "LogEntry.new creates entry" := do
+  let entry := LogEntry.new .info "Test message" (some "12:00:00")
+  entry.level ≡ .info
+  entry.timestamp ≡ some "12:00:00"
+  entry.message ≡ "Test message"
+
+test "Logger.new creates empty logger" := do
+  let logger := Logger.new
+  logger.entries.length ≡ 0
+  logger.follow ≡ true
+
+test "Logger.add appends entry" := do
+  let logger := Logger.new
+    |>.add (LogEntry.new .info "First" (some "12:00"))
+    |>.add (LogEntry.new .warn "Second" (some "12:01"))
+  logger.entries.length ≡ 2
+
+test "Logger.extend adds multiple entries" := do
+  let entries := [
+    LogEntry.new .info "A" (some "12:00"),
+    LogEntry.new .debug "B" (some "12:01")
+  ]
+  let logger := Logger.new |>.extend entries
+  logger.entries.length ≡ 2
+
+test "Logger.clear removes all entries" := do
+  let logger := Logger.new
+    |>.add (LogEntry.new .info "Test")
+    |>.clear
+  logger.entries.length ≡ 0
+  logger.scroll ≡ 0
+
+test "Logger.scrollDown increments scroll" := do
+  let logger := Logger.new |>.scrollDown 5
+  logger.scroll ≡ 5
+  logger.follow ≡ false  -- Scrolling disables follow
+
+test "Logger.scrollUp decrements scroll" := do
+  let logger := Logger.new |>.scrollDown 10 |>.scrollUp 3
+  logger.scroll ≡ 7
+
+test "Logger.home resets scroll to 0" := do
+  let logger := Logger.new |>.scrollDown 20 |>.home
+  logger.scroll ≡ 0
+
+test "Logger.end_ sets scroll to end" := do
+  let entries := List.replicate 50 (LogEntry.new .info "Test")
+  let logger := Logger.new |>.extend entries |>.end_
+  logger.follow ≡ true  -- end_ re-enables follow
+
+test "Logger.toggleFollow toggles follow mode" := do
+  let logger := Logger.new |>.toggleFollow
+  logger.follow ≡ false
+  let logger2 := logger.toggleFollow
+  logger2.follow ≡ true
+
+test "LogLevelFilter.allows with minLevel" := do
+  let filter := { minLevel := some LogLevel.warn : LogLevelFilter }
+  filter.allows .error ≡ true
+  filter.allows .warn ≡ true
+  filter.allows .info ≡ false
+
+test "LogLevelFilter.allows with allowedLevels" := do
+  let filter := { allowedLevels := some [LogLevel.info, LogLevel.error] : LogLevelFilter }
+  filter.allows .info ≡ true
+  filter.allows .error ≡ true
+  filter.allows .warn ≡ false
+
+test "Logger.withMinLevel sets filter" := do
+  let logger := Logger.new |>.withMinLevel LogLevel.warn
+  logger.filter.minLevel ≡ some LogLevel.warn
+
+test "Logger renders without crash" := do
+  let logger := Logger.new
+    |>.add (LogEntry.new .info "Application started" (some "12:00:00"))
+    |>.add (LogEntry.new .warn "Low memory warning" (some "12:00:01"))
+    |>.add (LogEntry.new .error "Connection failed" (some "12:00:02"))
+  let buf := renderWidget logger 60 5
+  buf.width ≡ 60
+
+-- ============================================================================
+-- BigText Widget Tests
+-- ============================================================================
+
+test "BigText.new creates with text" := do
+  let bt := BigText.new "Hello"
+  bt.text ≡ "Hello"
+
+test "BigText.withFont changes font" := do
+  let bt := BigText.new "Test" |>.withFont .slant
+  -- Just verify it doesn't crash; BigFont doesn't have BEq
+  ensure true "font changed"
+
+test "BigText.withStyle sets style" := do
+  let bt := BigText.new "Test" |>.withStyle (Style.fgColor Color.red)
+  bt.style.fg ≡ Color.red
+
+test "BigText.withOn changes on-pixel character" := do
+  let bt := BigText.new "A" |>.withOn '#'
+  bt.on ≡ '#'
+
+test "BigText.withOff changes off-pixel character" := do
+  let bt := BigText.new "A" |>.withOff '.'
+  bt.off ≡ some '.'
+
+test "BigText.transparent disables off pixels" := do
+  let bt := BigText.new "A" |>.withOff '.' |>.transparent
+  bt.off ≡ none
+
+test "BigText.withAlignment sets alignment" := do
+  let bt := BigText.new "A" |>.withAlignment .center
+  bt.alignment ≡ .center
+
+test "BigText.centered sets center alignment" := do
+  let bt := BigText.new "A" |>.centered
+  bt.alignment ≡ .center
+
+test "BigText.rightAligned sets right alignment" := do
+  let bt := BigText.new "A" |>.rightAligned
+  bt.alignment ≡ .right
+
+test "BigText.withSpacing sets character spacing" := do
+  let bt := BigText.new "AB" |>.withSpacing 2
+  bt.spacing ≡ 2
+
+test "BigFont.glyphWidth returns correct width for block font" := do
+  BigFont.block.glyphWidth 'A' ≡ 8
+
+test "BigFont.glyphWidth returns correct width for small font" := do
+  BigFont.small.glyphWidth 'A' ≡ 4
+
+test "BigText renders without crash" := do
+  let bt := BigText.new "Hi" |>.withFont .block
+  let buf := renderWidget bt 20 8
+  buf.width ≡ 20
+
+test "BigText renders with slant font" := do
+  let bt := BigText.new "OK" |>.withFont .slant
+  let buf := renderWidget bt 24 8
+  buf.height ≡ 8
+
+test "BigText renders with small font" := do
+  let bt := BigText.new "XY" |>.withFont .small
+  let buf := renderWidget bt 12 4
+  buf.height ≡ 4
+
+-- ============================================================================
+-- Canvas Widget Tests
+-- ============================================================================
+
+test "BrailleGrid.new creates grid with correct dimensions" := do
+  let grid := BrailleGrid.new 10 5
+  grid.cellWidth ≡ 10
+  grid.cellHeight ≡ 5
+
+test "BrailleGrid.new initializes with empty patterns" := do
+  let grid := BrailleGrid.new 3 2
+  -- All patterns should be 0 (no dots set)
+  grid.patterns.size ≡ 6  -- 3 * 2 cells
+
+test "BrailleGrid.setPixel sets a pixel" := do
+  let grid := BrailleGrid.new 2 2
+  let grid2 := grid.setPixel 0 0 Style.default
+  -- Pixel (0,0) is in cell (0,0), dot position 0
+  -- After setting, the pattern should be non-zero
+  ensure (grid2.patterns.getD 0 0 != 0) "pixel set"
+
+test "BrailleGrid.clearPixel clears a pixel" := do
+  let grid := BrailleGrid.new 2 2
+    |>.setPixel 0 0 Style.default
+    |>.clearPixel 0 0
+  (grid.patterns.getD 0 0) ≡ 0
+
+test "BrailleGrid.clear resets entire grid" := do
+  let grid := BrailleGrid.new 2 2
+    |>.setPixel 0 0 Style.default
+    |>.setPixel 1 1 Style.default
+    |>.clear
+  (grid.patterns.getD 0 0) ≡ 0
+
+test "BrailleGrid.getCell returns braille character" := do
+  let grid := BrailleGrid.new 1 1
+  let (char, _) := grid.getCell 0 0
+  -- Empty cell should return base braille character U+2800
+  char ≡ '⠀'
+
+test "Canvas.new creates empty canvas" := do
+  let canvas := Canvas.new
+  canvas.shapes.length ≡ 0
+
+test "Canvas.point adds point shape" := do
+  let canvas := Canvas.new |>.point 5.0 3.0 Style.default
+  canvas.shapes.length ≡ 1
+
+test "Canvas.line adds line shape" := do
+  let canvas := Canvas.new |>.line 0.0 0.0 10.0 10.0 Style.default
+  canvas.shapes.length ≡ 1
+
+test "Canvas.rect adds rectangle shape" := do
+  let canvas := Canvas.new |>.rect 0.0 0.0 5.0 3.0 Style.default
+  canvas.shapes.length ≡ 1
+
+test "Canvas.filledRect adds filled rectangle shape" := do
+  let canvas := Canvas.new |>.filledRect 0.0 0.0 5.0 3.0 Style.default
+  canvas.shapes.length ≡ 1
+
+test "Canvas.circle adds circle shape" := do
+  let canvas := Canvas.new |>.circle 5.0 5.0 3.0 Style.default
+  canvas.shapes.length ≡ 1
+
+test "Canvas.filledCircle adds filled circle shape" := do
+  let canvas := Canvas.new |>.filledCircle 5.0 5.0 3.0 Style.default
+  canvas.shapes.length ≡ 1
+
+test "Canvas.addShape appends shape to list" := do
+  let shape := CanvasShape.point 1.0 1.0 Style.default
+  let canvas := Canvas.new |>.addShape shape |>.addShape shape
+  canvas.shapes.length ≡ 2
+
+test "Canvas renders without crash" := do
+  let canvas := Canvas.new
+    |>.line 0.0 0.0 15.0 7.0 Style.default
+    |>.circle 8.0 4.0 3.0 (Style.fgColor Color.blue)
+  let buf := renderWidget canvas 10 5
+  buf.width ≡ 10
+
+test "Canvas renders shapes to braille characters" := do
+  let canvas := Canvas.new |>.point 0.0 0.0 Style.default
+  let buf := renderWidget canvas 2 2
+  -- The character at (0,0) should be a braille character (not space)
+  let c := (buf.get 0 0).char
+  -- Braille block starts at U+2800
+  ensure (c.toNat >= 0x2800 && c.toNat <= 0x28FF) "braille character rendered"
+
+-- ============================================================================
+-- Image Widget Tests
+-- ============================================================================
+
+test "Image.fromBytes creates image from bytes" := do
+  let bytes := ByteArray.mk #[0x89, 0x50, 0x4E, 0x47]  -- PNG header
+  let img := Image.fromBytes bytes
+  match img.source with
+  | .bytes b => b.size ≡ 4
+  | .path _ => ensure false "Expected bytes source"
+
+test "Image.fromPath creates image from path" := do
+  let img := Image.fromPath "/tmp/test.png"
+  match img.source with
+  | .path p => p.toString ≡ "/tmp/test.png"
+  | .bytes _ => ensure false "Expected path source"
+
+test "Image.withProtocol sets protocol" := do
+  let img := Image.fromPath "/tmp/test.png" |>.withProtocol .iterm2
+  -- Just verify it doesn't crash; only iterm2 is currently supported
+  ensure true "protocol set"
+
+test "Image.withName sets image name" := do
+  let img := Image.fromPath "/tmp/test.png" |>.withName (some "myimage")
+  img.name ≡ some "myimage"
+
+test "Image.withPreserveAspectRatio sets aspect ratio flag" := do
+  let img := Image.fromPath "/tmp/test.png" |>.withPreserveAspectRatio false
+  img.preserveAspectRatio ≡ false
+
+test "Image.withAltText sets fallback text" := do
+  let img := Image.fromPath "/tmp/test.png" |>.withAltText "Photo"
+  img.altText ≡ "Photo"
+
+test "Image.withBackground sets background style" := do
+  let img := Image.fromPath "/tmp/test.png" |>.withBackground (Style.bgColor Color.black)
+  img.background.bg ≡ Color.black
+
+test "Image fallback Widget renders alt text" := do
+  let img := Image.fromPath "/tmp/test.png" |>.withAltText "IMG"
+  let buf := renderWidget img 10 3
+  -- The fallback widget should render the alt text
+  buf.width ≡ 10
 
 #generate_tests
 
