@@ -2,6 +2,7 @@
 
 import Terminus.Widgets.Widget
 import Terminus.Widgets.Block
+import Terminus.Core.Unicode
 
 namespace Terminus
 
@@ -47,7 +48,7 @@ def styled (s : String) (st : Style) : Line := { spans := [Span.styled s st] }
 def fromString (s : String) : Line := raw s
 
 def width (l : Line) : Nat :=
-  l.spans.foldl (fun acc span => acc + span.content.length) 0
+  l.spans.foldl (fun acc span => acc + span.content.displayWidth) 0
 
 end Line
 
@@ -80,38 +81,48 @@ def withBlock (p : Paragraph) (b : Block) : Paragraph := { p with block := some 
 def centered (p : Paragraph) : Paragraph := p.withAlignment .center
 def rightAligned (p : Paragraph) : Paragraph := p.withAlignment .right
 
-/-- Word wrap a string to fit within a width -/
+/-- Word wrap a string to fit within a display width -/
 private def wordWrap (s : String) (width : Nat) : List String := Id.run do
   if width == 0 then return []
   let words := s.splitOn " "
   let mut result : List String := []
   let mut currentLine := ""
+  let mut currentWidth : Nat := 0
 
   for word in words do
+    let wordWidth := word.displayWidth
     if currentLine.isEmpty then
       currentLine := word
-    else if currentLine.length + 1 + word.length <= width then
+      currentWidth := wordWidth
+    else if currentWidth + 1 + wordWidth <= width then
       currentLine := currentLine ++ " " ++ word
+      currentWidth := currentWidth + 1 + wordWidth
     else
       result := result ++ [currentLine]
       currentLine := word
+      currentWidth := wordWidth
 
   if !currentLine.isEmpty then
     result := result ++ [currentLine]
 
   result
 
-/-- Character wrap a string to fit within a width -/
+/-- Character wrap a string to fit within a display width -/
 private def charWrap (s : String) (width : Nat) : List String := Id.run do
   if width == 0 then return []
   let mut result : List String := []
   let mut current := ""
+  let mut currentWidth : Nat := 0
 
   for c in s.toList do
-    if current.length >= width then
+    let charWidth := c.displayWidth
+    -- Check if adding this character would exceed width
+    if currentWidth + charWidth > width && !current.isEmpty then
       result := result ++ [current]
       current := ""
+      currentWidth := 0
     current := current.push c
+    currentWidth := currentWidth + charWidth
 
   if !current.isEmpty then
     result := result ++ [current]
@@ -125,7 +136,7 @@ private def alignOffset (textWidth areaWidth : Nat) (align : Alignment) : Nat :=
   | .center => if areaWidth > textWidth then (areaWidth - textWidth) / 2 else 0
   | .right => if areaWidth > textWidth then areaWidth - textWidth else 0
 
-/-- Render a single line at the given position -/
+/-- Render a single line at the given position, handling Unicode widths -/
 private def renderLine (line : Line) (x y : Nat) (maxWidth : Nat) (baseStyle : Style) (buf : Buffer) : Buffer := Id.run do
   let mut result := buf
   let mut col := x
@@ -133,9 +144,17 @@ private def renderLine (line : Line) (x y : Nat) (maxWidth : Nat) (baseStyle : S
   for span in line.spans do
     let style := Style.merge baseStyle span.style
     for c in span.content.toList do
-      if col >= x + maxWidth then break
+      let charWidth := c.displayWidth
+      -- Skip zero-width characters
+      if charWidth == 0 then
+        continue
+      -- Check if character fits
+      if col + charWidth > x + maxWidth then break
       result := result.setStyled col y c style
-      col := col + 1
+      -- For wide characters, mark the next cell as a placeholder
+      if charWidth == 2 then
+        result := result.set (col + 1) y Cell.placeholder
+      col := col + charWidth
 
   result
 

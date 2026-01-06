@@ -3,6 +3,7 @@
 import Terminus.Widgets.Widget
 import Terminus.Widgets.Block
 import Terminus.Input.Key
+import Terminus.Core.Unicode
 
 namespace Terminus
 
@@ -24,6 +25,22 @@ structure TextInput where
   deriving Repr, Inhabited
 
 namespace TextInput
+
+/-- Convert a character index to a display column position -/
+def displayColumn (s : String) (charIndex : Nat) : Nat :=
+  (s.take charIndex).displayWidth
+
+/-- Find the character index that fits within a display width from a starting position -/
+def charsInDisplayWidth (s : String) (startChar : Nat) (maxDisplayWidth : Nat) : Nat := Id.run do
+  let chars := (s.drop startChar).toList
+  let mut displayWidth : Nat := 0
+  let mut charCount : Nat := 0
+  for c in chars do
+    let cw := c.displayWidth
+    if displayWidth + cw > maxDisplayWidth then break
+    displayWidth := displayWidth + cw
+    charCount := charCount + 1
+  charCount
 
 def new : TextInput := {}
 def withValue (t : TextInput) (v : String) : TextInput := { t with value := v, cursor := v.length }
@@ -213,14 +230,25 @@ def handleKeyWithClipboard (t : TextInput) (key : KeyEvent) : TextInput × Optio
 def handleKey (t : TextInput) (key : KeyEvent) : TextInput :=
   (t.handleKeyWithClipboard key).1
 
-/-- Adjust scroll offset to keep cursor visible -/
+/-- Adjust scroll offset to keep cursor visible (display width aware) -/
 def adjustScroll (t : TextInput) (visibleWidth : Nat) : TextInput :=
   if visibleWidth == 0 then t
-  else if t.cursor < t.scrollOffset then
-    { t with scrollOffset := t.cursor }
-  else if t.cursor >= t.scrollOffset + visibleWidth then
-    { t with scrollOffset := t.cursor - visibleWidth + 1 }
-  else t
+  else
+    -- Calculate display column of cursor relative to scroll offset
+    let cursorDisplayCol := displayColumn t.value t.cursor - displayColumn t.value t.scrollOffset
+    if t.cursor < t.scrollOffset then
+      { t with scrollOffset := t.cursor }
+    else if cursorDisplayCol >= visibleWidth then
+      -- Need to scroll right - find new scroll offset
+      -- We want cursor to be visible, so scroll until cursor fits
+      let targetOffset := Id.run do
+        let mut offset := t.scrollOffset
+        while displayColumn t.value t.cursor - displayColumn t.value offset >= visibleWidth do
+          offset := offset + 1
+          if offset >= t.cursor then break
+        offset
+      { t with scrollOffset := targetOffset }
+    else t
 
 end TextInput
 
@@ -247,43 +275,69 @@ instance : Widget TextInput where
     let displayStr := if isEmpty then t.placeholder else t.displayText
     let style := if isEmpty then t.placeholderStyle else t.style
 
-    -- Adjust scroll offset
-    let scrollOffset := if t.cursor < t.scrollOffset then t.cursor
-                        else if t.cursor >= t.scrollOffset + visibleWidth then t.cursor - visibleWidth + 1
-                        else t.scrollOffset
+    -- Adjust scroll offset (display-width aware)
+    let scrollOffset := Id.run do
+      let mut offset := t.scrollOffset
+      -- If cursor is before scroll offset, scroll left
+      if t.cursor < offset then
+        return t.cursor
+      -- Calculate cursor's display column relative to scroll offset
+      let cursorDisplayCol := TextInput.displayColumn displayStr t.cursor -
+                              TextInput.displayColumn displayStr offset
+      -- If cursor is past visible area, scroll right
+      if cursorDisplayCol >= visibleWidth then
+        while TextInput.displayColumn displayStr t.cursor -
+              TextInput.displayColumn displayStr offset >= visibleWidth do
+          offset := offset + 1
+          if offset >= t.cursor then break
+      offset
 
-    -- Get selection range (adjusted for scroll)
+    -- Get selection range
     let selRange := t.selectionRange
 
-    -- Get visible portion of text
-    let visibleText := displayStr.drop scrollOffset |>.take visibleWidth
+    -- Render characters with display width awareness
+    let chars := (displayStr.drop scrollOffset).toList
+    let mut displayCol : Nat := 0
+    let mut charIdx : Nat := scrollOffset
 
-    -- Render text
-    let visibleChars := visibleText.toList
-    for i in [:visibleChars.length] do
-      let x := contentArea.x + i
-      let textPos := scrollOffset + i  -- Position in the actual text
-      let cursorPos := t.cursor - scrollOffset
-      let isCursor := t.focused && !isEmpty && i == cursorPos
+    for c in chars do
+      if displayCol >= visibleWidth then break
+
+      let charWidth := c.displayWidth
+      -- Skip zero-width characters
+      if charWidth == 0 then
+        charIdx := charIdx + 1
+        continue
+
+      -- Check if this character would extend past the visible area
+      if displayCol + charWidth > visibleWidth then break
+
+      let x := contentArea.x + displayCol
+      let isCursor := t.focused && !isEmpty && charIdx == t.cursor
 
       -- Check if this position is within selection
       let isSelected := match selRange with
-        | some (s, e) => textPos >= s && textPos < e
+        | some (s, e) => charIdx >= s && charIdx < e
         | none => false
 
-      match visibleChars[i]? with
-      | some c =>
-        let charStyle := if isCursor then t.cursorStyle
-                         else if isSelected then t.selectionStyle
-                         else style
-        result := result.setStyled x y c charStyle
-      | none => pure ()
+      let charStyle := if isCursor then t.cursorStyle
+                       else if isSelected then t.selectionStyle
+                       else style
+
+      result := result.setStyled x y c charStyle
+      -- For wide characters, mark the next cell as a placeholder
+      if charWidth == 2 then
+        result := result.set (x + 1) y Cell.placeholder
+
+      displayCol := displayCol + charWidth
+      charIdx := charIdx + 1
 
     -- Render cursor at end if cursor is past text
     if t.focused && !isEmpty then
-      let cursorPos := t.cursor - scrollOffset
-      if cursorPos >= visibleText.length && cursorPos < visibleWidth then
-        let x := contentArea.x + cursorPos
+      let cursorDisplayCol := TextInput.displayColumn displayStr t.cursor -
+                              TextInput.displayColumn displayStr scrollOffset
+      if cursorDisplayCol >= displayCol && cursorDisplayCol < visibleWidth then
+        let x := contentArea.x + cursorDisplayCol
         result := result.setStyled x y ' ' t.cursorStyle
 
     -- Render cursor for empty input with placeholder

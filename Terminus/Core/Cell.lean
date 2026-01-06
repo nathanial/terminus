@@ -9,11 +9,16 @@ structure Cell where
   char : Char := ' '
   style : Style := {}
   hyperlink : Option String := none
+  /-- True if this cell is a placeholder for the 2nd column of a wide character -/
+  isPlaceholder : Bool := false
   deriving Repr, BEq, Inhabited
 
 namespace Cell
 
 def empty : Cell := {}
+
+/-- Placeholder cell for the second column of a wide (double-width) character -/
+def placeholder : Cell := { isPlaceholder := true }
 
 def new (c : Char) : Cell := { char := c }
 

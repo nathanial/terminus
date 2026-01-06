@@ -1,6 +1,7 @@
 -- Terminus.Widgets.Block: Container widget with borders and titles
 
 import Terminus.Widgets.Widget
+import Terminus.Core.Unicode
 
 namespace Terminus
 
@@ -145,16 +146,26 @@ private def renderTitle (b : Block) (area : Rect) (buf : Buffer) : Buffer := Id.
     if area.width < 4 then return buf -- Not enough space for title
 
     let maxLen := area.width - 4 -- Leave space for borders and padding
-    let displayTitle := if title.length > maxLen then title.take maxLen else title
+    -- Truncate title based on display width
+    let displayTitle := Id.run do
+      let mut result := ""
+      let mut width : Nat := 0
+      for c in title.toList do
+        let cw := c.displayWidth
+        if width + cw > maxLen then break
+        result := result.push c
+        width := width + cw
+      result
     let titleWithPad := " " ++ displayTitle ++ " "
+    let titleWidth := titleWithPad.displayWidth
 
     let (y, x) := match b.titlePosition with
       | .topLeft => (area.y, area.x + 1)
-      | .topCenter => (area.y, area.x + (area.width - titleWithPad.length) / 2)
-      | .topRight => (area.y, area.x + area.width - titleWithPad.length - 1)
+      | .topCenter => (area.y, area.x + (area.width - titleWidth) / 2)
+      | .topRight => (area.y, area.x + area.width - titleWidth - 1)
       | .bottomLeft => (area.y + area.height - 1, area.x + 1)
-      | .bottomCenter => (area.y + area.height - 1, area.x + (area.width - titleWithPad.length) / 2)
-      | .bottomRight => (area.y + area.height - 1, area.x + area.width - titleWithPad.length - 1)
+      | .bottomCenter => (area.y + area.height - 1, area.x + (area.width - titleWidth) / 2)
+      | .bottomRight => (area.y + area.height - 1, area.x + area.width - titleWidth - 1)
 
     buf.writeString x y titleWithPad b.titleStyle
 

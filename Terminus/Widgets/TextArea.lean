@@ -3,6 +3,7 @@
 import Terminus.Widgets.Widget
 import Terminus.Widgets.Block
 import Terminus.Input.Key
+import Terminus.Core.Unicode
 
 namespace Terminus
 
@@ -50,6 +51,10 @@ structure TextArea where
   deriving Repr, Inhabited
 
 namespace TextArea
+
+/-- Convert a character index to a display column position -/
+def displayColumn (s : String) (charIndex : Nat) : Nat :=
+  (s.take charIndex).displayWidth
 
 def new : TextArea := {}
 
@@ -435,7 +440,7 @@ def handleKeyWithClipboard (t : TextArea) (key : KeyEvent) : TextArea × Option 
 def handleKey (t : TextArea) (key : KeyEvent) : TextArea :=
   (t.handleKeyWithClipboard key).1
 
-/-- Adjust scroll to keep cursor visible -/
+/-- Adjust scroll to keep cursor visible (display width aware) -/
 def adjustScroll (t : TextArea) (visibleHeight visibleWidth : Nat) : TextArea :=
   -- Vertical scroll
   let scrollRow :=
@@ -445,11 +450,22 @@ def adjustScroll (t : TextArea) (visibleHeight visibleWidth : Nat) : TextArea :=
       else t.scrollRow
     else t.scrollRow
 
-  -- Horizontal scroll
+  -- Horizontal scroll (display width aware)
+  let currentLine := t.lines.getD t.cursorRow ""
+  let cursorDisplayCol := displayColumn currentLine t.cursorCol
+  let scrollDisplayCol := displayColumn currentLine t.scrollCol
+
   let scrollCol :=
     if visibleWidth > 0 then
       if t.cursorCol < t.scrollCol then t.cursorCol
-      else if t.cursorCol >= t.scrollCol + visibleWidth then t.cursorCol - visibleWidth + 1
+      else if cursorDisplayCol - scrollDisplayCol >= visibleWidth then
+        -- Find new scroll offset so cursor is visible
+        Id.run do
+          let mut offset := t.scrollCol
+          while displayColumn currentLine t.cursorCol - displayColumn currentLine offset >= visibleWidth do
+            offset := offset + 1
+            if offset >= t.cursorCol then break
+          offset
       else t.scrollCol
     else t.scrollCol
 
@@ -479,12 +495,24 @@ instance : Widget TextArea where
     let textWidth := if contentArea.width > lineNumWidth then contentArea.width - lineNumWidth else 0
     let visibleHeight := contentArea.height
 
-    -- Adjust scroll
+    -- Adjust scroll (vertical is simple, horizontal needs display width awareness)
     let scrollRow := if t.cursorRow < t.scrollRow then t.cursorRow
                      else if t.cursorRow >= t.scrollRow + visibleHeight then t.cursorRow - visibleHeight + 1
                      else t.scrollRow
+
+    -- Horizontal scroll with display width
+    let currentLine := t.lines.getD t.cursorRow ""
+    let cursorDisplayCol := TextArea.displayColumn currentLine t.cursorCol
+    let scrollDisplayCol := TextArea.displayColumn currentLine t.scrollCol
     let scrollCol := if t.cursorCol < t.scrollCol then t.cursorCol
-                     else if t.cursorCol >= t.scrollCol + textWidth then t.cursorCol - textWidth + 1
+                     else if cursorDisplayCol - scrollDisplayCol >= textWidth then
+                       -- Find scroll offset so cursor is visible
+                       Id.run do
+                         let mut offset := t.scrollCol
+                         while TextArea.displayColumn currentLine t.cursorCol - TextArea.displayColumn currentLine offset >= textWidth do
+                           offset := offset + 1
+                           if offset >= t.cursorCol then break
+                         offset
                      else t.scrollCol
 
     -- Render visible lines
@@ -508,11 +536,10 @@ instance : Widget TextArea where
             | some c => result := result.setStyled x y c t.lineNumberStyle
             | none => pure ()
 
-      -- Render line content
+      -- Render line content with display width awareness
       match t.lines[lineIdx]? with
       | none => pure ()
       | some line =>
-        let visibleLine := line.drop scrollCol |>.take textWidth
         let isCurrentLine := lineIdx == t.cursorRow
 
         -- Apply current line style if set
@@ -523,12 +550,26 @@ instance : Widget TextArea where
         -- Get selection range for highlight checking
         let selRange := t.selectionRange
 
-        let visibleLineChars := visibleLine.toList
-        for col in [:visibleLineChars.length] do
-          let x := textStartX + col
-          let textCol := scrollCol + col  -- Actual column in the text
-          let pos : TextPosition := { row := lineIdx, col := textCol }
-          let isCursor := t.focused && isCurrentLine && textCol == t.cursorCol
+        -- Render characters with display width tracking
+        let chars := (line.drop scrollCol).toList
+        let mut displayCol : Nat := 0
+        let mut charIdx : Nat := scrollCol
+
+        for c in chars do
+          if displayCol >= textWidth then break
+
+          let charWidth := c.displayWidth
+          -- Skip zero-width characters
+          if charWidth == 0 then
+            charIdx := charIdx + 1
+            continue
+
+          -- Check if character would extend past visible area
+          if displayCol + charWidth > textWidth then break
+
+          let x := textStartX + displayCol
+          let pos : TextPosition := { row := lineIdx, col := charIdx }
+          let isCursor := t.focused && isCurrentLine && charIdx == t.cursorCol
 
           -- Check if this position is within selection
           let isSelected := match selRange with
@@ -538,15 +579,21 @@ instance : Widget TextArea where
           let style := if isCursor then t.cursorStyle
                        else if isSelected then t.selectionStyle
                        else baseStyle
-          match visibleLineChars[col]? with
-          | some c => result := result.setStyled x y c style
-          | none => pure ()
+
+          result := result.setStyled x y c style
+          -- For wide characters, mark the next cell as a placeholder
+          if charWidth == 2 then
+            result := result.set (x + 1) y Cell.placeholder
+
+          displayCol := displayCol + charWidth
+          charIdx := charIdx + 1
 
         -- Render cursor at end of line if needed
         if t.focused && isCurrentLine then
-          let cursorScreenCol := t.cursorCol - scrollCol
-          if cursorScreenCol >= 0 && cursorScreenCol >= visibleLine.length && cursorScreenCol < textWidth then
-            let x := textStartX + cursorScreenCol
+          let cursorDisplayCol := TextArea.displayColumn line t.cursorCol -
+                                  TextArea.displayColumn line scrollCol
+          if cursorDisplayCol >= displayCol && cursorDisplayCol < textWidth then
+            let x := textStartX + cursorDisplayCol
             result := result.setStyled x y ' ' t.cursorStyle
 
     result

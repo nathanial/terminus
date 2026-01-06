@@ -394,6 +394,52 @@ test "Cell.link creates hyperlinked cell" := do
   cell.hyperlink ≡ some "https://test.com"
   cell.style.modifier.underline ≡ true
 
+test "Cell.placeholder is marked as placeholder" := do
+  let cell := Cell.placeholder
+  cell.isPlaceholder ≡ true
+
+test "Cell.empty is not a placeholder" := do
+  Cell.empty.isPlaceholder ≡ false
+
+-- ============================================================================
+-- Unicode Width Tests
+-- ============================================================================
+
+test "Char.displayWidth ASCII has width 1" := do
+  'A'.displayWidth ≡ 1
+  'z'.displayWidth ≡ 1
+  ' '.displayWidth ≡ 1
+  '!'.displayWidth ≡ 1
+
+test "Char.displayWidth CJK has width 2" := do
+  '中'.displayWidth ≡ 2
+  '日'.displayWidth ≡ 2
+  '本'.displayWidth ≡ 2
+
+test "Char.displayWidth Hangul has width 2" := do
+  '한'.displayWidth ≡ 2
+  '글'.displayWidth ≡ 2
+
+test "Char.displayWidth Hiragana has width 2" := do
+  'あ'.displayWidth ≡ 2
+  'い'.displayWidth ≡ 2
+
+test "Char.displayWidth control characters have width 0" := do
+  '\x00'.displayWidth ≡ 0
+  '\x1F'.displayWidth ≡ 0
+
+test "String.displayWidth sums correctly for ASCII" := do
+  "Hello".displayWidth ≡ 5
+  "".displayWidth ≡ 0
+
+test "String.displayWidth sums correctly for CJK" := do
+  "中文".displayWidth ≡ 4
+  "日本語".displayWidth ≡ 6
+
+test "String.displayWidth mixed content" := do
+  "Hi中".displayWidth ≡ 4
+  "a日b".displayWidth ≡ 4
+
 -- ============================================================================
 -- Buffer Tests
 -- ============================================================================
@@ -432,6 +478,26 @@ test "Buffer.writeString applies style" := do
   let buf := Buffer.new 10 3
   let buf := buf.writeString 0 0 "X" Style.bold
   (buf.get 0 0).style.modifier.bold ≡ true
+
+test "Buffer.writeString handles CJK wide characters" := do
+  let buf := Buffer.new 10 3
+  let buf := buf.writeString 0 0 "中文"
+  -- First CJK char at column 0
+  (buf.get 0 0).char ≡ '中'
+  -- Placeholder at column 1
+  (buf.get 1 0).isPlaceholder ≡ true
+  -- Second CJK char at column 2
+  (buf.get 2 0).char ≡ '文'
+  -- Placeholder at column 3
+  (buf.get 3 0).isPlaceholder ≡ true
+
+test "Buffer.writeString mixed ASCII and CJK" := do
+  let buf := Buffer.new 10 3
+  let buf := buf.writeString 0 0 "Hi中"
+  (buf.get 0 0).char ≡ 'H'
+  (buf.get 1 0).char ≡ 'i'
+  (buf.get 2 0).char ≡ '中'
+  (buf.get 3 0).isPlaceholder ≡ true
 
 test "Buffer.writeLink writes hyperlinked text" := do
   let buf := Buffer.new 20 3

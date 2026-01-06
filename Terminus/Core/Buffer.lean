@@ -2,6 +2,7 @@
 
 import Terminus.Core.Cell
 import Terminus.Core.Rect
+import Terminus.Core.Unicode
 
 namespace Terminus
 
@@ -68,44 +69,74 @@ def fillRect (buf : Buffer) (r : Rect) (cell : Cell) : Buffer := Id.run do
       result := result.set x y cell
   result
 
-/-- Write a string horizontally starting at (x, y) -/
+/-- Write a string horizontally starting at (x, y), handling Unicode widths -/
 def writeString (buf : Buffer) (x y : Nat) (s : String) (style : Style := {}) : Buffer := Id.run do
   let mut result := buf
   let mut col := x
   for c in s.toList do
+    let width := c.displayWidth
+    -- Skip zero-width characters (combining marks)
+    if width == 0 then
+      continue
     result := result.set col y (Cell.styled c style)
-    col := col + 1
+    -- For wide characters, mark the next cell as a placeholder
+    if width == 2 then
+      result := result.set (col + 1) y Cell.placeholder
+    col := col + width
   result
 
-/-- Write a string within bounds, truncating if necessary -/
+/-- Write a string within bounds, truncating if necessary, handling Unicode widths -/
 def writeStringBounded (buf : Buffer) (x y : Nat) (maxWidth : Nat) (s : String) (style : Style := {}) : Buffer := Id.run do
   let mut result := buf
   let mut col := x
   let endCol := min (x + maxWidth) buf.width
   for c in s.toList do
-    if col >= endCol then break
+    let width := c.displayWidth
+    -- Skip zero-width characters (combining marks)
+    if width == 0 then
+      continue
+    -- Check if character fits (including placeholder for wide chars)
+    if col + width > endCol then break
     result := result.set col y (Cell.styled c style)
-    col := col + 1
+    -- For wide characters, mark the next cell as a placeholder
+    if width == 2 then
+      result := result.set (col + 1) y Cell.placeholder
+    col := col + width
   result
 
-/-- Write a hyperlinked string starting at (x, y) -/
+/-- Write a hyperlinked string starting at (x, y), handling Unicode widths -/
 def writeLink (buf : Buffer) (x y : Nat) (s : String) (url : String) (style : Style := {}) : Buffer := Id.run do
   let mut result := buf
   let mut col := x
   for c in s.toList do
+    let width := c.displayWidth
+    -- Skip zero-width characters (combining marks)
+    if width == 0 then
+      continue
     result := result.set col y (Cell.link c style url)
-    col := col + 1
+    -- For wide characters, mark the next cell as a placeholder
+    if width == 2 then
+      result := result.set (col + 1) y Cell.placeholder
+    col := col + width
   result
 
-/-- Write a hyperlinked string within bounds, truncating if necessary -/
+/-- Write a hyperlinked string within bounds, truncating if necessary, handling Unicode widths -/
 def writeLinkBounded (buf : Buffer) (x y : Nat) (maxWidth : Nat) (s : String) (url : String) (style : Style := {}) : Buffer := Id.run do
   let mut result := buf
   let mut col := x
   let endCol := min (x + maxWidth) buf.width
   for c in s.toList do
-    if col >= endCol then break
+    let width := c.displayWidth
+    -- Skip zero-width characters (combining marks)
+    if width == 0 then
+      continue
+    -- Check if character fits (including placeholder for wide chars)
+    if col + width > endCol then break
     result := result.set col y (Cell.link c style url)
-    col := col + 1
+    -- For wide characters, mark the next cell as a placeholder
+    if width == 2 then
+      result := result.set (col + 1) y Cell.placeholder
+    col := col + width
   result
 
 /-- Clear the buffer (fill with empty cells) -/
