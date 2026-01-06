@@ -80,7 +80,7 @@ instance : Widget Sparkline where
         let x := contentArea.x + i
         if x < contentArea.x + contentArea.width then
           let barIdx := Sparkline.valueToBarIndex value maxVal
-          let char := sparklineChars[barIdx]!
+          let char := sparklineChars.getD barIdx ' '
           result := result.setStyled x y char s.style
       | none => pure ()
 

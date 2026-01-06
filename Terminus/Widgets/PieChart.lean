@@ -118,7 +118,7 @@ private def chooseSliceIdx (angles : Array Float) (a : Float) : Nat :=
       return 0
     let mut idx : Nat := angles.size - 1
     for i in [:angles.size] do
-      if a < angles[i]! then
+      if a < angles.getD i 0.0 then
         idx := i
         break
     idx

@@ -61,7 +61,7 @@ def withBlock (s : Spinner) (b : Block) : Spinner := { s with block := some b }
 /-- Get the current frame string -/
 def currentFrame (s : Spinner) : String :=
   if s.frames.isEmpty then "?"
-  else s.frames[s.frameIndex % s.frames.size]!
+  else s.frames.getD (s.frameIndex % s.frames.size) "?"
 
 end Spinner
 

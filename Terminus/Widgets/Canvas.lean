@@ -73,11 +73,11 @@ def setPixel (g : BrailleGrid) (px py : Nat) (style : Style) : BrailleGrid :=
   else
     let idx := cellY * g.cellWidth + cellX
     let bit := brailleDotBit dotRow dotCol
-    let oldPattern := g.patterns[idx]!
+    let oldPattern := g.patterns.getD idx 0
     let newPattern := oldPattern ||| bit
     { g with
-      patterns := g.patterns.set! idx newPattern
-      styles := g.styles.set! idx style
+      patterns := g.patterns.modify idx (fun _ => newPattern)
+      styles := g.styles.modify idx (fun _ => style)
     }
 
 /-- Clear a single pixel -/
@@ -91,9 +91,9 @@ def clearPixel (g : BrailleGrid) (px py : Nat) : BrailleGrid :=
   else
     let idx := cellY * g.cellWidth + cellX
     let bit := brailleDotBit dotRow dotCol
-    let oldPattern := g.patterns[idx]!
+    let oldPattern := g.patterns.getD idx 0
     let newPattern := oldPattern &&& (~~~bit)
-    { g with patterns := g.patterns.set! idx newPattern }
+    { g with patterns := g.patterns.modify idx (fun _ => newPattern) }
 
 /-- Clear the entire grid -/
 def clear (g : BrailleGrid) : BrailleGrid :=
@@ -190,7 +190,7 @@ def getCell (g : BrailleGrid) (cellX cellY : Nat) : (Char × Style) :=
   if cellX >= g.cellWidth || cellY >= g.cellHeight then ('⠀', Style.default)
   else
     let idx := cellY * g.cellWidth + cellX
-    (brailleChar g.patterns[idx]!, g.styles[idx]!)
+    (brailleChar (g.patterns.getD idx 0), g.styles.getD idx Style.default)
 
 end BrailleGrid
 

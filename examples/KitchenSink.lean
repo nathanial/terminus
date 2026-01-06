@@ -1047,7 +1047,7 @@ def toggleCheckbox (s : State) : State :=
   if h : s.checkboxIndex < s.checkboxes.size then
     let item := s.checkboxes.getD s.checkboxIndex { label := "", checked := false }
     let updated := { item with checked := !item.checked }
-    { s with checkboxes := s.checkboxes.set! s.checkboxIndex updated }
+    { s with checkboxes := s.checkboxes.modify s.checkboxIndex (fun _ => updated) }
   else
     s
 

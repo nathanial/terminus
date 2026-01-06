@@ -113,7 +113,7 @@ def insertChar (t : TextArea) (c : Char) : TextArea :=
       let after := line.drop t.cursorCol
       let newLine := before ++ String.singleton c ++ after
       { t with
-        lines := t.lines.set! t.cursorRow newLine
+        lines := t.lines.modify t.cursorRow (fun _ => newLine)
         cursorCol := t.cursorCol + 1
       }
 
@@ -146,7 +146,7 @@ def deleteBackward (t : TextArea) : TextArea :=
       let before := line.take (t.cursorCol - 1)
       let after := line.drop t.cursorCol
       { t with
-        lines := t.lines.set! t.cursorRow (before ++ after)
+        lines := t.lines.modify t.cursorRow (fun _ => before ++ after)
         cursorCol := t.cursorCol - 1
       }
   else if t.cursorRow > 0 then
@@ -176,7 +176,7 @@ def deleteForward (t : TextArea) : TextArea :=
         -- Delete within line
         let before := line.take t.cursorCol
         let after := line.drop (t.cursorCol + 1)
-        { t with lines := t.lines.set! t.cursorRow (before ++ after) }
+        { t with lines := t.lines.modify t.cursorRow (fun _ => before ++ after) }
       else if t.cursorRow + 1 < t.lines.size then
         -- Merge with next line
         match t.lines[t.cursorRow + 1]? with
@@ -299,7 +299,7 @@ def deleteSelection (t : TextArea) : TextArea :=
         let before := line.take start.col
         let after := line.drop «end».col
         { t with
-          lines := t.lines.set! start.row (before ++ after)
+          lines := t.lines.modify start.row (fun _ => before ++ after)
           cursorRow := start.row
           cursorCol := start.col
           selectionAnchor := none
@@ -361,7 +361,7 @@ def paste (t : TextArea) (text : String) : TextArea :=
       let before := line.take t.cursorCol
       let after := line.drop t.cursorCol
       { t with
-        lines := t.lines.set! t.cursorRow (before ++ single ++ after)
+        lines := t.lines.modify t.cursorRow (fun _ => before ++ single ++ after)
         cursorCol := t.cursorCol + single.length
       }
     | none => t
@@ -371,7 +371,7 @@ def paste (t : TextArea) (text : String) : TextArea :=
     | some line =>
       let before := line.take t.cursorCol
       let after := line.drop t.cursorCol
-      let lastPasteLine := rest.getLast!
+      let lastPasteLine := rest.getLast?.getD ""
       let middleLines := rest.dropLast
       let firstLine := before ++ first
       let lastLine := lastPasteLine ++ after

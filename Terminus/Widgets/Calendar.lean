@@ -79,7 +79,7 @@ def withBlock (c : Calendar) (b : Block) : Calendar := { c with block := some b 
 
 /-- Get month name -/
 def monthName (c : Calendar) : String :=
-  monthNames[(c.month - 1) % 12]!
+  monthNames.getD ((c.month - 1) % 12) "?"
 
 /-- Get number of days in current month -/
 def numDays (c : Calendar) : Nat :=

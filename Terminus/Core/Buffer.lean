@@ -44,7 +44,7 @@ def get (buf : Buffer) (x y : Nat) : Cell :=
 /-- Set a cell at (x, y), returns unchanged buffer if out of bounds -/
 def set (buf : Buffer) (x y : Nat) (cell : Cell) : Buffer :=
   if buf.inBounds x y then
-    { buf with cells := buf.cells.set! (buf.index x y) cell }
+    { buf with cells := buf.cells.modify (buf.index x y) (fun _ => cell) }
   else
     buf
 

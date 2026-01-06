@@ -168,7 +168,7 @@ private def rowString (row : UInt8) : String := Id.run do
 private def glyphFromBytes (bytes : Array UInt8) : Array String := Id.run do
   let mut rows := #[]
   for i in [0:bytes.size] do
-    rows := rows.push (rowString bytes[i]!)
+    rows := rows.push (rowString (bytes.getD i 0))
   rows
 
 private def fallbackIndex : Nat := '?'.toNat
@@ -351,7 +351,7 @@ instance : Widget BigText where
         for c in chars do
           let glyph := b.font.glyph c
           let glyphW := BigFont.glyphWidth b.font c
-          let rowStr := if row < glyph.size then glyph[row]! else ""
+          let rowStr := glyph.getD row ""
 
           for ch in rowStr.toList do
             if x >= contentArea.x + contentArea.width then break
