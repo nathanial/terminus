@@ -3,6 +3,7 @@
 import Terminus.Core.Buffer
 import Terminus.Core.Cell
 import Terminus.Core.Base64
+import Terminus.Core.Sixel
 import Terminus.Backend.Ansi
 import Terminus.Backend.Commands
 import Terminus.Backend.TerminalEffect
@@ -115,6 +116,10 @@ private def iterm2ImageEscape (payloadB64 : String) (nameB64 : Option String) (w
   let params := s!"inline=1;{preservePart}{namePart}width={w};height={h}:"
   esc ++ params ++ payloadB64 ++ "\x07"
 
+/-- Convert decoded RGB bytes to Sixel RawImage -/
+private def bytesToSixelImage (width height : Nat) (data : ByteArray) : Option Sixel.RawImage :=
+  Sixel.RawImage.fromRGB width height data
+
 private def applyCommands [Monad m] [TerminalEffect m] (term : Terminal) (cmds : List TerminalCommand) : m Terminal := do
   let keys := cmds.map TerminalCommand.key
   let imageRects := cmds.foldl (fun acc c => match c.rect? with | some r => r :: acc | none => acc) [] |>.reverse
@@ -138,12 +143,24 @@ private def applyCommands [Monad m] [TerminalEffect m] (term : Terminal) (cmds :
             match ic.source with
             | .bytes b => pure b
             | .path p => TerminalEffect.readFileBytes p
-          let payloadB64 := Base64.encode bytes
-          let nameB64 := ic.name.map (fun s => Base64.encode s.toUTF8)
           match ic.protocol with
           | .iterm2 =>
+            let payloadB64 := Base64.encode bytes
+            let nameB64 := ic.name.map (fun s => Base64.encode s.toUTF8)
             TerminalEffect.writeStdout (Ansi.cursorToZero ic.rect.x ic.rect.y)
             TerminalEffect.writeStdout (iterm2ImageEscape payloadB64 nameB64 ic.rect.width ic.rect.height ic.preserveAspectRatio)
+          | .sixel =>
+            -- Decode image bytes to RGB pixels, then encode as Sixel
+            let decoded ← TerminalEffect.decodeImageBytes bytes
+            match decoded with
+            | some (width, height, rgbData) =>
+              match bytesToSixelImage width height rgbData with
+              | some rawImg =>
+                let sixelSeq := Sixel.encodeRaw rawImg
+                TerminalEffect.writeStdout (Ansi.cursorToZero ic.rect.x ic.rect.y)
+                TerminalEffect.writeStdout sixelSeq
+              | none => pure ()  -- Failed to convert to Sixel image
+            | none => pure ()  -- Failed to decode image
       | .clipboard cc =>
         -- Write text to system clipboard using OSC 52
         TerminalEffect.writeStdout (Ansi.clipboardWrite cc.text cc.selection.code)

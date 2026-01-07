@@ -32,12 +32,14 @@ end ImageSource
 /-- Terminal image protocol. -/
 inductive ImageProtocol where
   | iterm2
+  | sixel
   deriving BEq, Inhabited
 
 namespace ImageProtocol
 
 def label : ImageProtocol → String
   | .iterm2 => "iterm2"
+  | .sixel => "sixel"
 
 end ImageProtocol
 

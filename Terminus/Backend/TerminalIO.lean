@@ -2,6 +2,7 @@
 
 import Terminus.Backend.TerminalEffect
 import Terminus.Backend.Raw
+import Raster
 
 namespace Terminus
 
@@ -19,5 +20,12 @@ instance : TerminalEffect IO where
       IO.FS.readBinFile path
     catch _ =>
       pure ByteArray.empty
+  decodeImageBytes buffer := do
+    try
+      -- Use raster to decode image bytes, forcing RGB format
+      let img ← Raster.Image.loadFromMemoryAs buffer .rgb
+      pure (some (img.width, img.height, img.data))
+    catch _ =>
+      pure none
 
 end Terminus

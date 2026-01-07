@@ -29,6 +29,9 @@ class TerminalEffect (m : Type → Type) where
   /-- Read a file as raw bytes. Used for image protocols and other binary payloads. -/
   readFileBytes : System.FilePath → m ByteArray
 
+  /-- Decode image bytes to raw RGB pixels. Returns (width, height, rgb_data) or none on failure. -/
+  decodeImageBytes : ByteArray → m (Option (Nat × Nat × ByteArray))
+
 namespace TerminalEffect
 
 /-- Run an action with raw mode enabled, restoring settings on exit -/
