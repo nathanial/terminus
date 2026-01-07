@@ -118,21 +118,14 @@ private def iterm2ImageEscape (payloadB64 : String) (nameB64 : Option String) (w
 private def applyCommands [Monad m] [TerminalEffect m] (term : Terminal) (cmds : List TerminalCommand) : m Terminal := do
   let keys := cmds.map TerminalCommand.key
   let imageRects := cmds.foldl (fun acc c => match c.rect? with | some r => r :: acc | none => acc) [] |>.reverse
-  let hasPathImages := cmds.any fun c =>
-    match c with
-    | .image ic =>
-      match ic.source with
-      | .path _ => true
-      | .bytes _ => false
-    | _ => false
-
   -- If any prior image rects disappeared (or changed), redraw those regions from the buffer to "erase" overlays.
   let removed := term.previousImageRects.filter (fun r => !imageRects.contains r)
   for r in removed do
     redrawRect term r
 
   -- Avoid re-sending identical command sets every tick (large image payloads).
-  if !hasPathImages && keys == term.previousCommandKeys then
+  -- Keys include path for file-based images, so unchanged paths won't re-encode.
+  if keys == term.previousCommandKeys then
     pure { term with previousCommandKeys := keys, previousImageRects := imageRects }
   else
     for cmd in cmds do
