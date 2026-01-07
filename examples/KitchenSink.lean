@@ -1388,12 +1388,7 @@ end LoggerDemo
 
 namespace ImageDemo
 
-private def samplePng : ByteArray :=
-  ByteArray.mk #[
-    137, 80, 78, 71, 13, 10, 26, 10, 0, 0, 0, 13, 73, 72, 68, 82, 0, 0, 0, 1, 0, 0, 0, 1, 8, 4,
-    0, 0, 0, 181, 28, 12, 2, 0, 0, 0, 11, 73, 68, 65, 84, 120, 218, 99, 252, 255, 31, 0, 3, 3, 2,
-    0, 239, 1, 207, 107, 0, 0, 0, 0, 73, 69, 78, 68, 174, 66, 96, 130
-  ]
+private def nibblePngPath : System.FilePath := "examples/nibble.png"
 
 structure State where
   preserve : Bool := true
@@ -1418,8 +1413,8 @@ def draw (frame : Frame) (state : State) : Frame := Id.run do
     let imgBlock := Block.rounded
       |>.withTitle (if state.preserve then "preserve AR" else "stretch")
       |>.withBorderStyle (Style.fgColor Color.cyan)
-    let img := Image.fromBytes samplePng
-      |>.withName (some "sample.png")
+    let img := Image.fromPath nibblePngPath
+      |>.withName (some "nibble.png")
       |>.withPreserveAspectRatio state.preserve
       |>.withBlock imgBlock
       |>.withBackground (Style.bgColor Color.black)

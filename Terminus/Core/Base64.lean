@@ -19,9 +19,11 @@ private def sextetChar (n : Nat) : Char :=
 
 /-- Encode bytes as base64 (RFC 4648, with `=` padding). -/
 def encode (bytes : ByteArray) : String := Id.run do
-  let mut out : List Char := []
-  let mut i : Nat := 0
   let n := bytes.size
+  -- Pre-allocate array: ceil(n/3) * 4 characters
+  let outSize := ((n + 2) / 3) * 4
+  let mut out : Array Char := Array.mkEmpty outSize
+  let mut i : Nat := 0
 
   while i < n do
     let b0 := bytes.get! i |>.toNat
@@ -35,13 +37,14 @@ def encode (bytes : ByteArray) : String := Id.run do
     let c2 := sextetChar ((triple >>> 6) &&& 0x3F)
     let c3 := sextetChar (triple &&& 0x3F)
 
-    out := out ++ [c0, c1]
-    if i + 1 < n then out := out ++ [c2] else out := out ++ ['=']
-    if i + 2 < n then out := out ++ [c3] else out := out ++ ['=']
+    out := out.push c0
+    out := out.push c1
+    out := out.push (if i + 1 < n then c2 else '=')
+    out := out.push (if i + 2 < n then c3 else '=')
 
     i := i + 3
 
-  String.ofList out
+  String.ofList out.toList
 
 /-- Encode a string as base64 -/
 def encodeString (s : String) : String :=
