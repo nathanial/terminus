@@ -87,19 +87,18 @@ def maxDataLength (c : LineChart) : Nat :=
 
 end LineChart
 
+namespace LineChart
+
+/-- Minimum height required for rendering a line chart (axes + data) -/
+def minRenderHeight : Nat := 3
+
+end LineChart
+
 instance : Widget LineChart where
   render c area buf := Id.run do
-    -- Render block if present
-    let mut result := match c.block with
-      | some block => Widget.render block area buf
-      | none => buf
-
-    -- Get content area
-    let contentArea := match c.block with
-      | some block => block.innerArea area
-      | none => area
-
-    if contentArea.isEmpty || contentArea.height < 3 then return result
+    let (contentArea, buf') := renderBlockAndGetInner c.block area buf
+    if contentArea.isEmpty || contentArea.height < LineChart.minRenderHeight then return buf'
+    let mut result := buf'
 
     -- Calculate chart area (excluding axes and legend)
     let yAxisWidth := if c.showYAxis then c.yAxisWidth else 0

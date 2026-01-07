@@ -70,15 +70,9 @@ instance : Frame.FrameWidget Image where
 /-- Fallback text-only rendering (does not display real images). -/
 instance : Widget Image where
   render img area buf := Id.run do
-    let mut result := match img.block with
-      | some b => Widget.render b area buf
-      | none => buf
-
-    let contentArea := match img.block with
-      | some b => b.innerArea area
-      | none => area
-
-    if contentArea.isEmpty then return result
+    let (contentArea, buf') := renderBlockAndGetInner img.block area buf
+    if contentArea.isEmpty then return buf'
+    let mut result := buf'
 
     result := Image.fillArea result contentArea img.background
 

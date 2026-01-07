@@ -82,17 +82,9 @@ end ListWidget
 
 instance : Widget ListWidget where
   render l area buf := Id.run do
-    -- Render block if present
-    let mut result := match l.block with
-      | some block => Widget.render block area buf
-      | none => buf
-
-    -- Get content area
-    let contentArea := match l.block with
-      | some block => block.innerArea area
-      | none => area
-
-    if contentArea.isEmpty then return result
+    let (contentArea, buf') := renderBlockAndGetInner l.block area buf
+    if contentArea.isEmpty then return buf'
+    let mut result := buf'
 
     -- Adjust scroll to keep selection visible
     let adjustedList := l.adjustScroll contentArea.height

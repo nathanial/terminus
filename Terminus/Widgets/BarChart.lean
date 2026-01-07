@@ -36,6 +36,9 @@ structure BarChart where
 
 namespace BarChart
 
+/-- Maximum width for bar labels in horizontal bar charts -/
+def maxLabelWidth : Nat := 10
+
 def new (data : List BarData) : BarChart := { data }
 
 def fromPairs (pairs : List (String × Float)) : BarChart :=
@@ -137,8 +140,8 @@ private def renderHorizontalBarChart (c : BarChart) (area : Rect) (buf : Buffer)
   let maxVal := c.computeMax
 
   -- Calculate max label width
-  let maxLabelWidth := c.data.foldl (fun acc d => Nat.max acc d.label.length) 0
-  let labelWidth := if c.showLabels then Nat.min maxLabelWidth 10 else 0
+  let maxLabelLen := c.data.foldl (fun acc d => Nat.max acc d.label.length) 0
+  let labelWidth := if c.showLabels then Nat.min maxLabelLen BarChart.maxLabelWidth else 0
 
   -- Calculate available chart width
   let chartStartX := area.x + labelWidth + (if labelWidth > 0 then 1 else 0)
@@ -194,17 +197,9 @@ private def renderHorizontalBarChart (c : BarChart) (area : Rect) (buf : Buffer)
 
 instance : Widget BarChart where
   render c area buf := Id.run do
-    -- Render block if present
-    let mut result := match c.block with
-      | some block => Widget.render block area buf
-      | none => buf
-
-    -- Get content area
-    let contentArea := match c.block with
-      | some block => block.innerArea area
-      | none => area
-
-    if contentArea.isEmpty then return result
+    let (contentArea, buf') := renderBlockAndGetInner c.block area buf
+    if contentArea.isEmpty then return buf'
+    let result := buf'
 
     match c.orientation with
     | .vertical => renderVerticalBarChart c contentArea result

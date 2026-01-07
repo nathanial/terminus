@@ -320,15 +320,9 @@ end BigText
 
 instance : Widget BigText where
   render b area buf := Id.run do
-    let mut result := match b.block with
-      | some blk => Widget.render blk area buf
-      | none => buf
-
-    let contentArea := match b.block with
-      | some blk => blk.innerArea area
-      | none => area
-
-    if contentArea.isEmpty || contentArea.height == 0 then return result
+    let (contentArea, buf') := renderBlockAndGetInner b.block area buf
+    if contentArea.isEmpty || contentArea.height == 0 then return buf'
+    let mut result := buf'
 
     let lines := b.text.splitOn "\n"
     let mut lineIdx := 0

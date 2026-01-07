@@ -212,17 +212,9 @@ end Tree
 
 instance : Widget Tree where
   render t area buf := Id.run do
-    -- Render block if present
-    let mut result := match t.block with
-      | some block => Widget.render block area buf
-      | none => buf
-
-    -- Get content area
-    let contentArea := match t.block with
-      | some block => block.innerArea area
-      | none => area
-
-    if contentArea.isEmpty then return result
+    let (contentArea, buf') := renderBlockAndGetInner t.block area buf
+    if contentArea.isEmpty then return buf'
+    let mut result := buf'
 
     let lines := t.visibleLines
     let visibleHeight := contentArea.height

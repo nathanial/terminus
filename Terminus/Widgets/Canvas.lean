@@ -295,17 +295,9 @@ end Canvas
 
 instance : Widget Canvas where
   render c area buf := Id.run do
-    -- Render block if present
-    let mut result := match c.block with
-      | some block => Widget.render block area buf
-      | none => buf
-
-    -- Get content area
-    let contentArea := match c.block with
-      | some block => block.innerArea area
-      | none => area
-
-    if contentArea.isEmpty then return result
+    let (contentArea, buf') := renderBlockAndGetInner c.block area buf
+    if contentArea.isEmpty then return buf'
+    let mut result := buf'
 
     -- Create braille grid and render shapes
     let grid := BrailleGrid.new contentArea.width contentArea.height

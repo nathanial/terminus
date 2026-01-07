@@ -104,16 +104,9 @@ end Form
 
 instance : Widget Form where
   render f area buf := Id.run do
-    let mut result := match f.block with
-      | some b => Widget.render b area buf
-      | none => buf
-
-    let contentArea := match f.block with
-      | some b => b.innerArea area
-      | none => area
-
-    if contentArea.isEmpty || f.rows.isEmpty then
-      return result
+    let (contentArea, buf') := renderBlockAndGetInner f.block area buf
+    if contentArea.isEmpty || f.rows.isEmpty then return buf'
+    let mut result := buf'
 
     let maxLabelW := min (Form.computeLabelWidth f) contentArea.width
 

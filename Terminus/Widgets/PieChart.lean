@@ -52,7 +52,10 @@ def new (data : List PieSlice) : PieChart := { data }
 def withData (p : PieChart) (data : List PieSlice) : PieChart := { p with data := data }
 def withResolution (p : PieChart) (r : PieChartResolution) : PieChart := { p with resolution := r }
 def withStartAngle (p : PieChart) (deg : Float) : PieChart := { p with startAngle := deg }
-def withDonutRatio (p : PieChart) (r : Float) : PieChart := { p with donutRatio := max 0.0 (min 0.9 r) }
+/-- Maximum donut ratio to prevent the hole from being too large -/
+def maxDonutRatio : Float := 0.9
+
+def withDonutRatio (p : PieChart) (r : Float) : PieChart := { p with donutRatio := max 0.0 (min maxDonutRatio r) }
 def withShowLegend (p : PieChart) (b : Bool := true) : PieChart := { p with showLegend := b }
 def withLegendPosition (p : PieChart) (pos : LegendPosition) : PieChart := { p with legendPosition := some pos }
 def withShowPercent (p : PieChart) (b : Bool := true) : PieChart := { p with showPercent := b }
@@ -220,15 +223,9 @@ end PieChart
 
 instance : Widget PieChart where
   render p area buf := Id.run do
-    let mut result := match p.block with
-      | some block => Widget.render block area buf
-      | none => buf
-
-    let contentArea := match p.block with
-      | some block => block.innerArea area
-      | none => area
-
-    if contentArea.isEmpty then return result
+    let (contentArea, buf') := renderBlockAndGetInner p.block area buf
+    if contentArea.isEmpty then return buf'
+    let mut result := buf'
 
     let data := PieChart.sanitizeData p.data
     if data.isEmpty then return result

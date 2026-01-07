@@ -56,15 +56,9 @@ end ScrollView
 
 instance [Widget α] : Widget (ScrollView α) where
   render s area buf := Id.run do
-    let mut result := match s.block with
-      | some b => Widget.render b area buf
-      | none => buf
-
-    let viewport := match s.block with
-      | some b => b.innerArea area
-      | none => area
-
-    if viewport.isEmpty then return result
+    let (viewport, buf') := renderBlockAndGetInner s.block area buf
+    if viewport.isEmpty then return buf'
+    let mut result := buf'
 
     let contentW := s.contentWidth
     let contentH := s.contentHeight

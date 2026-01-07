@@ -142,19 +142,18 @@ def nextWeek (c : Calendar) : Calendar :=
 
 end Calendar
 
+namespace Calendar
+
+/-- Minimum height required for calendar rendering (header + days header + at least 1 week) -/
+def minRenderHeight : Nat := 3
+
+end Calendar
+
 instance : Widget Calendar where
   render c area buf := Id.run do
-    -- Render block if present
-    let mut result := match c.block with
-      | some block => Widget.render block area buf
-      | none => buf
-
-    -- Get content area
-    let contentArea := match c.block with
-      | some block => block.innerArea area
-      | none => area
-
-    if contentArea.isEmpty || contentArea.height < 3 then return result
+    let (contentArea, buf') := renderBlockAndGetInner c.block area buf
+    if contentArea.isEmpty || contentArea.height < Calendar.minRenderHeight then return buf'
+    let mut result := buf'
 
     -- Calendar layout:
     -- Row 0: Month Year header (centered)

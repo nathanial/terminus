@@ -38,17 +38,9 @@ end Checkbox
 
 instance : Widget Checkbox where
   render c area buf := Id.run do
-    -- Render block if present
-    let mut result := match c.block with
-      | some block => Widget.render block area buf
-      | none => buf
-
-    -- Get content area
-    let contentArea := match c.block with
-      | some block => block.innerArea area
-      | none => area
-
-    if contentArea.isEmpty then return result
+    let (contentArea, buf') := renderBlockAndGetInner c.block area buf
+    if contentArea.isEmpty then return buf'
+    let mut result := buf'
 
     let symbol := if c.checked then c.checkedSymbol else c.uncheckedSymbol
     let stateStyle := if c.checked then c.checkedStyle else c.uncheckedStyle
@@ -162,17 +154,9 @@ end RadioGroup
 
 instance : Widget RadioGroup where
   render r area buf := Id.run do
-    -- Render block if present
-    let mut result := match r.block with
-      | some block => Widget.render block area buf
-      | none => buf
-
-    -- Get content area
-    let contentArea := match r.block with
-      | some block => block.innerArea area
-      | none => area
-
-    if contentArea.isEmpty then return result
+    let (contentArea, buf') := renderBlockAndGetInner r.block area buf
+    if contentArea.isEmpty then return buf'
+    let mut result := buf'
 
     -- Adjust scroll to keep selection visible
     let adjusted := r.adjustScroll contentArea.height

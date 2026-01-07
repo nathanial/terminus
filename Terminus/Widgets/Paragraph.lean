@@ -162,17 +162,9 @@ end Paragraph
 
 instance : Widget Paragraph where
   render p area buf := Id.run do
-    -- First render the block if present
-    let mut result := match p.block with
-      | some block => Widget.render block area buf
-      | none => buf
-
-    -- Get the content area
-    let contentArea := match p.block with
-      | some block => block.innerArea area
-      | none => area
-
-    if contentArea.isEmpty then return result
+    let (contentArea, buf') := renderBlockAndGetInner p.block area buf
+    if contentArea.isEmpty then return buf'
+    let mut result := buf'
 
     -- Process lines based on wrap mode
     let processedLines : List Line := match p.wrapMode with

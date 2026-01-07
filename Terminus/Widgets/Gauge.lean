@@ -41,17 +41,9 @@ end Gauge
 
 instance : Widget Gauge where
   render g area buf := Id.run do
-    -- Render block if present
-    let mut result := match g.block with
-      | some block => Widget.render block area buf
-      | none => buf
-
-    -- Get content area
-    let contentArea := match g.block with
-      | some block => block.innerArea area
-      | none => area
-
-    if contentArea.isEmpty || contentArea.height == 0 then return result
+    let (contentArea, buf') := renderBlockAndGetInner g.block area buf
+    if contentArea.isEmpty || contentArea.height == 0 then return buf'
+    let mut result := buf'
 
     -- Calculate label text
     let labelText := match g.label with
@@ -110,15 +102,9 @@ end VGauge
 
 instance : Widget VGauge where
   render g area buf := Id.run do
-    let mut result := match g.block with
-      | some block => Widget.render block area buf
-      | none => buf
-
-    let contentArea := match g.block with
-      | some block => block.innerArea area
-      | none => area
-
-    if contentArea.isEmpty then return result
+    let (contentArea, buf') := renderBlockAndGetInner g.block area buf
+    if contentArea.isEmpty then return buf'
+    let mut result := buf'
 
     let filledHeight := (g.ratio * contentArea.height.toFloat).toUInt32.toNat
     let startFilledY := contentArea.y + contentArea.height - filledHeight

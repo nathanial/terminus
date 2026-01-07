@@ -189,4 +189,23 @@ instance : Widget Block where
     |> Block.renderTitle b area
     |> Block.renderBackground b area
 
+/-- Helper to render an optional block and compute the inner content area.
+    This eliminates the common boilerplate pattern in widgets:
+    ```
+    let mut result := match w.block with
+      | some block => Widget.render block area buf
+      | none => buf
+    let contentArea := match w.block with
+      | some block => block.innerArea area
+      | none => area
+    ```
+    Returns (contentArea, renderedBuffer). -/
+def renderBlockAndGetInner (block? : Option Block) (area : Rect) (buf : Buffer) : Rect × Buffer :=
+  match block? with
+  | some block =>
+    let rendered := Widget.render block area buf
+    (block.innerArea area, rendered)
+  | none =>
+    (area, buf)
+
 end Terminus

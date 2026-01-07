@@ -67,17 +67,9 @@ end Spinner
 
 instance : Widget Spinner where
   render s area buf := Id.run do
-    -- Render block if present
-    let mut result := match s.block with
-      | some block => Widget.render block area buf
-      | none => buf
-
-    -- Get content area
-    let contentArea := match s.block with
-      | some block => block.innerArea area
-      | none => area
-
-    if contentArea.isEmpty || contentArea.height == 0 then return result
+    let (contentArea, buf') := renderBlockAndGetInner s.block area buf
+    if contentArea.isEmpty || contentArea.height == 0 then return buf'
+    let mut result := buf'
 
     -- Get current frame
     let frame := s.currentFrame
