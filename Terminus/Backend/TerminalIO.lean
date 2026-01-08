@@ -12,6 +12,7 @@ instance : TerminalEffect IO where
   disableRawMode := Terminus.disableRawMode
   getTerminalSize := Terminus.getTerminalSize
   readByte := Terminus.readByte
+  readByteBlocking := Terminus.readByteBlocking
   unreadByte := Terminus.unreadByte
   writeStdout := Terminus.writeStdout
   flushStdout := Terminus.flushStdout

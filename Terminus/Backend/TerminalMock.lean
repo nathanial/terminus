@@ -41,6 +41,14 @@ instance : TerminalEffect MockTerminal where
       set { s with inputQueue := rest }
       pure (some b)
 
+  readByteBlocking := do
+    let s ← get
+    match s.inputQueue with
+    | [] => pure none
+    | b :: rest =>
+      set { s with inputQueue := rest }
+      pure (some b)
+
   unreadByte b := modify fun s =>
     { s with inputQueue := b :: s.inputQueue }
 
@@ -52,6 +60,8 @@ instance : TerminalEffect MockTerminal where
   readFileBytes path := do
     let s ← get
     pure (s.files.getD path.toString ByteArray.empty)
+
+  decodeImageBytes _ := pure none
 
 namespace MockTerminal
 

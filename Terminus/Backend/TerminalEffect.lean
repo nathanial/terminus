@@ -17,6 +17,9 @@ class TerminalEffect (m : Type → Type) where
   /-- Read a single byte from stdin (non-blocking) -/
   readByte : m (Option UInt8)
 
+  /-- Read a single byte from stdin (blocking until input is available) -/
+  readByteBlocking : m (Option UInt8)
+
   /-- Push a byte back onto the input stream (for non-destructive peeks). -/
   unreadByte : UInt8 → m Unit
 

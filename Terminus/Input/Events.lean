@@ -199,19 +199,25 @@ def poll [Monad m] [TerminalEffect m] : m Event := do
   | none => pure Event.none
   | some b => parseInput b
 
-/-- Wait for the next event (blocking) - IO specific due to sleep -/
+/-- Wait for the next event (blocking). -/
 partial def read : IO Event := do
-  match ← poll with
-  | .none =>
-    IO.sleep 10 -- Small delay to avoid busy-waiting
-    read
-  | e => pure e
+  match ← TerminalEffect.readByteBlocking with
+  | some b => parseInput b
+  | none => read
 
 /-- Wait for the next key event (blocking), ignoring mouse events -/
 partial def readKey : IO KeyEvent := do
   match ← read with
   | .key ke => pure ke
   | _ => readKey
+
+/-- Wait for the next event asynchronously on a dedicated task. -/
+def readAsync : IO (Task (Except IO.Error Event)) := do
+  IO.asTask (prio := .dedicated) read
+
+/-- Wait for the next key event asynchronously, ignoring mouse events. -/
+def readKeyAsync : IO (Task (Except IO.Error KeyEvent)) := do
+  IO.asTask (prio := .dedicated) readKey
 
 /-- Check if any input is available -/
 def available [Monad m] [TerminalEffect m] : m Bool := do

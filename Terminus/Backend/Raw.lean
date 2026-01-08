@@ -18,6 +18,10 @@ opaque getTerminalSize : IO (Nat × Nat)
 @[extern "terminus_read_byte"]
 opaque readByte : IO (Option UInt8)
 
+/-- Read a single byte from stdin (blocking) -/
+@[extern "terminus_read_byte_blocking"]
+opaque readByteBlocking : IO (Option UInt8)
+
 /-- Push a byte back onto the input stream. -/
 @[extern "terminus_unread_byte"]
 opaque unreadByte : UInt8 → IO Unit

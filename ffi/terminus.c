@@ -4,6 +4,7 @@
 #include <termios.h>
 #include <unistd.h>
 #include <sys/ioctl.h>
+#include <poll.h>
 #include <fcntl.h>
 #include <errno.h>
 
@@ -101,6 +102,59 @@ LEAN_EXPORT lean_obj_res terminus_read_byte(lean_obj_arg world) {
     } else {
         // None
         return lean_io_result_mk_ok(lean_box(0));
+    }
+}
+
+// Read a single byte from stdin, blocking until input is available
+LEAN_EXPORT lean_obj_res terminus_read_byte_blocking(lean_obj_arg world) {
+    unsigned char c;
+    if (unread_len > 0) {
+        c = unread_buf[--unread_len];
+        lean_object* some = lean_alloc_ctor(1, 1, 0);
+        lean_ctor_set(some, 0, lean_box(c));
+        return lean_io_result_mk_ok(some);
+    }
+
+    for (;;) {
+        struct pollfd pfd;
+        pfd.fd = STDIN_FILENO;
+        pfd.events = POLLIN;
+        pfd.revents = 0;
+
+        int ready = poll(&pfd, 1, -1);
+        if (ready == -1) {
+            if (errno == EINTR) {
+                continue;
+            }
+            return lean_io_result_mk_error(
+                lean_mk_io_user_error(lean_mk_string("Failed to poll for input")));
+        }
+
+        if (pfd.revents & POLLIN) {
+            ssize_t nread = read(STDIN_FILENO, &c, 1);
+            if (nread == 1) {
+                lean_object* some = lean_alloc_ctor(1, 1, 0);
+                lean_ctor_set(some, 0, lean_box(c));
+                return lean_io_result_mk_ok(some);
+            }
+            if (nread == 0) {
+                return lean_io_result_mk_ok(lean_box(0));
+            }
+            if (errno == EINTR || errno == EAGAIN || errno == EWOULDBLOCK) {
+                continue;
+            }
+            return lean_io_result_mk_error(
+                lean_mk_io_user_error(lean_mk_string("Failed to read input")));
+        }
+
+        if (pfd.revents & POLLHUP) {
+            return lean_io_result_mk_ok(lean_box(0));
+        }
+
+        if (pfd.revents & (POLLERR | POLLNVAL)) {
+            return lean_io_result_mk_error(
+                lean_mk_io_user_error(lean_mk_string("Input polling error")));
+        }
     }
 }
 

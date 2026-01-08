@@ -117,6 +117,15 @@ test "readByte drains queue" := do
   let (result, _) := MockTerminal.run action initial
   result ≡ none
 
+test "readByteBlocking returns none when queue empty" := do
+  let (result, _) := MockTerminal.run TerminalEffect.readByteBlocking
+  result ≡ none
+
+test "readByteBlocking returns byte from queue" := do
+  let initial := MockTerminal.withInput [65, 66, 67] -- 'A', 'B', 'C'
+  let (result, _) := MockTerminal.run TerminalEffect.readByteBlocking initial
+  result ≡ some 65
+
 -- ============================================================================
 -- Output Writing Tests
 -- ============================================================================
