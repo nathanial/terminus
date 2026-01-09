@@ -102,5 +102,8 @@ instance [Widget α] : Widget (ScrollView α) where
       some (w + border, h + border)
   handleEvent s event :=
     { s with content := Widget.handleEvent s.content event }
+  focusable s := Widget.focusable s.content
+  setFocused s focused :=
+    { s with content := Widget.setFocused s.content focused }
 
 end Terminus

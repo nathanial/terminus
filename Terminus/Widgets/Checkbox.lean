@@ -74,6 +74,7 @@ instance : Widget Checkbox where
       | .space | .enter => c.toggle
       | _ => c
     | _ => c
+  focusable _ := true
 
 /-- Single radio option -/
 structure RadioOption where
@@ -210,5 +211,6 @@ instance : Widget RadioGroup where
       | .down | .right => r.selectNext
       | _ => r
     | _ => r
+  focusable _ := true
 
 end Terminus

@@ -268,5 +268,6 @@ instance : Widget Tree where
       | .enter | .space => t.toggleSelected
       | _ => t
     | _ => t
+  focusable _ := true
 
 end Terminus

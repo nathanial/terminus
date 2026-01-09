@@ -15,6 +15,10 @@ class Widget (α : Type u) where
   preferredSize : α → Option (Nat × Nat) := fun _ => none
   /-- Handle an input event, returning updated widget state. -/
   handleEvent : α → Event → α := fun w _ => w
+  /-- Whether this widget can receive focus. -/
+  focusable : α → Bool := fun _ => false
+  /-- Set focus state for widgets that track it. -/
+  setFocused : α → Bool → α := fun w _ => w
 
 namespace Widget
 
@@ -35,6 +39,14 @@ def handleEventOpt [Widget α] (w : α) (event : Option Event) : α :=
   match event with
   | some e => Widget.handleEvent w e
   | none => w
+
+/-- Whether a widget can receive focus. -/
+def isFocusable [Widget α] (w : α) : Bool :=
+  Widget.focusable w
+
+/-- Set focus state for a widget. -/
+def setFocus [Widget α] (w : α) (focused : Bool) : α :=
+  Widget.setFocused w focused
 
 end Widget
 

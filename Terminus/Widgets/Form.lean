@@ -33,6 +33,8 @@ instance : Widget AnyWidget where
   render w area buf := w.inst.render w.value area buf
   preferredSize w := w.inst.preferredSize w.value
   handleEvent w event := { w with value := w.inst.handleEvent w.value event }
+  focusable w := w.inst.focusable w.value
+  setFocused w focused := { w with value := w.inst.setFocused w.value focused }
 
 /-- A single row in a form. -/
 inductive FormRow where

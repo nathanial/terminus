@@ -4,6 +4,7 @@ import Terminus.Core.Style
 import Terminus.Core.Cell
 import Terminus.Core.Rect
 import Terminus.Core.Buffer
+import Terminus.Core.Focus
 
 import Terminus.Backend.Ansi
 import Terminus.Backend.Raw

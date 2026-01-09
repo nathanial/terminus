@@ -129,5 +129,6 @@ instance : Widget ListWidget where
         if l.items.isEmpty then l else { l with selected := some (l.items.length - 1) }
       | _ => l
     | _ => l
+  focusable _ := true
 
 end Terminus

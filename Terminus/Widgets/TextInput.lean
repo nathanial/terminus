@@ -341,5 +341,7 @@ instance : Widget TextInput where
     match event with
     | .key k => t.handleKey k
     | _ => t
+  focusable _ := true
+  setFocused t focused := if focused then t.focus else t.blur
 
 end Terminus

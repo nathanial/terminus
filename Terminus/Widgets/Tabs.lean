@@ -102,5 +102,6 @@ instance : Widget Tabs where
       | .right => t.selectNext
       | _ => t
     | _ => t
+  focusable _ := true
 
 end Terminus
