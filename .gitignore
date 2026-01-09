@@ -14,4 +14,3 @@ Thumbs.db
 # Lean build outputs
 build/
 .lake
-lake-manifest.json
