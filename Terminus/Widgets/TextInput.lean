@@ -337,5 +337,9 @@ instance : Widget TextInput where
       result := result.setStyled contentArea.x y ' ' t.cursorStyle
 
     result
+  handleEvent t event :=
+    match event with
+    | .key k => t.handleKey k
+    | _ => t
 
 end Terminus

@@ -589,5 +589,9 @@ instance : Widget TextArea where
             result := result.setStyled x y ' ' t.cursorStyle
 
     result
+  handleEvent t event :=
+    match event with
+    | .key k => t.handleKey k
+    | _ => t
 
 end Terminus

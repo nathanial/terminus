@@ -94,5 +94,13 @@ instance : Widget Tabs where
         x := x + t.divider.length
 
     result
+  handleEvent t event :=
+    match event with
+    | .key k =>
+      match k.code with
+      | .left => t.selectPrev
+      | .right => t.selectNext
+      | _ => t
+    | _ => t
 
 end Terminus

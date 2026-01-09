@@ -259,5 +259,14 @@ instance : Widget Tree where
             x := x + 1
 
     result
+  handleEvent t event :=
+    match event with
+    | .key k =>
+      match k.code with
+      | .up => t.selectPrev
+      | .down => t.selectNext
+      | .enter | .space => t.toggleSelected
+      | _ => t
+    | _ => t
 
 end Terminus

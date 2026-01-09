@@ -8,7 +8,7 @@ namespace Terminus
 
 /-- A scrollable viewport over content rendered to an offscreen buffer.
 
-Since Terminus widgets don't currently expose intrinsic sizing, `contentSize` must be provided. -/
+If `contentSize` is (0, 0), the widget's preferred size is used when available. -/
 structure ScrollView (α : Type) where
   content : α
   /-- (contentWidth, contentHeight) in terminal cells. -/
@@ -39,18 +39,34 @@ def scrollUp (s : ScrollView α) (n : Nat := 1) : ScrollView α := { s with offs
 def scrollRight (s : ScrollView α) (n : Nat := 1) : ScrollView α := { s with offset := (s.offsetX + n, s.offsetY) }
 def scrollLeft (s : ScrollView α) (n : Nat := 1) : ScrollView α := { s with offset := (s.offsetX - n, s.offsetY) }
 
-private def clampOffset (s : ScrollView α) (viewportW viewportH : Nat) : Nat × Nat :=
-  let maxX := if s.contentWidth > viewportW then s.contentWidth - viewportW else 0
-  let maxY := if s.contentHeight > viewportH then s.contentHeight - viewportH else 0
+private def clampOffset (s : ScrollView α) (contentW contentH viewportW viewportH : Nat) : Nat × Nat :=
+  let maxX := if contentW > viewportW then contentW - viewportW else 0
+  let maxY := if contentH > viewportH then contentH - viewportH else 0
   (Nat.min s.offsetX maxX, Nat.min s.offsetY maxY)
 
+private def resolveContentSize [Widget α] (s : ScrollView α) : Nat × Nat :=
+  let (w, h) := s.contentSize
+  if w > 0 && h > 0 then
+    (w, h)
+  else
+    match Widget.preferredSize s.content with
+    | some size => size
+    | none => (0, 0)
+
+private def borderSize (block : Option Block) : Nat :=
+  match block with
+  | some b => if b.borderType == .none then 0 else 2
+  | none => 0
+
 /-- Convenience vertical scrollbar for this scroll view and viewport. -/
-def verticalScrollbar (s : ScrollView α) (viewportH : Nat) : Scrollbar :=
-  Scrollbar.vertical s.offsetY s.contentHeight viewportH
+def verticalScrollbar [Widget α] (s : ScrollView α) (viewportH : Nat) : Scrollbar :=
+  let (_, contentH) := ScrollView.resolveContentSize s
+  Scrollbar.vertical s.offsetY contentH viewportH
 
 /-- Convenience horizontal scrollbar for this scroll view and viewport. -/
-def horizontalScrollbar (s : ScrollView α) (viewportW : Nat) : Scrollbar :=
-  Scrollbar.horizontal s.offsetX s.contentWidth viewportW
+def horizontalScrollbar [Widget α] (s : ScrollView α) (viewportW : Nat) : Scrollbar :=
+  let (contentW, _) := ScrollView.resolveContentSize s
+  Scrollbar.horizontal s.offsetX contentW viewportW
 
 end ScrollView
 
@@ -60,11 +76,10 @@ instance [Widget α] : Widget (ScrollView α) where
     if viewport.isEmpty then return buf'
     let mut result := buf'
 
-    let contentW := s.contentWidth
-    let contentH := s.contentHeight
+    let (contentW, contentH) := ScrollView.resolveContentSize s
     if contentW == 0 || contentH == 0 then return result
 
-    let (offX, offY) := ScrollView.clampOffset s viewport.width viewport.height
+    let (offX, offY) := ScrollView.clampOffset s contentW contentH viewport.width viewport.height
 
     let offscreenArea : Rect := { x := 0, y := 0, width := contentW, height := contentH }
     let offscreen := Widget.render s.content offscreenArea (Buffer.new contentW contentH)
@@ -78,5 +93,14 @@ instance [Widget α] : Widget (ScrollView α) where
           result := result.set (viewport.x + col) (viewport.y + row) cell
 
     result
+  preferredSize s :=
+    let (w, h) := ScrollView.resolveContentSize s
+    if w == 0 || h == 0 then
+      none
+    else
+      let border := ScrollView.borderSize s.block
+      some (w + border, h + border)
+  handleEvent s event :=
+    { s with content := Widget.handleEvent s.content event }
 
 end Terminus

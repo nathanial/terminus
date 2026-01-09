@@ -117,5 +117,17 @@ instance : Widget ListWidget where
       row := row + 1
 
     result
+  handleEvent l event :=
+    match event with
+    | .key k =>
+      match k.code with
+      | .up => l.selectPrev
+      | .down => l.selectNext
+      | .home =>
+        if l.items.isEmpty then l else { l with selected := some 0 }
+      | .«end» =>
+        if l.items.isEmpty then l else { l with selected := some (l.items.length - 1) }
+      | _ => l
+    | _ => l
 
 end Terminus

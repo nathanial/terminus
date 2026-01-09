@@ -67,6 +67,13 @@ instance : Widget Checkbox where
         result := result.writeStringBounded nextX y labelWidth c.label labelStyle
 
     result
+  handleEvent c event :=
+    match event with
+    | .key k =>
+      match k.code with
+      | .space | .enter => c.toggle
+      | _ => c
+    | _ => c
 
 /-- Single radio option -/
 structure RadioOption where
@@ -195,5 +202,13 @@ instance : Widget RadioGroup where
       row := row + 1
 
     result
+  handleEvent r event :=
+    match event with
+    | .key k =>
+      match k.code with
+      | .up | .left => r.selectPrev
+      | .down | .right => r.selectNext
+      | _ => r
+    | _ => r
 
 end Terminus

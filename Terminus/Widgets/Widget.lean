@@ -2,12 +2,19 @@
 
 import Terminus.Core.Buffer
 import Terminus.Core.Rect
+import Terminus.Input.Key
 
 namespace Terminus
 
-/-- Widget typeclass - anything that can be rendered to a buffer -/
-class Widget (α : Type) where
+universe u
+
+/-- Widget typeclass - anything that can be rendered to a buffer. -/
+class Widget (α : Type u) where
   render : α → Rect → Buffer → Buffer
+  /-- Preferred size in cells (width, height), if known. -/
+  preferredSize : α → Option (Nat × Nat) := fun _ => none
+  /-- Handle an input event, returning updated widget state. -/
+  handleEvent : α → Event → α := fun w _ => w
 
 namespace Widget
 
@@ -18,6 +25,16 @@ def renderNew [Widget α] (w : α) (area : Rect) : Buffer :=
 /-- Render a widget if the area is not empty -/
 def renderIfVisible [Widget α] (w : α) (area : Rect) (buf : Buffer) : Buffer :=
   if area.isEmpty then buf else Widget.render w area buf
+
+/-- Get the preferred size of a widget, or a fallback default. -/
+def preferredSizeOr [Widget α] (w : α) (fallback : Nat × Nat) : Nat × Nat :=
+  (Widget.preferredSize w).getD fallback
+
+/-- Handle an optional input event with a widget. -/
+def handleEventOpt [Widget α] (w : α) (event : Option Event) : α :=
+  match event with
+  | some e => Widget.handleEvent w e
+  | none => w
 
 end Widget
 
@@ -36,6 +53,7 @@ end Text
 
 instance : Widget Text where
   render t area buf := buf.writeStringBounded area.x area.y area.width t.content t.style
+  preferredSize t := some (t.content.length, 1)
 
 /-- Empty widget that renders nothing -/
 structure Empty where
@@ -43,5 +61,6 @@ structure Empty where
 
 instance : Widget Empty where
   render _ _ buf := buf
+  preferredSize _ := some (0, 0)
 
 end Terminus

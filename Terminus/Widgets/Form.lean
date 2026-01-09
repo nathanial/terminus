@@ -7,14 +7,22 @@ namespace Terminus
 
 /-- A type-erased widget wrapper, useful for building heterogeneous containers. -/
 structure AnyWidget where
-  renderFn : Rect → Buffer → Buffer
+  α : Type
+  inst : Widget α
+  value : α
 
 namespace AnyWidget
 
-def empty : AnyWidget := { renderFn := fun _ buf => buf }
+def of {α : Type} (w : α) [Widget α] : AnyWidget :=
+  { α := α, inst := inferInstance, value := w }
 
-def of (w : α) [Widget α] : AnyWidget :=
-  { renderFn := fun area buf => Widget.render w area buf }
+def empty : AnyWidget := AnyWidget.of ({} : Empty)
+
+def handleEvent (w : AnyWidget) (event : Event) : AnyWidget :=
+  { w with value := w.inst.handleEvent w.value event }
+
+def preferredSize (w : AnyWidget) : Option (Nat × Nat) :=
+  w.inst.preferredSize w.value
 
 end AnyWidget
 
@@ -22,7 +30,9 @@ instance : Inhabited AnyWidget where
   default := AnyWidget.empty
 
 instance : Widget AnyWidget where
-  render w area buf := w.renderFn area buf
+  render w area buf := w.inst.render w.value area buf
+  preferredSize w := w.inst.preferredSize w.value
+  handleEvent w event := { w with value := w.inst.handleEvent w.value event }
 
 /-- A single row in a form. -/
 inductive FormRow where
@@ -39,13 +49,13 @@ namespace FormRow
 def fieldWidget (label : String) (content : AnyWidget) (height : Nat := 1) : FormRow :=
   .field label content height
 
-def fieldOf (label : String) (content : α) [Widget α] (height : Nat := 1) : FormRow :=
+def fieldOf {α : Type} (label : String) (content : α) [Widget α] (height : Nat := 1) : FormRow :=
   .field label (AnyWidget.of content) height
 
 def fullWidget (content : AnyWidget) (height : Nat := 1) : FormRow :=
   .full content height
 
-def fullOf (content : α) [Widget α] (height : Nat := 1) : FormRow :=
+def fullOf {α : Type} (content : α) [Widget α] (height : Nat := 1) : FormRow :=
   .full (AnyWidget.of content) height
 
 def gap (n : Nat := 1) : FormRow :=
@@ -145,4 +155,3 @@ instance : Widget Form where
     result
 
 end Terminus
-
