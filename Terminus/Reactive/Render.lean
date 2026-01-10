@@ -85,6 +85,20 @@ partial def buildLayoutTree (node : RNode) : StateM IdGen (LayoutNode × Array (
     let layoutNode := LayoutNode.leaf nodeId size
     pure (layoutNode, #[(nodeId, node)])
 
+  | .clipped child =>
+    -- Clipped node acts as a pass-through container
+    -- The clip boundary is established during render based on computed bounds
+    let (childLayout, childMap) ← buildLayoutTree child
+    let layoutNode := LayoutNode.column nodeId #[childLayout] (gap := 0)
+    pure (layoutNode, #[(nodeId, node)] ++ childMap)
+
+  | .scrolled _ _ child =>
+    -- Scrolled node passes through to child
+    -- Offset is applied during render phase
+    let (childLayout, childMap) ← buildLayoutTree child
+    let layoutNode := LayoutNode.column nodeId #[childLayout] (gap := 0)
+    pure (layoutNode, #[(nodeId, node)] ++ childMap)
+
 /-! ## Coordinate Conversion -/
 
 /-- Convert Float to Nat for terminal coordinates (floor to nearest cell). -/
@@ -103,9 +117,56 @@ def toTerminalRect (rect : LayoutRect) : Terminus.Rect :=
   , width := floatToCell rect.width
   , height := floatToCellCeil rect.height }
 
+/-! ## Clipping and Scroll Context -/
+
+/-- Clip rectangle context for rendering. None means no clipping. -/
+structure ClipContext where
+  /-- Current clip rectangle (none = no clipping). -/
+  clipRect : Option Terminus.Rect := none
+  /-- Scroll offset to subtract from positions. -/
+  scrollOffsetX : Nat := 0
+  scrollOffsetY : Nat := 0
+  deriving Repr, Inhabited
+
+namespace ClipContext
+
+/-- Check if a cell position is within the clip bounds. -/
+def contains (ctx : ClipContext) (x y : Nat) : Bool :=
+  match ctx.clipRect with
+  | none => true
+  | some r =>
+    x >= r.x && x < r.x + r.width &&
+    y >= r.y && y < r.y + r.height
+
+/-- Intersect current clip with a new rect. -/
+def intersect (ctx : ClipContext) (r : Terminus.Rect) : ClipContext :=
+  match ctx.clipRect with
+  | none => { ctx with clipRect := some r }
+  | some existing =>
+    -- Compute intersection
+    let x1 := max existing.x r.x
+    let y1 := max existing.y r.y
+    let x2 := min (existing.x + existing.width) (r.x + r.width)
+    let y2 := min (existing.y + existing.height) (r.y + r.height)
+    let w := if x2 > x1 then x2 - x1 else 0
+    let h := if y2 > y1 then y2 - y1 else 0
+    { ctx with clipRect := some { x := x1, y := y1, width := w, height := h } }
+
+/-- Add scroll offset to context. -/
+def addOffset (ctx : ClipContext) (dx dy : Nat) : ClipContext :=
+  { ctx with
+    scrollOffsetX := ctx.scrollOffsetX + dx
+    scrollOffsetY := ctx.scrollOffsetY + dy }
+
+/-- Apply scroll offset to a position. Returns adjusted (x, y). -/
+def applyOffset (ctx : ClipContext) (x y : Nat) : (Nat × Nat) :=
+  (x - min x ctx.scrollOffsetX, y - min y ctx.scrollOffsetY)
+
+end ClipContext
+
 /-! ## Buffer Rendering -/
 
-/-- Render a text node to the buffer at the given rect. -/
+/-- Render a text node to the buffer at the given rect (no clipping). -/
 def renderText (content : String) (style : Style) (rect : Terminus.Rect) (buf : Buffer) : Buffer :=
   if rect.width == 0 || rect.height == 0 then buf
   else
@@ -113,7 +174,35 @@ def renderText (content : String) (style : Style) (rect : Terminus.Rect) (buf : 
     let displayText := content.take rect.width
     buf.writeString rect.x rect.y displayText style
 
-/-- Render a block border around the given rect. -/
+/-- Write a string with clipping support. -/
+def writeStringClipped (buf : Buffer) (x y : Nat) (s : String) (style : Style)
+    (clip : ClipContext) : Buffer := Id.run do
+  let mut result := buf
+  let mut col := x
+  for c in s.toList do
+    let width := c.displayWidth
+    if width == 0 then continue
+    if clip.contains col y then
+      result := result.setStyled col y c style
+    if width == 2 && clip.contains (col + 1) y then
+      result := result.set (col + 1) y Cell.placeholder
+    col := col + width
+  result
+
+/-- Write a styled character with clipping. -/
+def setStyledClipped (buf : Buffer) (x y : Nat) (c : Char) (style : Style)
+    (clip : ClipContext) : Buffer :=
+  if clip.contains x y then buf.setStyled x y c style else buf
+
+/-- Render a text node with clipping support. -/
+def renderTextClipped (content : String) (style : Style) (rect : Terminus.Rect)
+    (buf : Buffer) (clip : ClipContext) : Buffer :=
+  if rect.width == 0 || rect.height == 0 then buf
+  else
+    let displayText := content.take rect.width
+    writeStringClipped buf rect.x rect.y displayText style clip
+
+/-- Render a block border around the given rect (no clipping). -/
 def renderBlockBorder (title : Option String) (borderType : BorderType) (borderStyle : Style)
     (rect : Terminus.Rect) (buf : Buffer) : Buffer := Id.run do
   if borderType == .none || rect.width < 2 || rect.height < 2 then
@@ -149,31 +238,117 @@ def renderBlockBorder (title : Option String) (borderType : BorderType) (borderS
 
   result
 
-/-- Render an RNode to a Buffer using computed layout.
+/-- Render a block border with clipping support. -/
+def renderBlockBorderClipped (title : Option String) (borderType : BorderType) (borderStyle : Style)
+    (rect : Terminus.Rect) (buf : Buffer) (clip : ClipContext) : Buffer := Id.run do
+  if borderType == .none || rect.width < 2 || rect.height < 2 then
+    return buf
+
+  let chars := BorderChars.fromType borderType
+  let mut result := buf
+
+  -- Draw corners
+  result := setStyledClipped result rect.x rect.y chars.topLeft borderStyle clip
+  result := setStyledClipped result (rect.x + rect.width - 1) rect.y chars.topRight borderStyle clip
+  result := setStyledClipped result rect.x (rect.y + rect.height - 1) chars.bottomLeft borderStyle clip
+  result := setStyledClipped result (rect.x + rect.width - 1) (rect.y + rect.height - 1) chars.bottomRight borderStyle clip
+
+  -- Draw horizontal borders
+  for x in [rect.x + 1 : rect.x + rect.width - 1] do
+    result := setStyledClipped result x rect.y chars.horizontal borderStyle clip
+    result := setStyledClipped result x (rect.y + rect.height - 1) chars.horizontal borderStyle clip
+
+  -- Draw vertical borders
+  for y in [rect.y + 1 : rect.y + rect.height - 1] do
+    result := setStyledClipped result rect.x y chars.vertical borderStyle clip
+    result := setStyledClipped result (rect.x + rect.width - 1) y chars.vertical borderStyle clip
+
+  -- Draw title if present
+  match title with
+  | some t =>
+    if rect.width >= 4 then
+      let maxLen := rect.width - 4
+      let displayTitle := " " ++ t.take maxLen ++ " "
+      result := writeStringClipped result (rect.x + 1) rect.y displayTitle borderStyle clip
+  | none => pure ()
+
+  result
+
+/-- Look up clip context for a node in an array of (nodeId, clipContext). -/
+def lookupClipContext (contexts : Array (Nat × ClipContext)) (nodeId : Nat) : ClipContext :=
+  match contexts.find? (fun (id, _) => id == nodeId) with
+  | some (_, ctx) => ctx
+  | none => {}
+
+/-- Build clip contexts for all nodes by traversing the tree.
+    Returns an array of (nodeId, clipContext) pairs. -/
+partial def buildClipContexts (nodeMap : Array (Nat × RNode)) (layouts : LayoutResult)
+    : Array (Nat × ClipContext) := Id.run do
+  let mut contexts : Array (Nat × ClipContext) := #[]
+
+  -- For now, use a simple approach: each node gets the default context
+  -- Clipping is applied per-node based on ancestors
+  for (nodeId, node) in nodeMap do
+    let ctx : ClipContext := match node with
+    | .clipped _ =>
+      match layouts.get nodeId with
+      | some computed =>
+        let rect := toTerminalRect computed.contentRect
+        ClipContext.intersect {} rect
+      | none => {}
+    | _ => {}
+    contexts := contexts.push (nodeId, ctx)
+
+  contexts
+
+/-- Render an RNode to a Buffer using computed layout with clipping.
     - nodeMap: Mapping from Trellis node IDs to RNodes
-    - layouts: Computed layout result from Trellis -/
-def renderNode (nodeId : Nat) (node : RNode) (layouts : LayoutResult) (buf : Buffer) : Buffer :=
+    - layouts: Computed layout result from Trellis
+    - clip: Current clipping context -/
+def renderNodeClipped (nodeId : Nat) (node : RNode) (layouts : LayoutResult)
+    (buf : Buffer) (clip : ClipContext) : Buffer :=
   match layouts.get nodeId with
   | none => buf  -- No layout for this node
   | some computed =>
     let rect := toTerminalRect computed.contentRect
     match node with
     | .text content style =>
-      renderText content style rect buf
+      renderTextClipped content style rect buf clip
 
     | .block title borderType borderStyle _ =>
       -- Render border using the border rect (includes border area)
       let borderRect := toTerminalRect computed.borderRect
-      renderBlockBorder title borderType borderStyle borderRect buf
+      renderBlockBorderClipped title borderType borderStyle borderRect buf clip
+
+    | .clipped _ | .scrolled _ _ _ =>
+      -- These nodes don't render directly - they affect clip context
+      buf
 
     | .row _ _ _ | .column _ _ _ | .spacer _ _ | .empty =>
       -- Container nodes don't render directly - children handle themselves
       buf
 
-/-- Render entire RNode tree to Buffer.
+/-- Render an RNode to a Buffer using computed layout (no clipping). -/
+def renderNode (nodeId : Nat) (node : RNode) (layouts : LayoutResult) (buf : Buffer) : Buffer :=
+  renderNodeClipped nodeId node layouts buf {}
+
+/-- Render entire RNode tree to Buffer with clipping support.
     Traverses the nodeMap and renders each node at its computed position. -/
+def renderTreeClipped (nodeMap : Array (Nat × RNode)) (layouts : LayoutResult)
+    (buf : Buffer) (_defaultClip : ClipContext := {}) : Buffer := Id.run do
+  -- Build clip contexts for all nodes
+  let contexts := buildClipContexts nodeMap layouts
+
+  -- Render each node with its appropriate clip context
+  let mut result := buf
+  for (nodeId, node) in nodeMap do
+    let clip := lookupClipContext contexts nodeId
+    result := renderNodeClipped nodeId node layouts result clip
+  result
+
+/-- Render entire RNode tree to Buffer (backwards compatible, no clipping). -/
 def renderTree (nodeMap : Array (Nat × RNode)) (layouts : LayoutResult) (buf : Buffer) : Buffer :=
-  nodeMap.foldl (fun b (id, node) => renderNode id node layouts b) buf
+  renderTreeClipped nodeMap layouts buf
 
 /-! ## Main Render Function -/
 

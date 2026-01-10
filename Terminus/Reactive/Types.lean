@@ -40,6 +40,10 @@ inductive RNode where
   | spacer (width : Nat) (height : Nat)
   /-- Empty placeholder (zero size). -/
   | empty
+  /-- Clips child content to this node's computed bounds. -/
+  | clipped (child : RNode)
+  /-- Shifts child content by offset (for scrolling). -/
+  | scrolled (offsetX offsetY : Nat) (child : RNode)
   deriving Repr, Inhabited
 
 namespace RNode

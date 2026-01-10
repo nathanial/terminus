@@ -36,7 +36,8 @@
   - **Input**: `textInput'`, `labeledTextInput'`
   - **List**: `selectableList'`, `dynSelectableList'`, `numberedList'`
   - **Overlay**: `overlay'`, `modal'`, `confirmDialog'`, `messageDialog'`
-  - **Render**: `render`, `renderToBuffer`, `computeLayout`
+  - **ScrollView**: `scrollView'`, `vscrollView'`, `hscrollView'`
+  - **Render**: `render`, `renderToBuffer`, `computeLayout`, `ClipContext`
   - **App**: `runReactiveApp`, `runSimpleApp`
 -/
 import Terminus.Reactive.Types
@@ -48,4 +49,5 @@ import Terminus.Reactive.Hooks
 import Terminus.Reactive.Input
 import Terminus.Reactive.List
 import Terminus.Reactive.Overlay
+import Terminus.Reactive.ScrollView
 import Terminus.Reactive.App

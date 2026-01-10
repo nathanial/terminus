@@ -34,7 +34,10 @@ structure ListConfig where
   focusName : String := ""
   /-- Whether this list responds to keys without focus (legacy behavior). -/
   globalKeys : Bool := false
-  deriving Repr, Inhabited
+  /-- External scroll control callback for auto-scroll to selection.
+      Called with the selected index when selection changes. -/
+  scrollToY : Option (Nat → IO Unit) := none
+  deriving Inhabited
 
 /-! ## List Result -/
 
@@ -187,6 +190,10 @@ def selectableList' [ToString α] (items : Array α) (initial : Nat := 0)
         stateRef.set newState
         fireIndex newState.selected
         fireSelectionChange newState.selected
+        -- Call external scroll callback if provided
+        match config.scrollToY with
+        | some scrollFn => scrollFn newState.selected
+        | none => pure ()
         if h : newState.selected < items.size then
           fireItem (some items[newState.selected])
         else
@@ -303,6 +310,10 @@ def dynSelectableList' [ToString α] (items : Reactive.Dynamic Spider (Array α)
         stateRef.set newState
         fireIndex newState.selected
         fireSelectionChange newState.selected
+        -- Call external scroll callback if provided
+        match config.scrollToY with
+        | some scrollFn => scrollFn newState.selected
+        | none => pure ()
         if h : newState.selected < currentItems.size then
           fireItem (some currentItems[newState.selected])
         else
@@ -424,6 +435,9 @@ def numberedList' [ToString α] (items : Array α) (initial : Nat := 0)
             stateRef.set idx
             fireIndex idx
             fireSelectionChange idx
+            match config.scrollToY with
+            | some scrollFn => scrollFn idx
+            | none => pure ()
             fireItem (some items[idx])
             fireSelect items[idx]
       | .up =>
@@ -432,6 +446,9 @@ def numberedList' [ToString α] (items : Array α) (initial : Nat := 0)
           stateRef.set newIdx
           fireIndex newIdx
           fireSelectionChange newIdx
+          match config.scrollToY with
+          | some scrollFn => scrollFn newIdx
+          | none => pure ()
           if h : newIdx < items.size then
             fireItem (some items[newIdx])
       | .down =>
@@ -440,6 +457,9 @@ def numberedList' [ToString α] (items : Array α) (initial : Nat := 0)
           stateRef.set newIdx
           fireIndex newIdx
           fireSelectionChange newIdx
+          match config.scrollToY with
+          | some scrollFn => scrollFn newIdx
+          | none => pure ()
           if h : newIdx < items.size then
             fireItem (some items[newIdx])
       | .enter =>
