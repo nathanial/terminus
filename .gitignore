@@ -14,3 +14,6 @@ Thumbs.db
 # Lean build outputs
 build/
 .lake
+
+# Log files
+*.log
