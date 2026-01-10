@@ -274,96 +274,66 @@ def renderBlockBorderClipped (title : Option String) (borderType : BorderType) (
 
   result
 
-/-- Look up clip context for a node in an array of (nodeId, clipContext). -/
-def lookupClipContext (contexts : Array (Nat × ClipContext)) (nodeId : Nat) : ClipContext :=
-  match contexts.find? (fun (id, _) => id == nodeId) with
-  | some (_, ctx) => ctx
-  | none => {}
+/-- Render state tracking node ID counter and buffer. -/
+structure RenderState where
+  nextId : Nat := 0
+  buf : Buffer
 
-/-- Build clip contexts for all nodes by traversing the tree.
-    Returns an array of (nodeId, clipContext) pairs. -/
-partial def buildClipContexts (nodeMap : Array (Nat × RNode)) (layouts : LayoutResult)
-    : Array (Nat × ClipContext) := Id.run do
-  let mut contexts : Array (Nat × ClipContext) := #[]
+/-- Render an RNode recursively with proper clip context propagation. -/
+partial def renderNodeRecursive (node : RNode) (layouts : LayoutResult)
+    (clip : ClipContext) : StateM RenderState Unit := do
+  let st ← get
+  let nodeId := st.nextId
+  set { st with nextId := nodeId + 1 }
 
-  -- For now, use a simple approach: each node gets the default context
-  -- Clipping is applied per-node based on ancestors
-  for (nodeId, node) in nodeMap do
-    let ctx : ClipContext := match node with
-    | .clipped _ =>
-      match layouts.get nodeId with
-      | some computed =>
-        let rect := toTerminalRect computed.contentRect
-        ClipContext.intersect {} rect
-      | none => {}
-    | _ => {}
-    contexts := contexts.push (nodeId, ctx)
-
-  contexts
-
-/-- Render an RNode to a Buffer using computed layout with clipping.
-    - nodeMap: Mapping from Trellis node IDs to RNodes
-    - layouts: Computed layout result from Trellis
-    - clip: Current clipping context -/
-def renderNodeClipped (nodeId : Nat) (node : RNode) (layouts : LayoutResult)
-    (buf : Buffer) (clip : ClipContext) : Buffer :=
   match layouts.get nodeId with
-  | none => buf  -- No layout for this node
+  | none => pure ()
   | some computed =>
     let rect := toTerminalRect computed.contentRect
     match node with
     | .text content style =>
-      renderTextClipped content style rect buf clip
+      modify fun s => { s with buf := renderTextClipped content style rect s.buf clip }
 
-    | .block title borderType borderStyle _ =>
-      -- Render border using the border rect (includes border area)
+    | .block title borderType borderStyle child =>
       let borderRect := toTerminalRect computed.borderRect
-      renderBlockBorderClipped title borderType borderStyle borderRect buf clip
+      modify fun s => { s with buf := renderBlockBorderClipped title borderType borderStyle borderRect s.buf clip }
+      renderNodeRecursive child layouts clip
 
-    | .clipped _ | .scrolled _ _ _ =>
-      -- These nodes don't render directly - they affect clip context
-      buf
+    | .row _ _ children =>
+      for child in children do
+        renderNodeRecursive child layouts clip
 
-    | .row _ _ _ | .column _ _ _ | .spacer _ _ | .empty =>
-      -- Container nodes don't render directly - children handle themselves
-      buf
+    | .column _ _ children =>
+      for child in children do
+        renderNodeRecursive child layouts clip
 
-/-- Render an RNode to a Buffer using computed layout (no clipping). -/
-def renderNode (nodeId : Nat) (node : RNode) (layouts : LayoutResult) (buf : Buffer) : Buffer :=
-  renderNodeClipped nodeId node layouts buf {}
+    | .clipped child =>
+      let newClip := clip.intersect rect
+      renderNodeRecursive child layouts newClip
 
-/-- Render entire RNode tree to Buffer with clipping support.
-    Traverses the nodeMap and renders each node at its computed position. -/
-def renderTreeClipped (nodeMap : Array (Nat × RNode)) (layouts : LayoutResult)
-    (buf : Buffer) (_defaultClip : ClipContext := {}) : Buffer := Id.run do
-  -- Build clip contexts for all nodes
-  let contexts := buildClipContexts nodeMap layouts
+    | .scrolled _offsetX _offsetY child =>
+      renderNodeRecursive child layouts clip
 
-  -- Render each node with its appropriate clip context
-  let mut result := buf
-  for (nodeId, node) in nodeMap do
-    let clip := lookupClipContext contexts nodeId
-    result := renderNodeClipped nodeId node layouts result clip
-  result
+    | .spacer _ _ | .empty =>
+      pure ()
 
-/-- Render entire RNode tree to Buffer (backwards compatible, no clipping). -/
-def renderTree (nodeMap : Array (Nat × RNode)) (layouts : LayoutResult) (buf : Buffer) : Buffer :=
-  renderTreeClipped nodeMap layouts buf
+/-- Render entire RNode tree to Buffer with clipping support. -/
+def renderTree (node : RNode) (layouts : LayoutResult) (buf : Buffer) : Buffer :=
+  let (_, st) := renderNodeRecursive node layouts {} |>.run { nextId := 0, buf := buf }
+  st.buf
 
 /-! ## Main Render Function -/
 
-/-- Compute layout for an RNode tree.
-    Returns the layout result and node mapping for rendering. -/
-def computeLayout (root : RNode) (width height : Nat) : LayoutResult × Array (Nat × RNode) :=
-  let ((layoutTree, nodeMap), _) := buildLayoutTree root |>.run { nextId := 0 }
-  let layouts := Trellis.layoutNode layoutTree width.toFloat height.toFloat
-  (layouts, nodeMap)
+/-- Compute layout for an RNode tree. -/
+def computeLayout (root : RNode) (width height : Nat) : LayoutResult :=
+  let ((layoutTree, _), _) := buildLayoutTree root |>.run { nextId := 0 }
+  Trellis.layoutNode layoutTree width.toFloat height.toFloat
 
 /-- Render an RNode tree to a Buffer.
     This is the main entry point for rendering reactive widgets. -/
 def renderToBuffer (root : RNode) (width height : Nat) (buf : Buffer) : Buffer :=
-  let (layouts, nodeMap) := computeLayout root width height
-  renderTree nodeMap layouts buf
+  let layouts := computeLayout root width height
+  renderTree root layouts buf
 
 /-- Create a fresh buffer and render an RNode tree to it. -/
 def render (root : RNode) (width height : Nat) : Buffer :=

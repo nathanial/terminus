@@ -77,17 +77,23 @@ def reactiveInputApp : ReactiveTermM ReactiveAppState := do
             let val ← submitted.sample
             pure (RNode.text s!"\"{val}\"" theme.primaryStyle)
 
-      -- Section 2: Selectable List Demo
-      titledBlock' "2. Selectable List" .rounded theme do
+      -- Section 2: Selectable List Demo (with ScrollView)
+      titledBlock' "2. Selectable List (ScrollView)" .rounded theme do
         text' "Navigate with arrows/j/k, Enter to select:" theme.bodyStyle
         spacer' 1 1
 
-        let fruits := #["Apple", "Banana", "Cherry", "Date", "Elderberry"]
-        let list ← selectableList' fruits 0 {
-          maxVisible := some 4
-          selectedStyle := { bg := .ansi .blue, fg := .ansi .white }
-          focusName := "fruit-list"
-        }
+        -- Wrap list in scrollView for clipping demo
+        let fruits := #["Apple", "Banana", "Cherry", "Date", "Elderberry",
+                        "Fig", "Grape", "Honeydew", "Kiwi", "Lemon"]
+        let scroll ← scrollView' { showVerticalScrollbar := true, focusName := "fruit-list", globalKeys := false } do
+          let list ← selectableList' fruits 0 {
+            selectedStyle := { bg := .ansi .blue, fg := .ansi .white }
+            focusName := "fruit-list-inner"
+            globalKeys := true  -- List responds when scrollView is focused
+          }
+          pure list
+
+        let list := scroll.content
 
         spacer' 1 1
 
