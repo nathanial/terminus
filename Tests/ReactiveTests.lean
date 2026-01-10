@@ -769,6 +769,330 @@ test "Events.poll and tick drive frame-to-frame changes" := do
 
   env.currentScope.dispose
 
+-- ============================================================================
+-- Phase 1: TextInput Tests
+-- ============================================================================
+
+test "textInput' renders with placeholder when empty" := do
+  runSpider do
+    let (events, _) ← createInputs
+    let (result, render) ← (runWidget do
+      textInput' "test" "" { placeholder := "Enter text...", width := 15 }
+    ).run events
+
+    let node ← SpiderM.liftIO render
+    -- Should contain placeholder text when empty and not focused
+    SpiderM.liftIO (ensure (rnodeHasText node "Enter text...") "expected placeholder")
+
+test "textInput' value dynamic updates on input" := do
+  let env ← SpiderEnv.new
+  let (inputResult, inputs) ← (do
+    let (events, inputs) ← createInputs
+    let (result, _render) ← (runWidget do
+      textInput' "test-input" "" {}
+    ).run events
+    pure (result, inputs)
+  ).run env
+
+  env.postBuildTrigger ()
+
+  -- Set focus to the input
+  let (events, _) ← (createInputs).run env
+
+  -- Initial value should be empty
+  let v0 ← inputResult.value.sample
+  v0 ≡ ""
+
+  env.currentScope.dispose
+
+test "textInput' state operations work correctly" := do
+  -- Test TextInputState operations
+  let s0 : TextInputState := { text := "hello", cursor := 3 }
+
+  -- Insert character
+  let s1 := s0.insertChar 'X' none
+  s1.text ≡ "helXlo"
+  s1.cursor ≡ 4
+
+  -- Backspace
+  let s2 := s1.backspace
+  s2.text ≡ "hello"
+  s2.cursor ≡ 3
+
+  -- Move left
+  let s3 := s0.moveLeft
+  s3.cursor ≡ 2
+
+  -- Move right
+  let s4 := s0.moveRight
+  s4.cursor ≡ 4
+
+  -- Home
+  let s5 := s0.moveHome
+  s5.cursor ≡ 0
+
+  -- End
+  let s6 := s0.moveEnd
+  s6.cursor ≡ 5
+
+  -- Delete
+  let s7 : TextInputState := { text := "hello", cursor := 2 }
+  let s8 := s7.delete
+  s8.text ≡ "helo"
+  s8.cursor ≡ 2
+
+test "textInput' respects maxLength" := do
+  let s0 : TextInputState := { text := "abc", cursor := 3 }
+
+  -- Should allow insert when under limit
+  let s1 := s0.insertChar 'd' (some 5)
+  s1.text ≡ "abcd"
+
+  -- Should block insert when at limit
+  let s2 : TextInputState := { text := "abcde", cursor := 5 }
+  let s3 := s2.insertChar 'f' (some 5)
+  s3.text ≡ "abcde"
+
+-- ============================================================================
+-- Phase 1: SelectableList Tests
+-- ============================================================================
+
+test "selectableList' renders items with selection" := do
+  runSpider do
+    let (events, _) ← createInputs
+    let items := #["Apple", "Banana", "Cherry"]
+    let (_result, render) ← (runWidget do
+      selectableList' items 0 {}
+    ).run events
+
+    let node ← SpiderM.liftIO render
+    -- Should have all items
+    SpiderM.liftIO (ensure (rnodeHasText node "> Apple") "expected selected Apple")
+    SpiderM.liftIO (ensure (rnodeHasText node "  Banana") "expected Banana")
+    SpiderM.liftIO (ensure (rnodeHasText node "  Cherry") "expected Cherry")
+
+test "selectableList' initial selection is correct" := do
+  runSpider do
+    let (events, _) ← createInputs
+    let items := #["A", "B", "C"]
+    let (result, _render) ← (runWidget do
+      selectableList' items 1 {}  -- Start at index 1
+    ).run events
+
+    let idx ← SpiderM.liftIO result.selectedIndex.sample
+    SpiderM.liftIO (idx ≡ 1)
+
+    let item ← SpiderM.liftIO result.selectedItem.sample
+    match item with
+    | some s => SpiderM.liftIO (s ≡ "B")
+    | none => SpiderM.liftIO (ensure false "expected selected item")
+
+test "selectableList' ListState navigation" := do
+  -- Test ListState operations
+  let s0 : ListState := { selected := 1, scrollOffset := 0 }
+
+  -- Move up
+  let s1 := s0.moveUp 5 true
+  s1.selected ≡ 0
+
+  -- Move up with wrap
+  let s2 : ListState := { selected := 0, scrollOffset := 0 }
+  let s3 := s2.moveUp 5 true
+  s3.selected ≡ 4
+
+  -- Move up without wrap
+  let s4 := s2.moveUp 5 false
+  s4.selected ≡ 0
+
+  -- Move down
+  let s5 := s0.moveDown 5 true
+  s5.selected ≡ 2
+
+  -- Move down with wrap
+  let s6 : ListState := { selected := 4, scrollOffset := 0 }
+  let s7 := s6.moveDown 5 true
+  s7.selected ≡ 0
+
+  -- Move to first/last
+  let s8 := s0.moveToFirst
+  s8.selected ≡ 0
+
+  let s9 := s0.moveToLast 5
+  s9.selected ≡ 4
+
+test "selectableList' scroll adjustment" := do
+  let s0 : ListState := { selected := 5, scrollOffset := 0 }
+
+  -- Adjust scroll to keep selection visible (maxVisible = 3)
+  let s1 := s0.adjustScroll 3
+  s1.scrollOffset ≡ 3  -- selected(5) - maxVisible(3) + 1 = 3
+
+  -- Selection within visible range should not change scroll
+  let s2 : ListState := { selected := 1, scrollOffset := 0 }
+  let s3 := s2.adjustScroll 3
+  s3.scrollOffset ≡ 0
+
+test "selectableList' renders scroll indicators" := do
+  runSpider do
+    let (events, _) ← createInputs
+    let items := #["A", "B", "C", "D", "E"]
+    let (_result, render) ← (runWidget do
+      selectableList' items 3 { maxVisible := some 2, showScrollIndicators := true }
+    ).run events
+
+    let node ← SpiderM.liftIO render
+    -- Should have scroll indicators since list is truncated
+    SpiderM.liftIO (ensure (rnodeHasText node "  ...") "expected scroll indicator")
+
+test "numberedList' renders with numbers" := do
+  runSpider do
+    let (events, _) ← createInputs
+    let items := #["Red", "Green", "Blue"]
+    let (_result, render) ← (runWidget do
+      numberedList' items 0 {}
+    ).run events
+
+    let node ← SpiderM.liftIO render
+    SpiderM.liftIO (ensure (rnodeHasText node "> 1. Red") "expected numbered item 1")
+    SpiderM.liftIO (ensure (rnodeHasText node "  2. Green") "expected numbered item 2")
+    SpiderM.liftIO (ensure (rnodeHasText node "  3. Blue") "expected numbered item 3")
+
+-- ============================================================================
+-- Phase 1: Overlay/Modal Tests
+-- ============================================================================
+
+test "overlayWhen' renders nothing when not visible" := do
+  runSpider do
+    let (events, _) ← createInputs
+    let (event, _trigger) ← Reactive.newTriggerEvent (t := Spider) (a := Bool)
+    let visible ← Reactive.holdDyn false event
+
+    let (_, render) ← (runWidget do
+      overlayWhen' visible {} do
+        text' "Overlay content" {}
+    ).run events
+
+    let node ← SpiderM.liftIO render
+    -- Should be empty when not visible
+    match node with
+    | .empty => pure ()
+    | _ => SpiderM.liftIO (ensure false "expected empty node when not visible")
+
+test "overlayWhen' renders content when visible" := do
+  runSpider do
+    let (events, _) ← createInputs
+    let (event, trigger) ← Reactive.newTriggerEvent (t := Spider) (a := Bool)
+    let visible ← Reactive.holdDyn false event
+
+    let (_, render) ← (runWidget do
+      overlayWhen' visible {} do
+        text' "Overlay content" {}
+    ).run events
+
+    -- Make visible
+    SpiderM.liftIO (trigger true)
+
+    let node ← SpiderM.liftIO render
+    SpiderM.liftIO (ensure (rnodeHasText node "Overlay content") "expected overlay content")
+
+test "modal' renders with title and border" := do
+  runSpider do
+    let (events, _) ← createInputs
+    let theme := Theme.dark
+
+    let (_, render) ← (runWidget do
+      let _ ← modal' "Test Modal" theme {} do
+        text' "Modal body" {}
+      pure ()
+    ).run events
+
+    let node ← SpiderM.liftIO render
+    -- Modal wraps in a block with title
+    match node with
+    | .block title _ _ child =>
+      SpiderM.liftIO (title ≡ some "Test Modal")
+      SpiderM.liftIO (ensure (rnodeHasText child "Modal body") "expected modal body")
+    | _ => SpiderM.liftIO (ensure false "expected block node")
+
+test "confirmDialog' emits confirmed event on Y key" := do
+  let env ← SpiderEnv.new
+  let (confirmResult, inputs, visible, setVisible) ← (do
+    let (events, inputs) ← createInputs
+    let (visEvent, setVis) ← Reactive.newTriggerEvent (t := Spider) (a := Bool)
+    let visible ← Reactive.holdDyn true visEvent
+    let (result, _render) ← (runWidget do
+      confirmDialog' "Are you sure?" visible Theme.dark
+    ).run events
+    pure (result, inputs, visible, setVis)
+  ).run env
+
+  env.postBuildTrigger ()
+
+  -- Track if confirmed was fired
+  let confirmedRef ← IO.mkRef false
+  let _unsub ← confirmResult.confirmed.subscribe fun () =>
+    confirmedRef.set true
+
+  -- Press 'y'
+  inputs.fireKey { event := KeyEvent.char 'y', focusedWidget := none }
+
+  let wasConfirmed ← confirmedRef.get
+  wasConfirmed ≡ true
+
+  env.currentScope.dispose
+
+test "confirmDialog' emits cancelled event on Escape" := do
+  let env ← SpiderEnv.new
+  let (confirmResult, inputs, visible, setVisible) ← (do
+    let (events, inputs) ← createInputs
+    let (visEvent, setVis) ← Reactive.newTriggerEvent (t := Spider) (a := Bool)
+    let visible ← Reactive.holdDyn true visEvent
+    let (result, _render) ← (runWidget do
+      confirmDialog' "Are you sure?" visible Theme.dark
+    ).run events
+    pure (result, inputs, visible, setVis)
+  ).run env
+
+  env.postBuildTrigger ()
+
+  -- Track if cancelled was fired
+  let cancelledRef ← IO.mkRef false
+  let _unsub ← confirmResult.cancelled.subscribe fun () =>
+    cancelledRef.set true
+
+  -- Press Escape
+  inputs.fireKey { event := KeyEvent.escape, focusedWidget := none }
+
+  let wasCancelled ← cancelledRef.get
+  wasCancelled ≡ true
+
+  env.currentScope.dispose
+
+test "messageDialog' emits dismiss on Enter" := do
+  let env ← SpiderEnv.new
+  let (dismissEvent, inputs, visible) ← (do
+    let (events, inputs) ← createInputs
+    let (visEvent, _setVis) ← Reactive.newTriggerEvent (t := Spider) (a := Bool)
+    let visible ← Reactive.holdDyn true visEvent
+    let (result, _render) ← (runWidget do
+      messageDialog' "Operation complete" visible Theme.dark
+    ).run events
+    pure (result, inputs, visible)
+  ).run env
+
+  env.postBuildTrigger ()
+
+  let dismissedRef ← IO.mkRef false
+  let _unsub ← dismissEvent.subscribe fun () =>
+    dismissedRef.set true
+
+  inputs.fireKey { event := KeyEvent.enter, focusedWidget := none }
+
+  let wasDismissed ← dismissedRef.get
+  wasDismissed ≡ true
+
+  env.currentScope.dispose
+
 #generate_tests
 
 end Tests.Reactive

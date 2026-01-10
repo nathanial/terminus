@@ -33,6 +33,9 @@
   - **Hooks**: `useKeyEvent`, `useMouseEvent`, `useResize`
   - **Components**: `text'`, `heading1'`, `caption'`, `dynText'`
   - **Containers**: `row'`, `column'`, `block'`, `titledPanel'`
+  - **Input**: `textInput'`, `labeledTextInput'`
+  - **List**: `selectableList'`, `dynSelectableList'`, `numberedList'`
+  - **Overlay**: `overlay'`, `modal'`, `confirmDialog'`, `messageDialog'`
   - **Render**: `render`, `renderToBuffer`, `computeLayout`
   - **App**: `runReactiveApp`, `runSimpleApp`
 -/
@@ -42,4 +45,7 @@ import Terminus.Reactive.Render
 import Terminus.Reactive.Components
 import Terminus.Reactive.Containers
 import Terminus.Reactive.Hooks
+import Terminus.Reactive.Input
+import Terminus.Reactive.List
+import Terminus.Reactive.Overlay
 import Terminus.Reactive.App

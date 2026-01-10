@@ -63,6 +63,9 @@ lean_exe «mouse» where
 lean_exe «reactive_demo» where
   root := `examples.ReactiveDemo
 
+lean_exe «reactive_input» where
+  root := `examples.ReactiveInput
+
 @[test_driver]
 lean_exe «tests» where
   root := `Tests.Main

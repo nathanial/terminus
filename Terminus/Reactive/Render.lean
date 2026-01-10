@@ -87,12 +87,17 @@ partial def buildLayoutTree (node : RNode) : StateM IdGen (LayoutNode × Array (
 def floatToCell (f : Float) : Nat :=
   if f < 0 then 0 else f.toUInt32.toNat
 
-/-- Convert Trellis LayoutRect to Terminus Rect. -/
+/-- Convert Float to Nat using ceiling (for heights where fractional content should still render). -/
+def floatToCellCeil (f : Float) : Nat :=
+  if f < 0 then 0 else f.ceil.toUInt32.toNat
+
+/-- Convert Trellis LayoutRect to Terminus Rect.
+    Uses ceiling for height to ensure text with fractional layout still renders. -/
 def toTerminalRect (rect : LayoutRect) : Terminus.Rect :=
   { x := floatToCell rect.x
   , y := floatToCell rect.y
   , width := floatToCell rect.width
-  , height := floatToCell rect.height }
+  , height := floatToCellCeil rect.height }
 
 /-! ## Buffer Rendering -/
 
