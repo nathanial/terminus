@@ -30,6 +30,10 @@ structure ListConfig where
   showScrollIndicators : Bool := true
   /-- Style for scroll indicators. -/
   scrollIndicatorStyle : Style := { fg := .ansi .brightBlack }
+  /-- Focus name for this list (for keyboard routing). Empty = auto-generated. -/
+  focusName : String := ""
+  /-- Whether this list responds to keys without focus (legacy behavior). -/
+  globalKeys : Bool := false
   deriving Repr, Inhabited
 
 /-! ## List Result -/
@@ -122,6 +126,10 @@ def selectableList' [ToString α] (items : Array α) (initial : Nat := 0)
     (config : ListConfig := {}) : WidgetM (ListResult α) := do
   let events ← getEventsW
 
+  -- Register as focusable component
+  let widgetName ← registerComponentW "selectableList" (isInput := true)
+  let focusedInput ← useFocusedInputW
+
   -- Create trigger events
   let (selectEvent, fireSelect) ← newTriggerEvent (t := Spider) (a := α)
   let (selectionChangeEvent, fireSelectionChange) ← newTriggerEvent (t := Spider) (a := Nat)
@@ -140,9 +148,16 @@ def selectableList' [ToString α] (items : Array α) (initial : Nat := 0)
   let initialItem := if h : initialSelected < items.size then some items[initialSelected] else none
   let selectedItemDyn ← holdDyn initialItem itemEvent
 
+  -- Determine the list's focus name
+  let listName := if config.focusName.isEmpty then widgetName else config.focusName
+
   -- Subscribe to key events
   let _unsub ← SpiderM.liftIO <| events.keyEvent.subscribe fun kd => do
-    if items.isEmpty then pure ()
+    -- Check focus (unless globalKeys is enabled)
+    let currentFocus ← focusedInput.sample
+    let isFocused := config.globalKeys || currentFocus == some listName
+
+    if items.isEmpty || !isFocused then pure ()
     else
       let state ← stateRef.get
       let ke := kd.event
@@ -227,6 +242,10 @@ def dynSelectableList' [ToString α] (items : Reactive.Dynamic Spider (Array α)
     (config : ListConfig := {}) : WidgetM (ListResult α) := do
   let events ← getEventsW
 
+  -- Register as focusable component
+  let widgetName ← registerComponentW "dynSelectableList" (isInput := true)
+  let focusedInput ← useFocusedInputW
+
   -- Create trigger events
   let (selectEvent, fireSelect) ← newTriggerEvent (t := Spider) (a := α)
   let (selectionChangeEvent, fireSelectionChange) ← newTriggerEvent (t := Spider) (a := Nat)
@@ -244,10 +263,17 @@ def dynSelectableList' [ToString α] (items : Reactive.Dynamic Spider (Array α)
   let initialItem := if h : initialSelected < initialItems.size then some initialItems[initialSelected] else none
   let selectedItemDyn ← holdDyn initialItem itemEvent
 
+  -- Determine the list's focus name
+  let listName := if config.focusName.isEmpty then widgetName else config.focusName
+
   -- Subscribe to key events
   let _unsub ← SpiderM.liftIO <| events.keyEvent.subscribe fun kd => do
+    -- Check focus (unless globalKeys is enabled)
+    let currentFocus ← focusedInput.sample
+    let isFocused := config.globalKeys || currentFocus == some listName
+
     let currentItems ← items.sample
-    if currentItems.isEmpty then pure ()
+    if currentItems.isEmpty || !isFocused then pure ()
     else
       let state ← stateRef.get
       let ke := kd.event
@@ -357,6 +383,10 @@ def numberedList' [ToString α] (items : Array α) (initial : Nat := 0)
     (config : ListConfig := {}) : WidgetM (ListResult α) := do
   let events ← getEventsW
 
+  -- Register as focusable component
+  let widgetName ← registerComponentW "numberedList" (isInput := true)
+  let focusedInput ← useFocusedInputW
+
   -- Create trigger events
   let (selectEvent, fireSelect) ← newTriggerEvent (t := Spider) (a := α)
   let (selectionChangeEvent, fireSelectionChange) ← newTriggerEvent (t := Spider) (a := Nat)
@@ -372,9 +402,16 @@ def numberedList' [ToString α] (items : Array α) (initial : Nat := 0)
   let initialItem := if h : initialSelected < items.size then some items[initialSelected] else none
   let selectedItemDyn ← holdDyn initialItem itemEvent
 
+  -- Determine the list's focus name
+  let listName := if config.focusName.isEmpty then widgetName else config.focusName
+
   -- Subscribe to key events for number shortcuts (1-9)
   let _unsub ← SpiderM.liftIO <| events.keyEvent.subscribe fun kd => do
-    if items.isEmpty then pure ()
+    -- Check focus (unless globalKeys is enabled)
+    let currentFocus ← focusedInput.sample
+    let isFocused := config.globalKeys || currentFocus == some listName
+
+    if items.isEmpty || !isFocused then pure ()
     else
       let state ← stateRef.get
       let ke := kd.event

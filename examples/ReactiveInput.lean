@@ -10,10 +10,6 @@ open Reactive Reactive.Host
 def reactiveInputApp : ReactiveTermM ReactiveAppState := do
   let theme := Theme.dark
 
-  -- Track which demo section is active
-  let (sectionEvent, _fireSection) ← newTriggerEvent (t := Spider) (a := Nat)
-  let currentSection ← holdDyn 0 sectionEvent
-
   -- Track if confirm dialog is visible
   let (showConfirmEvent, fireShowConfirm) ← newTriggerEvent (t := Spider) (a := Bool)
   let showConfirm ← holdDyn false showConfirmEvent
@@ -22,22 +18,34 @@ def reactiveInputApp : ReactiveTermM ReactiveAppState := do
   let (resultMsgEvent, fireResultMsg) ← newTriggerEvent (t := Spider) (a := String)
   let resultMsg ← holdDyn "" resultMsgEvent
 
-  -- Subscribe to number keys to switch sections
+  -- Define focusable component names in order
+  let focusableNames := #["demo-input", "fruit-list", "color-list"]
+  let focusIndexRef ← SpiderM.liftIO (IO.mkRef 0)
+
+  -- Subscribe to Tab key to cycle focus
   let keyEvents ← useKeyEvent
+  let events ← getEvents
   let _unsub ← SpiderM.liftIO <| keyEvents.subscribe fun kd => do
     match kd.event.code with
-    | .char '1' => fireShowConfirm false  -- Hide dialog when switching
-    | .char '2' => fireShowConfirm false
-    | .char '3' => fireShowConfirm false
     | .char 'c' | .char 'C' => fireShowConfirm true  -- Show confirm dialog
+    | .tab =>
+      -- Cycle focus to next component
+      let idx ← focusIndexRef.get
+      let nextIdx := (idx + 1) % focusableNames.size
+      focusIndexRef.set nextIdx
+      if h : nextIdx < focusableNames.size then
+        events.registry.fireFocus (some focusableNames[nextIdx])
     | _ => pure ()
+
+  -- Set initial focus to the fruit list
+  SpiderM.liftIO <| events.registry.fireFocus (some "fruit-list")
 
   -- Build the UI
   let (_, render) ← runWidget do
     column' (gap := 1) (style := {}) do
       -- Header
       text' "=== Reactive Input Demo ===" theme.heading1Style
-      text' "Press 1/2/3 to focus sections, C for confirm dialog, Ctrl+C to quit" theme.captionStyle
+      text' "Press Tab to cycle focus, C for confirm dialog, Ctrl+C to quit" theme.captionStyle
       text' "" {}
 
       -- Section 1: Text Input Demo
@@ -78,6 +86,7 @@ def reactiveInputApp : ReactiveTermM ReactiveAppState := do
         let list ← selectableList' fruits 0 {
           maxVisible := some 4
           selectedStyle := { bg := .ansi .blue, fg := .ansi .white }
+          focusName := "fruit-list"
         }
 
         spacer' 1 1
@@ -114,6 +123,7 @@ def reactiveInputApp : ReactiveTermM ReactiveAppState := do
         let colors := #["Red", "Green", "Blue", "Yellow", "Purple"]
         let numList ← numberedList' colors 0 {
           selectedStyle := { bg := .ansi .magenta, fg := .ansi .white }
+          focusName := "color-list"
         }
 
         spacer' 1 1
@@ -147,11 +157,13 @@ def reactiveInputApp : ReactiveTermM ReactiveAppState := do
         else
           pure (RNode.text s!"Dialog result: {msg}" theme.primaryStyle)
 
-      -- Status bar
+      -- Status bar showing current focus
       text' "" {}
+      let focusedInput ← useFocusedInputW
       emitDynamic do
-        let sectionIdx ← currentSection.sample
-        pure (RNode.text s!"Section {sectionIdx + 1} focused" theme.captionStyle)
+        let focused ← focusedInput.sample
+        let focusName := focused.getD "(none)"
+        pure (RNode.text s!"Focused: {focusName}" theme.captionStyle)
 
   pure { render }
 
