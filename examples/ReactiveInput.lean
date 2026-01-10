@@ -19,7 +19,7 @@ def reactiveInputApp : ReactiveTermM ReactiveAppState := do
   let resultMsg ← holdDyn "" resultMsgEvent
 
   -- Define focusable component names in order
-  let focusableNames := #["demo-input", "fruit-list", "color-list"]
+  let focusableNames := #["demo-input", "fruit-list", "color-list", "scroll-demo"]
   let focusIndexRef ← SpiderM.liftIO (IO.mkRef 0)
 
   -- Subscribe to Tab key to cycle focus
@@ -77,23 +77,19 @@ def reactiveInputApp : ReactiveTermM ReactiveAppState := do
             let val ← submitted.sample
             pure (RNode.text s!"\"{val}\"" theme.primaryStyle)
 
-      -- Section 2: Selectable List Demo (with ScrollView)
-      titledBlock' "2. Selectable List (ScrollView)" .rounded theme do
+      -- Section 2: Selectable List Demo
+      titledBlock' "2. Selectable List" .rounded theme do
         text' "Navigate with arrows/j/k, Enter to select:" theme.bodyStyle
         spacer' 1 1
 
-        -- Wrap list in scrollView for clipping demo
+        -- SelectableList handles its own scrolling via maxVisible
         let fruits := #["Apple", "Banana", "Cherry", "Date", "Elderberry",
                         "Fig", "Grape", "Honeydew", "Kiwi", "Lemon"]
-        let scroll ← scrollView' { maxVisible := 4, showVerticalScrollbar := true, focusName := "fruit-list", globalKeys := false } do
-          let list ← selectableList' fruits 0 {
-            selectedStyle := { bg := .ansi .blue, fg := .ansi .white }
-            focusName := "fruit-list-inner"
-            globalKeys := true  -- List responds when scrollView is focused
-          }
-          pure list
-
-        let list := scroll.content
+        let list ← selectableList' fruits 0 {
+          maxVisible := some 4
+          selectedStyle := { bg := .ansi .blue, fg := .ansi .white }
+          focusName := "fruit-list"
+        }
 
         spacer' 1 1
 
@@ -142,6 +138,21 @@ def reactiveInputApp : ReactiveTermM ReactiveAppState := do
               | some s => s
               | none => "(none)"
             pure (RNode.text display theme.primaryStyle)
+
+      -- Section 4: ScrollView Demo (for scrollable text content)
+      titledBlock' "4. ScrollView Demo" .rounded theme do
+        text' "Use arrows/j/k to scroll content:" theme.bodyStyle
+        spacer' 1 1
+
+        -- ScrollView for text content that doesn't have its own scrolling
+        let _scroll ← scrollView' { maxVisible := 3, showVerticalScrollbar := true, focusName := "scroll-demo" } do
+          text' "Line 1: The quick brown fox" theme.bodyStyle
+          text' "Line 2: jumps over the lazy dog." theme.bodyStyle
+          text' "Line 3: Pack my box with" theme.bodyStyle
+          text' "Line 4: five dozen liquor jugs." theme.bodyStyle
+          text' "Line 5: How vexingly quick" theme.bodyStyle
+          text' "Line 6: daft zebras jump!" theme.bodyStyle
+          pure ()
 
       -- Confirm Dialog (overlay)
       let confirm ← confirmDialog' "Do you want to proceed with this action?" showConfirm theme
