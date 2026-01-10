@@ -1,0 +1,168 @@
+/-
+  Terminus Reactive - Event Hooks
+  React-like hooks for subscribing to terminal events.
+-/
+import Terminus.Reactive.Monad
+import Reactive
+
+-- Don't open Reactive to avoid Event name conflict with Terminus.Event
+open Reactive.Host
+
+namespace Terminus.Reactive
+
+/-! ## Event Hooks
+
+These are like React hooks - they access the event context implicitly
+and set up subscriptions automatically.
+-/
+
+/-- Subscribe to all keyboard events. -/
+def useKeyEvent : ReactiveTermM (Reactive.Event Spider KeyData) := do
+  let events ← getEvents
+  pure events.keyEvent
+
+/-- Subscribe to all mouse events. -/
+def useMouseEvent : ReactiveTermM (Reactive.Event Spider MouseData) := do
+  let events ← getEvents
+  pure events.mouseEvent
+
+/-- Subscribe to terminal resize events. -/
+def useResize : ReactiveTermM (Reactive.Event Spider ResizeData) := do
+  let events ← getEvents
+  pure events.resizeEvent
+
+/-! ## Filtered Event Hooks -/
+
+/-- Filter key events by key code. -/
+def useKey (code : Terminus.KeyCode) : ReactiveTermM (Reactive.Event Spider KeyData) := do
+  let events ← getEvents
+  Event.filterM (fun kd => kd.event.code == code) events.keyEvent
+
+/-- Filter key events by character. -/
+def useChar (c : Char) : ReactiveTermM (Reactive.Event Spider KeyData) := do
+  let events ← getEvents
+  Event.filterM (fun kd => kd.event.isChar c) events.keyEvent
+
+/-- Get event when Enter is pressed. -/
+def useEnter : ReactiveTermM (Reactive.Event Spider Unit) := do
+  let events ← getEvents
+  let enterEvents ← Event.filterM (fun kd => kd.event.code == .enter) events.keyEvent
+  Event.voidM enterEvents
+
+/-- Get event when Escape is pressed. -/
+def useEscape : ReactiveTermM (Reactive.Event Spider Unit) := do
+  let events ← getEvents
+  let escEvents ← Event.filterM (fun kd => kd.event.code == .escape) events.keyEvent
+  Event.voidM escEvents
+
+/-- Get event when a character key is pressed (any printable character). -/
+def useAnyChar : ReactiveTermM (Reactive.Event Spider Char) := do
+  let events ← getEvents
+  Event.mapMaybeM (fun kd =>
+    match kd.event.code with
+    | .char c => some c
+    | _ => none
+  ) events.keyEvent
+
+/-- Get event when arrow keys are pressed. -/
+def useArrowKeys : ReactiveTermM (Reactive.Event Spider Terminus.KeyCode) := do
+  let events ← getEvents
+  let isArrow := fun (code : Terminus.KeyCode) => match code with
+    | .up | .down | .left | .right => true
+    | _ => false
+  Event.mapMaybeM (fun kd =>
+    if isArrow kd.event.code then some kd.event.code else none
+  ) events.keyEvent
+
+/-! ## Mouse Event Hooks -/
+
+/-- Get left click events. -/
+def useLeftClick : ReactiveTermM (Reactive.Event Spider MouseData) := do
+  let events ← getEvents
+  Event.filterM (fun md => md.event.isLeftClick) events.mouseEvent
+
+/-- Get right click events. -/
+def useRightClick : ReactiveTermM (Reactive.Event Spider MouseData) := do
+  let events ← getEvents
+  Event.filterM (fun md => md.event.isRightClick) events.mouseEvent
+
+/-- Get scroll events. -/
+def useScroll : ReactiveTermM (Reactive.Event Spider MouseData) := do
+  let events ← getEvents
+  Event.filterM (fun md => md.event.isScroll) events.mouseEvent
+
+/-- Get mouse position updates (motion events). -/
+def useMousePosition : ReactiveTermM (Reactive.Dynamic Spider (Nat × Nat)) := do
+  let events ← getEvents
+  let positions ← Event.mapM (fun md => (md.event.x, md.event.y)) events.mouseEvent
+  Reactive.holdDyn (0, 0) positions
+
+/-! ## Focus Management -/
+
+/-- Get the currently focused input widget name. -/
+def useFocusedInput : ReactiveTermM (Reactive.Dynamic Spider (Option String)) := do
+  let events ← getEvents
+  pure events.registry.focusedInput
+
+/-- Set the focused input widget. -/
+def setFocus (name : Option String) : ReactiveTermM Unit := do
+  let events ← getEvents
+  SpiderM.liftIO (events.registry.fireFocus name)
+
+/-- Check if a specific widget is focused. -/
+def useIsFocused (name : String) : ReactiveTermM (Reactive.Dynamic Spider Bool) := do
+  let focusedInput ← useFocusedInput
+  -- Map the dynamic to check if this name is focused
+  let isFocused ← SpiderM.liftIO do
+    let current ← focusedInput.sample
+    IO.mkRef (current == some name)
+  -- Subscribe to changes
+  let _unsub ← SpiderM.liftIO <| focusedInput.updated.subscribe fun newFocus => do
+    isFocused.set (newFocus == some name)
+  -- Create a dynamic from the ref
+  let (focusEvent, fireFocus) ← Reactive.newTriggerEvent (t := Spider) (a := Bool)
+  -- Wire updates
+  let _unsub2 ← SpiderM.liftIO <| focusedInput.updated.subscribe fun newFocus =>
+    fireFocus (newFocus == some name)
+  let initial ← SpiderM.liftIO isFocused.get
+  Reactive.holdDyn initial focusEvent
+
+/-! ## State Management Helpers -/
+
+/-- Create a counter that increments on each event occurrence. -/
+def useCounter (event : Reactive.Event Spider α) (initial : Int := 0)
+    : ReactiveTermM (Reactive.Dynamic Spider Int) := do
+  Reactive.foldDyn (fun _ n => n + 1) initial event
+
+/-- Create a toggle that flips on each event occurrence. -/
+def useToggle (event : Reactive.Event Spider α) (initial : Bool := false)
+    : ReactiveTermM (Reactive.Dynamic Spider Bool) := do
+  Reactive.foldDyn (fun _ b => !b) initial event
+
+/-- Hold the latest value from an event stream. -/
+def useLatest [Inhabited α] (event : Reactive.Event Spider α)
+    : ReactiveTermM (Reactive.Dynamic Spider α) := do
+  Reactive.holdDyn default event
+
+/-! ## WidgetM Versions
+
+Convenience wrappers for using hooks in WidgetM context.
+-/
+
+/-- Subscribe to keyboard events in WidgetM. -/
+def useKeyEventW : WidgetM (Reactive.Event Spider KeyData) :=
+  StateT.lift useKeyEvent
+
+/-- Subscribe to mouse events in WidgetM. -/
+def useMouseEventW : WidgetM (Reactive.Event Spider MouseData) :=
+  StateT.lift useMouseEvent
+
+/-- Subscribe to resize events in WidgetM. -/
+def useResizeW : WidgetM (Reactive.Event Spider ResizeData) :=
+  StateT.lift useResize
+
+/-- Get focused input in WidgetM. -/
+def useFocusedInputW : WidgetM (Reactive.Dynamic Spider (Option String)) :=
+  StateT.lift useFocusedInput
+
+end Terminus.Reactive

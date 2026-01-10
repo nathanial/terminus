@@ -6,6 +6,8 @@ package «terminus» where
 
 require crucible from git "https://github.com/nathanial/crucible" @ "v0.0.7"
 require raster from git "https://github.com/nathanial/raster" @ "v0.0.2"
+require reactive from git "https://github.com/nathanial/reactive" @ "v0.0.4"
+require trellis from git "https://github.com/nathanial/trellis" @ "v0.0.8"
 
 lean_lib «Terminus» where
   roots := #[`Terminus]
@@ -56,6 +58,9 @@ lean_exe «form» where
 
 lean_exe «mouse» where
   root := `examples.MouseDemo
+
+lean_exe «reactive_demo» where
+  root := `examples.ReactiveDemo
 
 @[test_driver]
 lean_exe «tests» where
