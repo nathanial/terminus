@@ -3,11 +3,8 @@
   Layout containers for composing reactive terminal widgets.
 -/
 import Terminus.Reactive.Monad
-import Trellis
 
 namespace Terminus.Reactive
-
-open Trellis
 
 /-! ## Basic Containers
 
@@ -17,7 +14,7 @@ in container widgets. They enable declarative nesting like Reflex-DOM.
 
 /-- Create a column container that collects children's renders.
     Children are laid out vertically with the specified gap. -/
-def column' (gap : Nat := 0) (style : BoxConstraints := {})
+def column' (gap : Nat := 0) (style : RStyle := {})
     (children : WidgetM α) : WidgetM α := do
   let (result, childRenders) ← runWidgetChildren children
   emit do
@@ -27,7 +24,7 @@ def column' (gap : Nat := 0) (style : BoxConstraints := {})
 
 /-- Create a row container that collects children's renders.
     Children are laid out horizontally with the specified gap. -/
-def row' (gap : Nat := 0) (style : BoxConstraints := {})
+def row' (gap : Nat := 0) (style : RStyle := {})
     (children : WidgetM α) : WidgetM α := do
   let (result, childRenders) ← runWidgetChildren children
   emit do
@@ -101,46 +98,32 @@ def elevatedPanel' (theme : Theme) (children : WidgetM α) : WidgetM α :=
 
 /-! ## Flex Containers
 
-These provide more control over layout using Trellis flexbox properties.
+Simplified flex-style containers.
 -/
 
-/-- Create a flex row with custom flex container properties. -/
-def flexRow' (props : FlexContainer) (style : BoxConstraints := {})
-    (children : WidgetM α) : WidgetM α := do
-  let (result, childRenders) ← runWidgetChildren children
-  emit do
-    let nodes ← childRenders.mapM id
-    -- Use gap from flex props, convert Float to Nat
-    let gap := props.gap.toUInt32.toNat
-    pure (RNode.row gap style nodes)
-  pure result
+/-- Create a flex row with gap. -/
+def flexRow' (gap : Nat := 0) (style : RStyle := {})
+    (children : WidgetM α) : WidgetM α :=
+  row' gap style children
 
-/-- Create a flex column with custom flex container properties. -/
-def flexColumn' (props : FlexContainer) (style : BoxConstraints := {})
-    (children : WidgetM α) : WidgetM α := do
-  let (result, childRenders) ← runWidgetChildren children
-  emit do
-    let nodes ← childRenders.mapM id
-    let gap := props.gap.toUInt32.toNat
-    pure (RNode.column gap style nodes)
-  pure result
+/-- Create a flex column with gap. -/
+def flexColumn' (gap : Nat := 0) (style : RStyle := {})
+    (children : WidgetM α) : WidgetM α :=
+  column' gap style children
 
 /-! ## Utility Containers -/
 
-/-- Create a container with padding (using Trellis BoxConstraints). -/
-def padded' (padding : EdgeInsets) (children : WidgetM α) : WidgetM α := do
-  let style : BoxConstraints := { padding }
+/-- Create a container with padding. -/
+def padded' (padding : Nat) (children : WidgetM α) : WidgetM α := do
+  let style : RStyle := { padding }
   column' (gap := 0) (style := style) children
 
-/-- Create a container with uniform padding. -/
+/-- Create a container with uniform padding (alias for padded'). -/
 def padded (amount : Nat) (children : WidgetM α) : WidgetM α :=
-  padded' (EdgeInsets.uniform amount.toFloat) children
+  padded' amount children
 
-/-- Create a centered container (using flex alignment). -/
-def centered' (children : WidgetM α) : WidgetM α := do
-  let style : BoxConstraints := {
-    -- Flex properties would go here but we're using simpler layout for now
-  }
-  column' (gap := 0) (style := style) children
+/-- Create a centered container. -/
+def centered' (children : WidgetM α) : WidgetM α :=
+  column' (gap := 0) (style := {}) children
 
 end Terminus.Reactive

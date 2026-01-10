@@ -3,7 +3,6 @@
   Types for FRP-based terminal widgets.
 -/
 import Terminus
-import Trellis
 import Reactive
 
 -- Note: We open Reactive for access to exported functions (Reactive.holdDyn, Reactive.newTriggerEvent, etc.)
@@ -12,6 +11,21 @@ import Reactive
 namespace Terminus.Reactive
 
 open Reactive Reactive.Host
+
+/-! ## Layout Style
+
+Simple constraints for reactive terminal layout.
+-/
+
+/-- Style constraints for reactive layout containers. -/
+structure RStyle where
+  /-- Minimum width in cells. -/
+  minWidth : Option Nat := none
+  /-- Minimum height in cells. -/
+  minHeight : Option Nat := none
+  /-- Padding on all sides in cells. -/
+  padding : Nat := 0
+  deriving Repr, Inhabited, BEq
 
 /-! ## Render Node Tree
 
@@ -33,9 +47,9 @@ inductive RNode where
   | block (title : Option String) (borderType : BorderType) (borderStyle : Style)
       (child : RNode)
   /-- Row container (horizontal flex layout). -/
-  | row (gap : Nat) (style : Trellis.BoxConstraints) (children : Array RNode)
+  | row (gap : Nat) (style : RStyle) (children : Array RNode)
   /-- Column container (vertical flex layout). -/
-  | column (gap : Nat) (style : Trellis.BoxConstraints) (children : Array RNode)
+  | column (gap : Nat) (style : RStyle) (children : Array RNode)
   /-- Fixed-size spacer. -/
   | spacer (width : Nat) (height : Nat)
   /-- Empty placeholder (zero size). -/

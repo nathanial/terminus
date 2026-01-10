@@ -1,17 +1,14 @@
 /-
   Terminus Reactive - Render Pipeline
-  Converts RNode trees to terminal Buffer output using Trellis layout.
+  Converts RNode trees to terminal Buffer output using internal Layout system.
 -/
 import Terminus.Reactive.Types
-import Trellis
 
 namespace Terminus.Reactive
 
-open Trellis
-
 /-! ## ID Generation
 
-We need unique IDs for each RNode when converting to Trellis LayoutNode.
+We need unique IDs for each RNode when computing layout.
 -/
 
 /-- State for generating unique node IDs during tree traversal. -/
@@ -22,100 +19,133 @@ structure IdGen where
 def IdGen.fresh (g : IdGen) : Nat × IdGen :=
   (g.nextId, { nextId := g.nextId + 1 })
 
-/-! ## RNode to LayoutNode Conversion -/
+/-! ## Layout Computation
 
-/-- Measure text content size in terminal cells.
-    Each character is 1 cell wide (simplified - doesn't handle wide chars). -/
-def measureText (content : String) : ContentSize :=
-  { width := content.length.toFloat
-  , height := 1.0
-  , baseline := none }
+Compute layout for RNode trees using Terminus internal Layout system.
+-/
 
-/-- Convert RNode tree to Trellis LayoutNode tree.
-    Returns the LayoutNode and mapping from Trellis node IDs to RNodes. -/
-partial def buildLayoutTree (node : RNode) : StateM IdGen (LayoutNode × Array (Nat × RNode)) := do
+/-- Result of layout computation: mapping node IDs to Rects. -/
+abbrev LayoutMap := Array (Nat × Rect)
+
+/-- Compute the natural/minimum height of an RNode (for layout purposes). -/
+partial def naturalHeight (node : RNode) : Nat :=
+  match node with
+  | .text _ _ => 1
+  | .spacer _ h => h
+  | .empty => 0
+  | .row _ style children =>
+    let padding := style.padding * 2
+    let maxChildHeight := children.foldl (fun acc c => max acc (naturalHeight c)) 0
+    padding + maxChildHeight
+  | .column gap style children =>
+    let padding := style.padding * 2
+    let childHeights := children.foldl (fun acc c => acc + naturalHeight c) 0
+    let gapTotal := if children.size > 1 then gap * (children.size - 1) else 0
+    padding + childHeights + gapTotal
+  | .block _ _ _ child =>
+    -- Border adds 2 (top + bottom)
+    2 + naturalHeight child
+  | .clipped child => naturalHeight child
+  | .scrolled _ _ child => naturalHeight child
+
+/-- Compute the natural/minimum width of an RNode (for layout purposes). -/
+partial def naturalWidth (node : RNode) : Nat :=
+  match node with
+  | .text content _ => content.length
+  | .spacer w _ => w
+  | .empty => 0
+  | .row gap style children =>
+    let padding := style.padding * 2
+    let childWidths := children.foldl (fun acc c => acc + naturalWidth c) 0
+    let gapTotal := if children.size > 1 then gap * (children.size - 1) else 0
+    padding + childWidths + gapTotal
+  | .column _ style children =>
+    let padding := style.padding * 2
+    let maxChildWidth := children.foldl (fun acc c => max acc (naturalWidth c)) 0
+    padding + maxChildWidth
+  | .block _ _ _ child =>
+    -- Border adds 2 (left + right)
+    2 + naturalWidth child
+  | .clipped child => naturalWidth child
+  | .scrolled _ _ child => naturalWidth child
+
+/-- Compute layout for RNode tree recursively using internal Layout system. -/
+partial def computeLayoutRec (node : RNode) (area : Rect) : StateM IdGen LayoutMap := do
   let (nodeId, gen) ← get >>= fun g => pure g.fresh
   set gen
 
   match node with
-  | .text content _ =>
-    let size := measureText content
-    -- Terminal text must be at least 1 cell tall to prevent overlap
-    let box : BoxConstraints := { minHeight := 1.0 }
-    let layoutNode := LayoutNode.leaf nodeId size (box := box)
-    pure (layoutNode, #[(nodeId, node)])
-
-  | .block _ _ _ child =>
-    -- Block adds 2 cells for border (1 each side)
-    let (childLayout, childMap) ← buildLayoutTree child
-    -- Wrap child in a container with padding for border
-    let box : BoxConstraints := { padding := EdgeInsets.uniform 1 }
-    let layoutNode := LayoutNode.column nodeId #[childLayout] (gap := 0) (box := box)
-    pure (layoutNode, #[(nodeId, node)] ++ childMap)
+  | .text _content _ =>
+    -- Text takes full width, height of 1 (single line)
+    let textRect := { area with height := max 1 (min area.height 1) }
+    pure #[(nodeId, textRect)]
 
   | .row gap style children =>
-    let mut childLayouts : Array LayoutNode := #[]
-    let mut allMaps : Array (Nat × RNode) := #[(nodeId, node)]
-    for child in children do
-      let (childLayout, childMap) ← buildLayoutTree child
-      childLayouts := childLayouts.push childLayout
-      allMaps := allMaps ++ childMap
-    let layoutNode := LayoutNode.row nodeId childLayouts (gap := gap.toFloat) (box := style)
-    pure (layoutNode, allMaps)
+    if children.isEmpty then pure #[(nodeId, area)]
+    else
+      let innerArea := if style.padding > 0 then area.inner style.padding else area
+      -- Compute child widths using natural width
+      -- All nodes get fixed width based on their natural size
+      let constraints := children.toList.map (fun child => Constraint.fixed (naturalWidth child))
+      let layout := Layout.horizontal constraints |>.withSpacing gap
+      let childRects := layout.split innerArea
+      let mut result : LayoutMap := #[(nodeId, area)]
+      for h : i in [:children.size] do
+        let child := children[i]
+        let childRect := childRects.getD i innerArea
+        let childLayouts ← computeLayoutRec child childRect
+        result := result ++ childLayouts
+      pure result
 
   | .column gap style children =>
-    let mut childLayouts : Array LayoutNode := #[]
-    let mut allMaps : Array (Nat × RNode) := #[(nodeId, node)]
-    for child in children do
-      let (childLayout, childMap) ← buildLayoutTree child
-      childLayouts := childLayouts.push childLayout
-      allMaps := allMaps ++ childMap
-    let layoutNode := LayoutNode.column nodeId childLayouts (gap := gap.toFloat) (box := style)
-    pure (layoutNode, allMaps)
+    if children.isEmpty then pure #[(nodeId, area)]
+    else
+      let innerArea := if style.padding > 0 then area.inner style.padding else area
+      -- Compute child heights using natural height
+      -- All nodes get fixed height based on their natural size
+      let constraints := children.toList.map (fun child => Constraint.fixed (naturalHeight child))
+      let layout := Layout.vertical constraints |>.withSpacing gap
+      let childRects := layout.split innerArea
+      let mut result : LayoutMap := #[(nodeId, area)]
+      for h : i in [:children.size] do
+        let child := children[i]
+        let childRect := childRects.getD i innerArea
+        let childLayouts ← computeLayoutRec child childRect
+        result := result ++ childLayouts
+      pure result
 
-  | .spacer width height =>
-    let size : ContentSize := { width := width.toFloat, height := height.toFloat, baseline := none }
-    -- Spacers should maintain their requested minimum size
-    let box : BoxConstraints := { minWidth := width.toFloat, minHeight := height.toFloat }
-    let layoutNode := LayoutNode.leaf nodeId size (box := box)
-    pure (layoutNode, #[(nodeId, node)])
+  | .block _ _ _ child =>
+    -- Block has 1-cell border padding
+    let innerArea := area.inner 1
+    let mut result : LayoutMap := #[(nodeId, area)]
+    let childLayouts ← computeLayoutRec child innerArea
+    result := result ++ childLayouts
+    pure result
+
+  | .spacer w h =>
+    let spacerRect := { area with
+      width := min w area.width
+      height := min h area.height }
+    pure #[(nodeId, spacerRect)]
 
   | .empty =>
-    let size : ContentSize := { width := 0, height := 0, baseline := none }
-    let layoutNode := LayoutNode.leaf nodeId size
-    pure (layoutNode, #[(nodeId, node)])
+    pure #[(nodeId, { area with width := 0, height := 0 })]
 
   | .clipped child =>
-    -- Clipped node acts as a pass-through container
-    -- The clip boundary is established during render based on computed bounds
-    let (childLayout, childMap) ← buildLayoutTree child
-    let layoutNode := LayoutNode.column nodeId #[childLayout] (gap := 0)
-    pure (layoutNode, #[(nodeId, node)] ++ childMap)
+    let mut result : LayoutMap := #[(nodeId, area)]
+    let childLayouts ← computeLayoutRec child area
+    result := result ++ childLayouts
+    pure result
 
   | .scrolled _ _ child =>
-    -- Scrolled node passes through to child
-    -- Offset is applied during render phase
-    let (childLayout, childMap) ← buildLayoutTree child
-    let layoutNode := LayoutNode.column nodeId #[childLayout] (gap := 0)
-    pure (layoutNode, #[(nodeId, node)] ++ childMap)
+    let mut result : LayoutMap := #[(nodeId, area)]
+    let childLayouts ← computeLayoutRec child area
+    result := result ++ childLayouts
+    pure result
 
-/-! ## Coordinate Conversion -/
-
-/-- Convert Float to Nat for terminal coordinates (floor to nearest cell). -/
-def floatToCell (f : Float) : Nat :=
-  if f < 0 then 0 else f.toUInt32.toNat
-
-/-- Convert Float to Nat using ceiling (for heights where fractional content should still render). -/
-def floatToCellCeil (f : Float) : Nat :=
-  if f < 0 then 0 else f.ceil.toUInt32.toNat
-
-/-- Convert Trellis LayoutRect to Terminus Rect.
-    Uses ceiling for height to ensure text with fractional layout still renders. -/
-def toTerminalRect (rect : LayoutRect) : Terminus.Rect :=
-  { x := floatToCell rect.x
-  , y := floatToCell rect.y
-  , width := floatToCell rect.width
-  , height := floatToCellCeil rect.height }
+/-- Look up rect by node ID in layout map. -/
+def lookupRect (layouts : LayoutMap) (nodeId : Nat) : Option Rect :=
+  layouts.find? (fun (id, _) => id == nodeId) |>.map (·.2)
 
 /-! ## Clipping and Scroll Context -/
 
@@ -280,23 +310,22 @@ structure RenderState where
   buf : Buffer
 
 /-- Render an RNode recursively with proper clip context propagation. -/
-partial def renderNodeRecursive (node : RNode) (layouts : LayoutResult)
+partial def renderNodeRecursive (node : RNode) (layouts : LayoutMap)
     (clip : ClipContext) : StateM RenderState Unit := do
   let st ← get
   let nodeId := st.nextId
   set { st with nextId := nodeId + 1 }
 
-  match layouts.get nodeId with
+  match lookupRect layouts nodeId with
   | none => pure ()
-  | some computed =>
-    let rect := toTerminalRect computed.contentRect
+  | some rect =>
     match node with
     | .text content style =>
       modify fun s => { s with buf := renderTextClipped content style rect s.buf clip }
 
     | .block title borderType borderStyle child =>
-      let borderRect := toTerminalRect computed.borderRect
-      modify fun s => { s with buf := renderBlockBorderClipped title borderType borderStyle borderRect s.buf clip }
+      -- For blocks, the rect is the border rect; content is inside
+      modify fun s => { s with buf := renderBlockBorderClipped title borderType borderStyle rect s.buf clip }
       renderNodeRecursive child layouts clip
 
     | .row _ _ children =>
@@ -318,16 +347,17 @@ partial def renderNodeRecursive (node : RNode) (layouts : LayoutResult)
       pure ()
 
 /-- Render entire RNode tree to Buffer with clipping support. -/
-def renderTree (node : RNode) (layouts : LayoutResult) (buf : Buffer) : Buffer :=
+def renderTree (node : RNode) (layouts : LayoutMap) (buf : Buffer) : Buffer :=
   let (_, st) := renderNodeRecursive node layouts {} |>.run { nextId := 0, buf := buf }
   st.buf
 
 /-! ## Main Render Function -/
 
 /-- Compute layout for an RNode tree. -/
-def computeLayout (root : RNode) (width height : Nat) : LayoutResult :=
-  let ((layoutTree, _), _) := buildLayoutTree root |>.run { nextId := 0 }
-  Trellis.layoutNode layoutTree width.toFloat height.toFloat
+def computeLayout (root : RNode) (width height : Nat) : LayoutMap :=
+  let area : Rect := { x := 0, y := 0, width, height }
+  let (layouts, _) := computeLayoutRec root area |>.run { nextId := 0 }
+  layouts
 
 /-- Render an RNode tree to a Buffer.
     This is the main entry point for rendering reactive widgets. -/

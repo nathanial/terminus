@@ -2,6 +2,7 @@
 import Crucible
 import Terminus.Reactive
 import Terminus.Reactive.Demos.ReactiveDemo
+import Terminus.Reactive.Demos.ReactiveInput
 import Terminus.Backend.TerminalMock
 import Reactive
 
@@ -1267,6 +1268,57 @@ test "computeThumbMetrics thumb position at end" := do
   let (thumbSize, thumbPos) := computeThumbMetrics 100 20 80 10  -- offset=80 (max)
   -- Thumb should be at end of track
   (thumbPos + thumbSize) ≡ 10
+
+-- ============================================================================
+-- ReactiveInput app rendering test
+-- ============================================================================
+
+test "titledBlock with content renders correctly" := do
+  runSpider do
+    let (events, _) ← createInputs
+    let theme := Theme.dark
+
+    let (_, render) ← (runWidget do
+      titledBlock' "Test Panel" .rounded theme do
+        text' "Line 1" {}
+        text' "Line 2" {}
+    ).run events
+
+    let node ← SpiderM.liftIO render
+    let buf := Terminus.Reactive.render node 40 10
+
+    -- Title should appear in top border
+    (buf.get 2 0).char ≡ 'T'  -- " Test Panel" starts at col 2
+
+    -- Content should be inside the block (row 1+)
+    -- Line 1 should start at column 1 (inside border), row 1
+    (buf.get 1 1).char ≡ 'L'
+    (buf.get 2 1).char ≡ 'i'
+    (buf.get 3 1).char ≡ 'n'
+    (buf.get 4 1).char ≡ 'e'
+
+test "reactiveInputApp renders correctly" := do
+  let env ← SpiderEnv.new
+  let (appState, _events, _inputs) ← (do
+    let (events, inputs) ← createInputs
+    let appState ← ReactiveTermM.run events reactiveInputApp
+    pure (appState, events, inputs)
+  ).run env
+
+  env.postBuildTrigger ()
+
+  let node ← appState.render
+  let buf := Terminus.Reactive.render node 80 60
+
+  -- Check header is at top
+  (buf.get 0 0).char ≡ '='
+
+  -- Check the buffer has some content rendered (not all empty)
+  -- The app should render multiple panels with text
+  let hasContent := (buf.get 0 6).char != ' ' -- Should have border char
+  hasContent ≡ true
+
+  env.currentScope.dispose
 
 #generate_tests
 
