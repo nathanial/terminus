@@ -85,7 +85,7 @@ def reactiveInputApp : ReactiveTermM ReactiveAppState := do
         -- Wrap list in scrollView for clipping demo
         let fruits := #["Apple", "Banana", "Cherry", "Date", "Elderberry",
                         "Fig", "Grape", "Honeydew", "Kiwi", "Lemon"]
-        let scroll ← scrollView' { showVerticalScrollbar := true, focusName := "fruit-list", globalKeys := false } do
+        let scroll ← scrollView' { maxVisible := 4, showVerticalScrollbar := true, focusName := "fruit-list", globalKeys := false } do
           let list ← selectableList' fruits 0 {
             selectedStyle := { bg := .ansi .blue, fg := .ansi .white }
             focusName := "fruit-list-inner"

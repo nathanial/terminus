@@ -23,6 +23,8 @@ structure ScrollViewConfig where
   showVerticalScrollbar : Bool := true
   /-- Show horizontal scrollbar when content overflows. -/
   showHorizontalScrollbar : Bool := false
+  /-- Maximum visible rows (viewport height). Required for scrolling to work. -/
+  maxVisible : Nat := 5
   /-- Scroll amount per arrow key press. -/
   scrollStep : Nat := 1
   /-- Scroll amount per page up/down (none = viewport height - 1). -/
@@ -238,6 +240,14 @@ def scrollView' (config : ScrollViewConfig := {})
   -- Run content builder to get child widgets
   let (result, childRenders) ← runWidgetChildren content
 
+  -- Set content height based on number of children, viewport from config
+  let contentHeight := childRenders.size
+  let viewportHeight := config.maxVisible
+  SpiderM.liftIO <| stateRef.set { initialState with
+    contentHeight := contentHeight
+    viewportHeight := viewportHeight
+  }
+
   -- Subscribe to key events for scrolling
   let _unsub ← SpiderM.liftIO <| events.keyEvent.subscribe fun kd => do
     let currentFocus ← focusedInput.sample
@@ -284,22 +294,20 @@ def scrollView' (config : ScrollViewConfig := {})
   emit do
     let state ← stateRef.get
 
-    -- Render all children into a combined node
-    let childNodes ← childRenders.mapM id
+    -- Render only visible children based on scroll offset
+    let startIdx := state.offsetY
+    let endIdx := min (startIdx + config.maxVisible) childRenders.size
+    let visibleRenders := childRenders.toSubarray startIdx endIdx |>.toArray
+
+    let childNodes ← visibleRenders.mapM id
     let contentNode := RNode.column 0 {} childNodes
-
-    -- Apply scroll offset
-    let scrolledNode := RNode.scrolled state.offsetX state.offsetY contentNode
-
-    -- Clip to viewport bounds
-    let clippedNode := RNode.clipped scrolledNode
 
     -- Add scrollbar if needed and configured
     if config.showVerticalScrollbar && state.needsVerticalScroll then
-      let scrollbar := renderVerticalScrollbar state config state.viewportHeight
-      pure (RNode.row 0 {} #[clippedNode, scrollbar])
+      let scrollbar := renderVerticalScrollbar state config config.maxVisible
+      pure (RNode.row 0 {} #[contentNode, scrollbar])
     else
-      pure clippedNode
+      pure contentNode
 
   pure {
     content := result
