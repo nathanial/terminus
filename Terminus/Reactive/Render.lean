@@ -96,9 +96,12 @@ def toTerminalRect (rect : LayoutRect) : Terminus.Rect :=
 
 /-! ## Buffer Rendering -/
 
-/-- Render a text node to the buffer at the given rect. -/
+/-- Render a text node to the buffer at the given rect.
+    Note: We render text even when height is 0 because Trellis may compute 0 height
+    for text nodes nested inside row containers within columns. Text is inherently
+    1 cell high, so we only skip when width is 0. -/
 def renderText (content : String) (style : Style) (rect : Terminus.Rect) (buf : Buffer) : Buffer :=
-  if rect.width == 0 || rect.height == 0 then buf
+  if rect.width == 0 then buf
   else
     -- Truncate text to fit width
     let displayText := content.take rect.width

@@ -460,6 +460,75 @@ test "dynProgressBar updates buffer when progress changes" := do
     (buf2.get 4 0).char ≡ '-'
 
 -- ============================================================================
+-- Row with dynamic content buffer tests
+-- ============================================================================
+
+test "row' with emitDynamic updates buffer" := do
+  runSpider do
+    let (events, _) ← createInputs
+    let (event, trigger) ← Reactive.newTriggerEvent (t := Spider) (a := Unit)
+    let countDyn ← Reactive.foldDyn (fun _ n => n + 1) 0 event
+
+    let (_, render) ← (runWidget do
+      row' (gap := 1) (style := {}) do
+        text' "Count:" {}
+        emitDynamic do
+          let n ← countDyn.sample
+          pure (RNode.text s!"{n}" {})
+    ).run events
+
+    let node1 ← SpiderM.liftIO render
+    let buf1 := Terminus.Reactive.render node1 20 2
+
+    -- Check initial buffer has "Count:" and "0"
+    (buf1.get 0 0).char ≡ 'C'
+    (buf1.get 6 0).char ≡ ' '  -- gap
+    (buf1.get 7 0).char ≡ '0'
+
+    SpiderM.liftIO (trigger ())
+
+    let node2 ← SpiderM.liftIO render
+    let buf2 := Terminus.Reactive.render node2 20 2
+
+    -- Check updated buffer has "1"
+    (buf2.get 7 0).char ≡ '1'
+
+    -- Verify buffers differ
+    let diff := Buffer.diff buf1 buf2
+    SpiderM.liftIO (ensure (!diff.isEmpty) "expected buffer to differ")
+
+test "column' with row' containing emitDynamic updates buffer" := do
+  runSpider do
+    let (events, _) ← createInputs
+    let (event, trigger) ← Reactive.newTriggerEvent (t := Spider) (a := Unit)
+    let countDyn ← Reactive.foldDyn (fun _ n => n + 1) 0 event
+
+    let (_, render) ← (runWidget do
+      column' (gap := 1) (style := {}) do
+        text' "Header" {}
+        row' (gap := 1) (style := {}) do
+          text' "Count:" {}
+          emitDynamic do
+            let n ← countDyn.sample
+            pure (RNode.text s!"{n}" {})
+    ).run events
+
+    let node1 ← SpiderM.liftIO render
+    let buf1 := Terminus.Reactive.render node1 20 5
+
+    -- Header on row 0
+    (buf1.get 0 0).char ≡ 'H'
+
+    SpiderM.liftIO (trigger ())
+
+    let node2 ← SpiderM.liftIO render
+    let buf2 := Terminus.Reactive.render node2 20 5
+
+    -- Verify buffers differ
+    let diff := Buffer.diff buf1 buf2
+    SpiderM.liftIO (ensure (!diff.isEmpty) "expected buffer to differ after count change")
+
+-- ============================================================================
 -- Terminal flush regression tests
 -- ============================================================================
 
