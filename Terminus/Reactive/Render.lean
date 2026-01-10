@@ -40,7 +40,9 @@ partial def buildLayoutTree (node : RNode) : StateM IdGen (LayoutNode × Array (
   match node with
   | .text content _ =>
     let size := measureText content
-    let layoutNode := LayoutNode.leaf nodeId size
+    -- Terminal text must be at least 1 cell tall to prevent overlap
+    let box : BoxConstraints := { minHeight := 1.0 }
+    let layoutNode := LayoutNode.leaf nodeId size (box := box)
     pure (layoutNode, #[(nodeId, node)])
 
   | .block _ _ _ child =>
@@ -73,7 +75,9 @@ partial def buildLayoutTree (node : RNode) : StateM IdGen (LayoutNode × Array (
 
   | .spacer width height =>
     let size : ContentSize := { width := width.toFloat, height := height.toFloat, baseline := none }
-    let layoutNode := LayoutNode.leaf nodeId size
+    -- Spacers should maintain their requested minimum size
+    let box : BoxConstraints := { minWidth := width.toFloat, minHeight := height.toFloat }
+    let layoutNode := LayoutNode.leaf nodeId size (box := box)
     pure (layoutNode, #[(nodeId, node)])
 
   | .empty =>
