@@ -154,6 +154,14 @@ structure ResizeData where
   height : Nat
   deriving Repr, Inhabited
 
+/-- Tick event data (fired each frame). -/
+structure TickData where
+  /-- Frame number since app start. -/
+  frame : Nat
+  /-- Elapsed time in milliseconds since app start. -/
+  elapsedMs : Nat
+  deriving Repr, Inhabited
+
 /-! ## Component Registry
 
 Registry for auto-generating unique widget names and tracking focusable components.
@@ -209,8 +217,12 @@ structure TerminusEvents where
   mouseEvent : Reactive.Event Spider MouseData
   /-- Terminal resize events. -/
   resizeEvent : Reactive.Event Spider ResizeData
+  /-- Tick events (fired each frame for animations). -/
+  tickEvent : Reactive.Event Spider TickData
   /-- Component registry for focus management. -/
   registry : ComponentRegistry
+  /-- Debug log function (writes to log file if debug enabled). -/
+  debugLog : String → IO Unit := fun _ => pure ()
 
 /-- Trigger functions to fire from the application loop when terminal events occur. -/
 structure TerminusInputs where
@@ -220,25 +232,32 @@ structure TerminusInputs where
   fireMouse : MouseData → IO Unit
   /-- Fire when terminal is resized. -/
   fireResize : ResizeData → IO Unit
+  /-- Fire on each frame (for animations). -/
+  fireTick : TickData → IO Unit
 
 /-- Create the reactive input infrastructure.
-    Returns both the event streams (for subscriptions) and triggers (for firing). -/
-def createInputs : SpiderM (TerminusEvents × TerminusInputs) := do
+    Returns both the event streams (for subscriptions) and triggers (for firing).
+    @param debugLog Optional debug logging function -/
+def createInputs (debugLog : String → IO Unit := fun _ => pure ()) : SpiderM (TerminusEvents × TerminusInputs) := do
   let (keyEvent, fireKey) ← Reactive.newTriggerEvent (t := Spider) (a := KeyData)
   let (mouseEvent, fireMouse) ← Reactive.newTriggerEvent (t := Spider) (a := MouseData)
   let (resizeEvent, fireResize) ← Reactive.newTriggerEvent (t := Spider) (a := ResizeData)
+  let (tickEvent, fireTick) ← Reactive.newTriggerEvent (t := Spider) (a := TickData)
   let registry ← ComponentRegistry.create
 
   let events : TerminusEvents := {
     keyEvent := keyEvent
     mouseEvent := mouseEvent
     resizeEvent := resizeEvent
+    tickEvent := tickEvent
     registry := registry
+    debugLog := debugLog
   }
   let inputs : TerminusInputs := {
     fireKey := fireKey
     fireMouse := fireMouse
     fireResize := fireResize
+    fireTick := fireTick
   }
   pure (events, inputs)
 

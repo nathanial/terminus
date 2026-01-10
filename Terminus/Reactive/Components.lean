@@ -100,6 +100,64 @@ def ifThenElse' (condition : Dynamic Spider Bool)
 /-- Emit a dynamic widget (the IO action is run at render time). -/
 def emitDynamic (render : ComponentRender) : WidgetM Unit := emit render
 
+/-! ## Progress Bar Components -/
+
+/-- Configuration for a progress bar. -/
+structure ProgressBarConfig where
+  /-- Total width of the progress bar in characters. -/
+  width : Nat := 20
+  /-- Character used for the filled portion. -/
+  filledChar : Char := '█'
+  /-- Character used for the empty portion. -/
+  emptyChar : Char := '░'
+  /-- Style for the filled portion. -/
+  filledStyle : Style := { fg := .ansi .cyan }
+  /-- Style for the empty portion. -/
+  emptyStyle : Style := { fg := .ansi .brightBlack }
+  /-- Whether to show percentage text. -/
+  showPercentage : Bool := true
+  /-- Style for percentage text. -/
+  percentageStyle : Style := {}
+  deriving Repr, Inhabited
+
+/-- Create a progress bar string from a progress value (0.0 to 1.0). -/
+def renderProgressBar (progress : Float) (config : ProgressBarConfig := {}) : String :=
+  let clampedProgress := max 0.0 (min 1.0 progress)
+  let filledCount := (clampedProgress * config.width.toFloat).toUInt32.toNat
+  let emptyCount := config.width - filledCount
+  let filled := String.mk (List.replicate filledCount config.filledChar)
+  let empty := String.mk (List.replicate emptyCount config.emptyChar)
+  if config.showPercentage then
+    let percent := (clampedProgress * 100).toUInt32
+    s!"{filled}{empty} {percent}%"
+  else
+    s!"{filled}{empty}"
+
+/-- Emit a static progress bar. -/
+def progressBar' (progress : Float) (config : ProgressBarConfig := {}) : WidgetM Unit := do
+  let barStr := renderProgressBar progress config
+  text' barStr config.filledStyle
+
+/-- Emit a dynamic progress bar that updates when the progress Dynamic changes. -/
+def dynProgressBar' (progress : Reactive.Dynamic Spider Float) (config : ProgressBarConfig := {})
+    : WidgetM Unit := do
+  emit do
+    let p ← progress.sample
+    let clampedProgress := max 0.0 (min 1.0 p)
+    let filledCount := (clampedProgress * config.width.toFloat).toUInt32.toNat
+    let emptyCount := config.width - filledCount
+    let filled := String.mk (List.replicate filledCount config.filledChar)
+    let empty := String.mk (List.replicate emptyCount config.emptyChar)
+    -- Create a row with filled, empty, and optional percentage
+    let filledNode := RNode.text filled config.filledStyle
+    let emptyNode := RNode.text empty config.emptyStyle
+    if config.showPercentage then
+      let percent := (clampedProgress * 100).toUInt32
+      let percentNode := RNode.text s!" {percent}%" config.percentageStyle
+      pure (RNode.row 0 {} #[filledNode, emptyNode, percentNode])
+    else
+      pure (RNode.row 0 {} #[filledNode, emptyNode])
+
 /-! ## Dynamic Widget Subtrees
 
 `dynWidget` enables rebuilding entire widget subtrees when a Dynamic value changes.

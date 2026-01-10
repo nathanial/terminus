@@ -8,6 +8,7 @@ require crucible from git "https://github.com/nathanial/crucible" @ "v0.0.7"
 require raster from git "https://github.com/nathanial/raster" @ "v0.0.2"
 require reactive from git "https://github.com/nathanial/reactive" @ "v0.0.4"
 require trellis from git "https://github.com/nathanial/trellis" @ "v0.0.8"
+require chronicle from git "https://github.com/nathanial/chronicle" @ "v0.0.2"
 
 lean_lib «Terminus» where
   roots := #[`Terminus]
@@ -65,6 +66,9 @@ lean_exe «reactive_demo» where
 @[test_driver]
 lean_exe «tests» where
   root := `Tests.Main
+
+lean_exe «reactive_tests» where
+  root := `Tests.ReactiveTests
 
 -- FFI: Build C code and link it
 target ffi.o pkg : System.FilePath := do

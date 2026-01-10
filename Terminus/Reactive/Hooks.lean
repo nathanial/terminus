@@ -31,6 +31,23 @@ def useResize : ReactiveTermM (Reactive.Event Spider ResizeData) := do
   let events ← getEvents
   pure events.resizeEvent
 
+/-- Subscribe to tick events (fired each frame). -/
+def useTick : ReactiveTermM (Reactive.Event Spider TickData) := do
+  let events ← getEvents
+  pure events.tickEvent
+
+/-- Get the current frame number as a dynamic. -/
+def useFrame : ReactiveTermM (Reactive.Dynamic Spider Nat) := do
+  let tickEvents ← useTick
+  let frames ← Event.mapM (fun td => td.frame) tickEvents
+  Reactive.holdDyn 0 frames
+
+/-- Get the elapsed time in milliseconds as a dynamic. -/
+def useElapsedMs : ReactiveTermM (Reactive.Dynamic Spider Nat) := do
+  let tickEvents ← useTick
+  let times ← Event.mapM (fun td => td.elapsedMs) tickEvents
+  Reactive.holdDyn 0 times
+
 /-! ## Filtered Event Hooks -/
 
 /-- Filter key events by key code. -/
@@ -164,5 +181,17 @@ def useResizeW : WidgetM (Reactive.Event Spider ResizeData) :=
 /-- Get focused input in WidgetM. -/
 def useFocusedInputW : WidgetM (Reactive.Dynamic Spider (Option String)) :=
   StateT.lift useFocusedInput
+
+/-- Subscribe to tick events in WidgetM. -/
+def useTickW : WidgetM (Reactive.Event Spider TickData) :=
+  StateT.lift useTick
+
+/-- Get current frame number in WidgetM. -/
+def useFrameW : WidgetM (Reactive.Dynamic Spider Nat) :=
+  StateT.lift useFrame
+
+/-- Get elapsed time in WidgetM. -/
+def useElapsedMsW : WidgetM (Reactive.Dynamic Spider Nat) :=
+  StateT.lift useElapsedMs
 
 end Terminus.Reactive

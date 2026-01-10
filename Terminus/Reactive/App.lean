@@ -6,11 +6,15 @@ import Terminus.Reactive.Monad
 import Terminus.Reactive.Render
 import Terminus.Reactive.Hooks
 import Reactive
+import Chronicle
 
 open Reactive Reactive.Host
 open Terminus
 
 namespace Terminus.Reactive
+
+instance : MonadLift IO IO where
+  monadLift x := x
 
 /-! ## Application State
 
@@ -28,7 +32,145 @@ structure ReactiveAppState where
 structure AppConfig where
   /-- Frame rate in milliseconds between updates. -/
   frameMs : Nat := 16
+  /-- Enable debug logging to file. -/
+  debug : Bool := false
+  /-- Log file path for debug output. -/
+  logPath : System.FilePath := "reactive_debug.log"
   deriving Repr, Inhabited
+
+/-! ## App Loop Dependencies -/
+
+/-- Dependencies for running the reactive app loop.
+    These are parameterized to enable deterministic testing. -/
+structure LoopDeps (m : Type → Type) where
+  /-- Source of external terminal events (defaults to Events.poll). -/
+  eventSource : m Terminus.Event
+  /-- Current monotonic time in milliseconds. -/
+  nowMs : m Nat
+  /-- Sleep for the given milliseconds. -/
+  sleepMs : Nat → m Unit
+  /-- Optional debug logger. -/
+  log : String → m Unit
+  /-- Optional frame limit for tests. -/
+  maxFrames : Option Nat := none
+  /-- Optional per-frame callback (e.g., capture buffers in tests). -/
+  onFrame : Nat → Buffer → m Unit
+
+namespace LoopDeps
+
+/-- Default IO dependencies using real terminal polling and sleep. -/
+def io (log : String → IO Unit := fun _ => pure ()) : LoopDeps IO := {
+  eventSource := Events.poll
+  nowMs := IO.monoMsNow
+  sleepMs := fun ms => IO.sleep ms.toUInt32
+  log := log
+  onFrame := fun _ _ => pure ()
+}
+
+end LoopDeps
+
+/-- Run the reactive app main loop.
+    This is extracted to enable deterministic tests with mock terminal effects. -/
+partial def runReactiveLoop [Monad m] [TerminalEffect m] [MonadLift IO m]
+    (config : AppConfig)
+    (events : TerminusEvents)
+    (inputs : TerminusInputs)
+    (render : ComponentRender)
+    (termRef : IO.Ref Terminal)
+    (deps : LoopDeps m) : m Unit := do
+  -- Track quit signal
+  let quitRef ← liftM (m := IO) (IO.mkRef false)
+
+  -- Track frame counter and start time
+  let frameRef ← liftM (m := IO) (IO.mkRef 0)
+  let startTime ← deps.nowMs
+
+  -- Subscribe to Ctrl+C/Ctrl+Q to quit
+  let _unsub ← liftM (m := IO) <| events.keyEvent.subscribe fun kd => do
+    if kd.event.isCtrlC || kd.event.isCtrlQ then
+      quitRef.set true
+
+  -- Main loop (runs in m, fires events into the live reactive network)
+  let rec loop : m Unit := do
+    let quit ← liftM (m := IO) quitRef.get
+    let frame ← liftM (m := IO) frameRef.get
+    let reachedMax := match deps.maxFrames with
+      | some max => frame >= max
+      | none => false
+    if quit || reachedMax then
+      pure ()
+    else
+      -- Poll for terminal events (non-blocking)
+      let ev ← deps.eventSource
+
+      -- Fire events into reactive network
+      match ev with
+      | .key ke =>
+        if ke.isCtrlC || ke.isCtrlQ then
+          deps.log s!"Quit signal received: {repr ke.code}"
+        deps.log s!"Key event: {repr ke.code}"
+        let focusedName ← liftM (m := IO) events.registry.focusedInput.sample
+        liftM (m := IO) <| inputs.fireKey { event := ke, focusedWidget := focusedName }
+        deps.log "Key event fired"
+      | .mouse me =>
+        deps.log s!"Mouse event: button={repr me.button} x={me.x} y={me.y}"
+        liftM (m := IO) <| inputs.fireMouse { event := me }
+      | .resize w h =>
+        deps.log s!"Resize event: {w}x{h}"
+        liftM (m := IO) <| inputs.fireResize { width := w, height := h }
+        -- Update terminal size
+        let newTerm ← Terminal.new
+        liftM (m := IO) <| termRef.set newTerm
+      | .none => pure ()
+
+      -- Fire tick event
+      let now ← deps.nowMs
+      let elapsed := now - startTime
+      liftM (m := IO) <| inputs.fireTick { frame := frame, elapsedMs := elapsed }
+      liftM (m := IO) <| frameRef.set (frame + 1)
+
+      -- Log every 60 frames (roughly once per second)
+      if frame % 60 == 0 then
+        deps.log s!"Frame {frame}, elapsed {elapsed}ms"
+
+      -- Sample and render
+      let rootNode ← liftM (m := IO) render
+      let (width, height) ← getTerminalSize
+      let buffer := Terminus.Reactive.render rootNode width height
+
+      -- Log first frame's render output
+      if frame == 0 then
+        deps.log s!"First render: size={width}x{height}, node={repr rootNode}"
+
+      -- Render to terminal (use flush for differential updates like traditional Terminus)
+      let term ← liftM (m := IO) termRef.get
+      let term := term.setBuffer buffer
+
+      -- Debug: check how many cells changed and compare specific cells
+      let changes := Buffer.diff term.previousBuffer term.currentBuffer
+      if frame % 60 == 0 then
+        deps.log s!"Buffer diff found {changes.length} changes"
+        -- Log first 20 chars of row 0 (title row)
+        let mut row0 := ""
+        for x in [0:20] do
+          row0 := row0 ++ (term.currentBuffer.get x 0).char.toString
+        deps.log s!"Row 0: '{row0}'"
+        -- Log first 20 chars of row 5 (should be progress bar area)
+        let mut row5 := ""
+        for x in [0:20] do
+          row5 := row5 ++ (term.currentBuffer.get x 5).char.toString
+        deps.log s!"Row 5: '{row5}'"
+
+      let term ← term.flush
+      liftM (m := IO) <| termRef.set term
+
+      deps.onFrame frame buffer
+
+      -- Frame delay
+      deps.sleepMs config.frameMs
+      loop
+
+  loop
 
 /-- Run a reactive terminal application.
 
@@ -52,63 +194,65 @@ structure AppConfig where
     ```
 -/
 def runReactiveApp (setup : ReactiveTermM ReactiveAppState) (config : AppConfig := {}) : IO Unit := do
+  -- Set up optional debug logger
+  let logConfig := Chronicle.Config.default config.logPath
+    |>.withLevel .debug
+  let loggerOpt ← if config.debug then
+    some <$> Chronicle.Logger.create logConfig
+  else
+    pure none
+
+  let log (msg : String) : IO Unit := match loggerOpt with
+    | some logger => logger.debug msg
+    | none => pure ()
+
+  log "=== Reactive App Starting ==="
+
   Terminal.setup
   try
-    -- Create terminal
-    let termRef ← IO.mkRef (← Terminal.new)
+    -- Create SpiderEnv manually (don't use runFresh which fires postBuild after loop)
+    -- This follows the pattern from Afferent demos
+    let spiderEnv ← Reactive.Host.SpiderEnv.new Reactive.Host.defaultErrorHandler
+    log "SpiderEnv created"
 
-    -- Run the reactive network
-    Reactive.Host.runSpider do
-      -- Create event infrastructure
-      let (events, inputs) ← createInputs
+    -- Run the reactive network setup within the env
+    let (appState, events, inputs) ← (do
+      -- Create event infrastructure (pass log function for debug access in setup)
+      let (events, inputs) ← createInputs log
+      SpiderM.liftIO <| log "Event infrastructure created"
 
       -- Run user setup
       let appState ← setup.run events
+      SpiderM.liftIO <| log "User setup complete"
 
-      -- Track quit signal
-      let quitRef ← SpiderM.liftIO (IO.mkRef false)
+      pure (appState, events, inputs)
+    ).run spiderEnv
 
-      -- Subscribe to Ctrl+C/Ctrl+Q to quit
-      let _unsub ← SpiderM.liftIO <| events.keyEvent.subscribe fun kd => do
-        if kd.event.isCtrlC || kd.event.isCtrlQ then
-          quitRef.set true
+    -- Fire post-build event BEFORE the main loop (keep env alive!)
+    spiderEnv.postBuildTrigger ()
+    log "Post-build event fired"
 
-      -- Main loop
-      SpiderM.liftIO do
-        while !(← quitRef.get) do
-          -- Poll for terminal events (non-blocking)
-          let ev ← Events.poll
+    -- Track quit signal
+    let termRef ← IO.mkRef (← Terminal.new)
+    log "Terminal created"
 
-          -- Fire events into reactive network
-          match ev with
-          | .key ke =>
-            let focusedName ← events.registry.focusedInput.sample
-            inputs.fireKey { event := ke, focusedWidget := focusedName }
-          | .mouse me =>
-            inputs.fireMouse { event := me }
-          | .resize w h =>
-            inputs.fireResize { width := w, height := h }
-            -- Update terminal size
-            let newTerm ← Terminal.new
-            termRef.set newTerm
-          | .none => pure ()
+    log "Entering main loop"
 
-          -- Sample and render
-          let rootNode ← appState.render
-          let (width, height) ← getTerminalSize
-          let buffer := Terminus.Reactive.render rootNode width height
+    let deps := LoopDeps.io log
+    runReactiveLoop config events inputs appState.render termRef deps
 
-          -- Render to terminal
-          let term ← termRef.get
-          let term := term.setBuffer buffer
-          let term ← term.draw
-          termRef.set term
+    log "Main loop exited"
 
-          -- Frame delay
-          IO.sleep config.frameMs.toUInt32
+    -- Dispose scope to clean up subscriptions
+    spiderEnv.currentScope.dispose
 
   finally
+    log "Tearing down terminal"
     Terminal.teardown
+    -- Close logger if open
+    match loggerOpt with
+    | some logger => logger.close
+    | none => pure ()
 
 /-! ## Simplified Runner
 
