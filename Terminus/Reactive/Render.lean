@@ -76,51 +76,60 @@ partial def computeLayoutRec (node : RNode) (area : Rect) : StateM IdGen LayoutM
 
   match node with
   | .text _content _ =>
-    -- Text takes full width, height of 1 (single line)
-    let textRect := { area with height := max 1 (min area.height 1) }
+    -- Text takes full width, height of 1 (single line) but respects 0-height areas
+    let textRect := { area with height := min 1 area.height }
     pure #[(nodeId, textRect)]
 
   | .row gap style children =>
     if children.isEmpty then pure #[(nodeId, area)]
     else
       let innerArea := if style.padding > 0 then area.inner style.padding else area
-      -- Compute child widths using natural width
-      -- All nodes get fixed width based on their natural size
-      let constraints := children.toList.map (fun child => Constraint.fixed (naturalWidth child))
-      let layout := Layout.horizontal constraints |>.withSpacing gap
-      let childRects := layout.split innerArea
-      let mut result : LayoutMap := #[(nodeId, area)]
-      for h : i in [:children.size] do
-        let child := children[i]
-        let childRect := childRects.getD i innerArea
-        let childLayouts ← computeLayoutRec child childRect
-        result := result ++ childLayouts
-      pure result
+      -- If inner area is empty (no space), skip child layout entirely
+      if innerArea.isEmpty then pure #[(nodeId, area)]
+      else
+        -- Compute child widths using natural width
+        -- All nodes get fixed width based on their natural size
+        let constraints := children.toList.map (fun child => Constraint.fixed (naturalWidth child))
+        let layout := Layout.horizontal constraints |>.withSpacing gap
+        let childRects := layout.split innerArea
+        let mut result : LayoutMap := #[(nodeId, area)]
+        for h : i in [:children.size] do
+          let child := children[i]
+          let childRect := childRects.getD i innerArea
+          let childLayouts ← computeLayoutRec child childRect
+          result := result ++ childLayouts
+        pure result
 
   | .column gap style children =>
     if children.isEmpty then pure #[(nodeId, area)]
     else
       let innerArea := if style.padding > 0 then area.inner style.padding else area
-      -- Compute child heights using natural height
-      -- All nodes get fixed height based on their natural size
-      let constraints := children.toList.map (fun child => Constraint.fixed (naturalHeight child))
-      let layout := Layout.vertical constraints |>.withSpacing gap
-      let childRects := layout.split innerArea
-      let mut result : LayoutMap := #[(nodeId, area)]
-      for h : i in [:children.size] do
-        let child := children[i]
-        let childRect := childRects.getD i innerArea
-        let childLayouts ← computeLayoutRec child childRect
-        result := result ++ childLayouts
-      pure result
+      -- If inner area is empty (no space), skip child layout entirely
+      if innerArea.isEmpty then pure #[(nodeId, area)]
+      else
+        -- Compute child heights using natural height
+        -- All nodes get fixed height based on their natural size
+        let constraints := children.toList.map (fun child => Constraint.fixed (naturalHeight child))
+        let layout := Layout.vertical constraints |>.withSpacing gap
+        let childRects := layout.split innerArea
+        let mut result : LayoutMap := #[(nodeId, area)]
+        for h : i in [:children.size] do
+          let child := children[i]
+          let childRect := childRects.getD i innerArea
+          let childLayouts ← computeLayoutRec child childRect
+          result := result ++ childLayouts
+        pure result
 
   | .block _ _ _ child =>
     -- Block has 1-cell border padding
     let innerArea := area.inner 1
     let mut result : LayoutMap := #[(nodeId, area)]
-    let childLayouts ← computeLayoutRec child innerArea
-    result := result ++ childLayouts
-    pure result
+    -- Only layout child if there's space inside the block
+    if innerArea.isEmpty then pure result
+    else
+      let childLayouts ← computeLayoutRec child innerArea
+      result := result ++ childLayouts
+      pure result
 
   | .spacer w h =>
     let spacerRect := { area with
@@ -133,15 +142,21 @@ partial def computeLayoutRec (node : RNode) (area : Rect) : StateM IdGen LayoutM
 
   | .clipped child =>
     let mut result : LayoutMap := #[(nodeId, area)]
-    let childLayouts ← computeLayoutRec child area
-    result := result ++ childLayouts
-    pure result
+    -- Skip child if area is empty
+    if area.isEmpty then pure result
+    else
+      let childLayouts ← computeLayoutRec child area
+      result := result ++ childLayouts
+      pure result
 
   | .scrolled _ _ child =>
     let mut result : LayoutMap := #[(nodeId, area)]
-    let childLayouts ← computeLayoutRec child area
-    result := result ++ childLayouts
-    pure result
+    -- Skip child if area is empty
+    if area.isEmpty then pure result
+    else
+      let childLayouts ← computeLayoutRec child area
+      result := result ++ childLayouts
+      pure result
 
 /-- Look up rect by node ID in layout map. -/
 def lookupRect (layouts : LayoutMap) (nodeId : Nat) : Option Rect :=
