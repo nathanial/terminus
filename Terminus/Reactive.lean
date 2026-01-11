@@ -43,6 +43,8 @@
   - **Animation**: `useAnimation`, `usePulse`, `useCycle`, `AnimPhase`, `Easing`
   - **TextArea**: `textArea'`, `labeledTextArea'`, `textDisplay'`
   - **Form**: `form'`, `optionSelector'`, `checkbox'`, `submitButton'`
+  - **Async**: `useAsync`, `useAsyncOnce`, `useStream`, `useDebounceAsync`
+  - **Layout**: `horizontalSplit'`, `verticalSplit'`, `sidebarLayout'`
   - **Render**: `render`, `renderToBuffer`, `computeLayout`, `ClipContext`
   - **App**: `runReactiveApp`, `runSimpleApp`
 -/
@@ -62,4 +64,6 @@ import Terminus.Reactive.Grid
 import Terminus.Reactive.Animation
 import Terminus.Reactive.TextArea
 import Terminus.Reactive.Form
+import Terminus.Reactive.Async
+import Terminus.Reactive.Layout
 import Terminus.Reactive.App
