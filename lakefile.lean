@@ -18,35 +18,8 @@ lean_lib TerminusTests where
   precompileModules := false
 
 @[default_target]
-lean_exe «reactive_demo» where
-  root := `examples.ReactiveDemo
-
-lean_exe «reactive_input» where
-  root := `examples.ReactiveInput
-
-lean_exe «reactive_nav» where
-  root := `examples.ReactiveNav
-
-lean_exe «reactive_game» where
-  root := `examples.ReactiveGame
-
-lean_exe «reactive_editor» where
-  root := `examples.ReactiveEditor
-
-lean_exe «reactive_async» where
-  root := `examples.ReactiveAsync
-
-lean_exe «reactive_data» where
-  root := `examples.ReactiveData
-
-lean_exe «reactive_feedback» where
-  root := `examples.ReactiveFeedback
-
-lean_exe «reactive_charts» where
-  root := `examples.ReactiveCharts
-
-lean_exe «reactive_media» where
-  root := `examples.ReactiveMedia
+lean_exe «demo» where
+  root := `examples.Demo
 
 @[test_driver]
 lean_exe terminus_tests where

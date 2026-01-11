@@ -287,7 +287,7 @@ def textArea' (name : String) (initial : String := "")
   let events ← getEventsW
 
   -- Register as focusable input
-  let widgetName ← registerComponentW "textArea" (isInput := true)
+  let widgetName ← registerComponentW "textArea" (isInput := true) (nameOverride := name)
 
   -- Create trigger events
   let (submitEvent, fireSubmit) ← newTriggerEvent (t := Spider) (a := String)

@@ -60,7 +60,7 @@ def checkbox'' (name : String) (label : String) (initial : Bool := false)
   let events ← getEventsW
 
   -- Register as focusable input
-  let widgetName ← registerComponentW "checkbox" (isInput := true)
+  let widgetName ← registerComponentW "checkbox" (isInput := true) (nameOverride := name)
 
   -- Create trigger events
   let (toggleEvent, fireToggle) ← newTriggerEvent (t := Spider) (a := Bool)
@@ -245,7 +245,8 @@ def radioGroup' (name : String) (options : Array String) (initial : Option Nat :
   let events ← getEventsW
 
   -- Register as focusable input
-  let widgetName ← registerComponentW "radioGroup" (isInput := true)
+  let focusOverride := if config.focusName.isEmpty then name else config.focusName
+  let widgetName ← registerComponentW "radioGroup" (isInput := true) (nameOverride := focusOverride)
 
   -- Create trigger events
   let (selectEvent, fireSelect) ← newTriggerEvent (t := Spider) (a := Nat)
@@ -382,7 +383,8 @@ def dynRadioGroup' (name : String) (options : Reactive.Dynamic Spider (Array Str
   let events ← getEventsW
 
   -- Register as focusable input
-  let widgetName ← registerComponentW "dynRadioGroup" (isInput := true)
+  let focusOverride := if config.focusName.isEmpty then name else config.focusName
+  let widgetName ← registerComponentW "dynRadioGroup" (isInput := true) (nameOverride := focusOverride)
 
   -- Create trigger events
   let (selectEvent, fireSelect) ← newTriggerEvent (t := Spider) (a := Nat)

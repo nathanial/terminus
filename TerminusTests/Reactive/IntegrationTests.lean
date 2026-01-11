@@ -2,8 +2,6 @@
 
 import Crucible
 import Terminus.Reactive
-import Terminus.Reactive.Demos.ReactiveDemo
-import Terminus.Reactive.Demos.ReactiveInput
 import Terminus.Backend.TerminalMock
 import Reactive
 import TerminusTests.Reactive.Common
@@ -15,6 +13,52 @@ open Terminus.Reactive
 open Crucible
 open Reactive Reactive.Host
 open TerminusTests.Reactive.Common
+
+/-! ## Inline test demos (minimal versions for testing) -/
+
+/-- Minimal demo app for testing tick/key event integration. -/
+def reactiveDemoApp : ReactiveTermM ReactiveAppState := do
+  let theme := Theme.dark
+  let keyEvents ← useKeyEvent
+  let elapsedMs ← useElapsedMs
+
+  let keyStrings ← Event.mapM (fun kd =>
+    match kd.event.code with
+    | .char c => s!"'{c}'"
+    | _ => "other"
+  ) keyEvents
+  let lastKey ← Reactive.holdDyn "none" keyStrings
+
+  let (_, render) ← runWidget do
+    column' (gap := 1) {} do
+      text' "=== Reactive Demo ===" theme.heading1Style
+      row' (gap := 1) {} do
+        text' "Elapsed:" theme.bodyStyle
+        emitDynamic do
+          let ms ← elapsedMs.sample
+          let seconds := ms / 1000
+          let minutes := seconds / 60
+          let secs := seconds % 60
+          pure (RNode.text s!"{minutes}:{String.ofList (if secs < 10 then ['0'] else [])}{secs}" theme.primaryStyle)
+      row' (gap := 1) {} do
+        text' "Last key:" theme.bodyStyle
+        emitDynamic do
+          let key ← lastKey.sample
+          pure (RNode.text key theme.primaryStyle)
+  pure { render }
+
+/-- Minimal input demo app for testing rendering. -/
+def reactiveInputApp : ReactiveTermM ReactiveAppState := do
+  let theme := Theme.dark
+  let (_, render) ← runWidget do
+    column' (gap := 1) {} do
+      text' "=== Reactive Input Demo ===" theme.heading1Style
+      text' "Tab: cycle focus" theme.captionStyle
+      titledBlock' "1. Text Input" .rounded theme do
+        text' "Type here:" theme.bodyStyle
+        text' "Value: (empty)" theme.bodyStyle
+        text' "Submitted: (none)" theme.bodyStyle
+  pure { render }
 
 testSuite "Reactive Integration Tests"
 

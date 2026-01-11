@@ -227,7 +227,7 @@ private def dayHeadersMonday : String := "Mo Tu We Th Fr Sa Su"
 def calendar' (name : String) (year : Nat) (month : Nat) (initialDay : Option Nat := none)
     (config : CalendarConfig := {}) : WidgetM CalendarResult := do
   -- Register as focusable component
-  let widgetName ← registerComponentW name (isInput := true)
+  let widgetName ← registerComponentW name (isInput := true) (nameOverride := name)
 
   -- Get focused state
   let focusedInput ← useFocusedInputW

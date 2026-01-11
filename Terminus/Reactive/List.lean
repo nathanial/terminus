@@ -131,6 +131,7 @@ def selectableList' [ToString α] (items : Array α) (initial : Nat := 0)
 
   -- Register as focusable component
   let widgetName ← registerComponentW "selectableList" (isInput := true)
+    (nameOverride := config.focusName)
   let focusedInput ← useFocusedInputW
 
   -- Create trigger events
@@ -251,6 +252,7 @@ def dynSelectableList' [ToString α] (items : Reactive.Dynamic Spider (Array α)
 
   -- Register as focusable component
   let widgetName ← registerComponentW "dynSelectableList" (isInput := true)
+    (nameOverride := config.focusName)
   let focusedInput ← useFocusedInputW
 
   -- Create trigger events
@@ -396,6 +398,7 @@ def numberedList' [ToString α] (items : Array α) (initial : Nat := 0)
 
   -- Register as focusable component
   let widgetName ← registerComponentW "numberedList" (isInput := true)
+    (nameOverride := config.focusName)
   let focusedInput ← useFocusedInputW
 
   -- Create trigger events

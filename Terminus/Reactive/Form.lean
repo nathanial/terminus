@@ -106,7 +106,7 @@ def optionSelector' (name : String) (options : Array String) (initial : Nat := 0
   let events ← getEventsW
 
   -- Register as focusable
-  let widgetName ← registerComponentW "optionSelector" (isInput := true)
+  let widgetName ← registerComponentW "optionSelector" (isInput := true) (nameOverride := name)
 
   -- Create events
   let (changeEvent, fireChange) ← newTriggerEvent (t := Spider) (a := Nat)
@@ -240,7 +240,7 @@ def checkbox' (name : String) (label : String) (initial : Bool := false)
   let events ← getEventsW
 
   -- Register as focusable
-  let widgetName ← registerComponentW "checkbox" (isInput := true)
+  let widgetName ← registerComponentW "checkbox" (isInput := true) (nameOverride := name)
 
   -- Create events
   let (changeEvent, fireChange) ← newTriggerEvent (t := Spider) (a := Bool)

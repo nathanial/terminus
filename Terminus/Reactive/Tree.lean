@@ -300,6 +300,7 @@ def tree' [Inhabited α] [ToString α] (root : TreeNode α) (config : TreeConfig
 
   -- Register as focusable component
   let widgetName ← registerComponentW "tree" (isInput := true)
+    (nameOverride := config.focusName)
   let focusedInput ← useFocusedInputW
 
   -- Create trigger events
@@ -482,6 +483,7 @@ def forest' [Inhabited α] [ToString α] (roots : Array (TreeNode α)) (config :
   let events ← getEventsW
 
   let widgetName ← registerComponentW "forest" (isInput := true)
+    (nameOverride := config.focusName)
   let focusedInput ← useFocusedInputW
 
   let (selectEvent, fireSelect) ← newTriggerEvent (t := Spider) (a := α)

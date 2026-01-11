@@ -188,6 +188,7 @@ def cursorGrid' (width height : Nat)
 
   -- Register as focusable component
   let widgetName ← registerComponentW "cursorGrid" (isInput := true)
+    (nameOverride := config.focusName)
   let focusedInput ← useFocusedInputW
 
   -- Create trigger events

@@ -53,12 +53,12 @@ def ReactiveTermM.run (events : TerminusEvents) (m : ReactiveTermM α) : SpiderM
 /-- Get the events from the implicit context. -/
 def getEvents : ReactiveTermM TerminusEvents := read
 
-/-- Register a component and get an auto-generated name.
+/-- Register a component and get a name (auto-generated unless `nameOverride` is provided).
     This is the preferred way to register components in ReactiveTermM context. -/
 def registerComponent (namePrefix : String) (isInput : Bool := false)
-    (isInteractive : Bool := true) : ReactiveTermM String := do
+    (isInteractive : Bool := true) (nameOverride : String := "") : ReactiveTermM String := do
   let events ← getEvents
-  SpiderM.liftIO <| events.registry.register namePrefix isInput isInteractive
+  SpiderM.liftIO <| events.registry.register namePrefix isInput isInteractive nameOverride
 
 /-! ## Type Aliases -/
 
@@ -152,7 +152,7 @@ def getEventsW : WidgetM TerminusEvents := StateT.lift getEvents
 
 /-- Register a component in WidgetM context. -/
 def registerComponentW (namePrefix : String) (isInput : Bool := false)
-    (isInteractive : Bool := true) : WidgetM String :=
-  StateT.lift (registerComponent namePrefix isInput isInteractive)
+    (isInteractive : Bool := true) (nameOverride : String := "") : WidgetM String :=
+  StateT.lift (registerComponent namePrefix isInput isInteractive nameOverride)
 
 end Terminus.Reactive

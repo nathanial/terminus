@@ -211,6 +211,7 @@ def scrollView' (config : ScrollViewConfig := {})
 
   -- Register for focus
   let widgetName ← registerComponentW "scrollView" (isInput := true)
+    (nameOverride := config.focusName)
   let focusedInput ← useFocusedInputW
   let scrollName := if config.focusName.isEmpty then widgetName else config.focusName
 

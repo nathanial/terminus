@@ -295,19 +295,54 @@ def ComponentRegistry.create : SpiderM ComponentRegistry := do
   let focusedInput ← Reactive.holdDyn none focusEvent
   pure { idCounter, inputNames, interactiveNames, focusedInput, fireFocus }
 
-/-- Register a component and get an auto-generated name.
+/-- Register a component and get a name (auto-generated unless `nameOverride` is provided).
     - `namePrefix`: Component type prefix (e.g., "button", "text-input")
     - `isInput`: Whether this is a focusable input widget
     - `isInteractive`: Whether this widget responds to clicks -/
 def ComponentRegistry.register (reg : ComponentRegistry) (namePrefix : String)
-    (isInput : Bool := false) (isInteractive : Bool := true) : IO String := do
+    (isInput : Bool := false) (isInteractive : Bool := true)
+    (nameOverride : String := "") : IO String := do
   let id ← reg.idCounter.modifyGet fun n => (n, n + 1)
-  let name := s!"{namePrefix}-{id}"
+  let name :=
+    if nameOverride.isEmpty then
+      s!"{namePrefix}-{id}"
+    else
+      nameOverride
   if isInput then
     reg.inputNames.modify (·.push name)
   if isInteractive then
     reg.interactiveNames.modify (·.push name)
   pure name
+
+/-- Cycle focus to the next registered input widget.
+    If no widget is focused, focuses the first one.
+    If the last widget is focused, wraps to the first. -/
+def ComponentRegistry.focusNext (reg : ComponentRegistry) : IO Unit := do
+  let names ← reg.inputNames.get
+  if names.isEmpty then return
+  let current ← reg.focusedInput.sample
+  let nextName := match current with
+    | none => names[0]!
+    | some name =>
+      match names.findIdx? (· == name) with
+      | some idx => names[(idx + 1) % names.size]!
+      | none => names[0]!
+  reg.fireFocus (some nextName)
+
+/-- Cycle focus to the previous registered input widget. -/
+def ComponentRegistry.focusPrev (reg : ComponentRegistry) : IO Unit := do
+  let names ← reg.inputNames.get
+  if names.isEmpty then return
+  let current ← reg.focusedInput.sample
+  let prevName := match current with
+    | none => names[names.size - 1]!
+    | some name =>
+      match names.findIdx? (· == name) with
+      | some idx =>
+        if idx == 0 then names[names.size - 1]!
+        else names[idx - 1]!
+      | none => names[names.size - 1]!
+  reg.fireFocus (some prevName)
 
 /-! ## Reactive Events Infrastructure
 

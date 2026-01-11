@@ -257,7 +257,7 @@ private def renderTableRow (row : TableRow') (colWidths : Array Nat) (rowStyle :
 def table' (name : String) (columns : Array TableColumn') (rows : Array TableRow')
     (config : TableConfig := {}) : WidgetM TableResult := do
   -- Register as focusable component
-  let widgetName ← registerComponentW name (isInput := true)
+  let widgetName ← registerComponentW name (isInput := true) (nameOverride := name)
 
   -- Get focused state
   let focusedInput ← useFocusedInputW
@@ -367,7 +367,7 @@ def dynTable' (name : String) (columns : Array TableColumn')
     (rows : Reactive.Dynamic Spider (Array TableRow')) (config : TableConfig := {})
     : WidgetM TableResult := do
   -- Register as focusable component
-  let widgetName ← registerComponentW name (isInput := true)
+  let widgetName ← registerComponentW name (isInput := true) (nameOverride := name)
 
   -- Get focused state
   let focusedInput ← useFocusedInputW

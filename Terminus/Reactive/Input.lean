@@ -134,7 +134,7 @@ def textInput' (name : String) (initial : String := "")
   let events ← getEventsW
 
   -- Register as focusable input
-  let widgetName ← registerComponentW "textInput" (isInput := true)
+  let widgetName ← registerComponentW "textInput" (isInput := true) (nameOverride := name)
 
   -- Create trigger events for submit/cancel/change
   let (submitEvent, fireSubmit) ← newTriggerEvent (t := Spider) (a := String)

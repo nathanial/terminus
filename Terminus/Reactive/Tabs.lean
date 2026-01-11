@@ -65,6 +65,7 @@ def tabs' (labels : Array String) (initial : Nat := 0)
 
   -- Register as focusable component
   let widgetName ← registerComponentW "tabs" (isInput := true)
+    (nameOverride := config.focusName)
   let focusedInput ← useFocusedInputW
 
   -- Create trigger events
@@ -168,6 +169,7 @@ def dynTabs' (labels : Reactive.Dynamic Spider (Array String)) (initial : Nat :=
 
   -- Register as focusable component
   let widgetName ← registerComponentW "dynTabs" (isInput := true)
+    (nameOverride := config.focusName)
   let focusedInput ← useFocusedInputW
 
   -- Create trigger events

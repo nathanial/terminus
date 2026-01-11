@@ -262,7 +262,7 @@ private def renderMenuItem (item : MenuItem') (isSelected : Bool) (config : Menu
 def menu' (name : String) (items : Array MenuItem') (config : MenuConfig := {})
     : WidgetM MenuResult := do
   -- Register as focusable component
-  let widgetName ← registerComponentW name (isInput := true)
+  let widgetName ← registerComponentW name (isInput := true) (nameOverride := name)
 
   -- Get focused state
   let focusedInput ← useFocusedInputW
