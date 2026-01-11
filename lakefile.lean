@@ -84,6 +84,9 @@ lean_exe «reactive_data» where
 lean_exe «reactive_feedback» where
   root := `examples.ReactiveFeedback
 
+lean_exe «reactive_charts» where
+  root := `examples.ReactiveCharts
+
 @[test_driver]
 lean_exe terminus_tests where
   root := `TerminusTests.Main

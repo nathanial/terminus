@@ -78,3 +78,6 @@ import Terminus.Reactive.Scrollbar
 import Terminus.Reactive.Paragraph
 import Terminus.Reactive.Popup
 import Terminus.Reactive.Clear
+import Terminus.Reactive.Gauge
+import Terminus.Reactive.Sparkline
+import Terminus.Reactive.Charts
