@@ -307,7 +307,7 @@ def checkbox' (name : String) (label : String) (initial : Bool := false)
     ```
 -/
 def form' (fields : Array FormFieldConfig) (config : FormConfig := {})
-    (theme : Theme := .dark) : WidgetM FormResult := do
+    (_theme : Theme := .dark) : WidgetM FormResult := do
   let events ← getEventsW
 
   -- Create events for the form

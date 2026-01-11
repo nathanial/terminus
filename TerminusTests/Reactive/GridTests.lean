@@ -89,7 +89,7 @@ test "cursorGrid' starts at position 0,0" := do
     let (events, inputs) ← createInputs
     SpiderM.liftIO <| events.registry.fireFocus (some "grid_0")
     let (result, _render) ← (runWidget do
-      cursorGrid' 4 4 (fun x y isCursor => do
+      cursorGrid' 4 4 (fun _x _y isCursor => do
         let content := if isCursor then ">>" else "  "
         pure { content, style := {} }
       ) { focusName := "grid_0" }

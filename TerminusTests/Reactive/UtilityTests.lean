@@ -167,7 +167,7 @@ test "clear' renders filled area" := do
       clear' { width := 5, height := 3 }
     ).run events
 
-    let node ← SpiderM.liftIO render
+    let _node ← SpiderM.liftIO render
     -- Should render something (spaces)
     -- Just verify we got a node (not testing equality)
 
@@ -179,7 +179,7 @@ test "hSpace' creates horizontal space" := do
       hSpace' 10
     ).run events
 
-    let node ← SpiderM.liftIO render
+    let _node ← SpiderM.liftIO render
     -- Just verify we got a node (not testing equality)
 
 test "vSpace' creates vertical space" := do
@@ -190,7 +190,7 @@ test "vSpace' creates vertical space" := do
       vSpace' 5
     ).run events
 
-    let node ← SpiderM.liftIO render
+    let _node ← SpiderM.liftIO render
     -- Just verify we got a node (not testing equality)
 
 test "filledRect' creates filled rectangle" := do

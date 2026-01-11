@@ -552,7 +552,7 @@ def dynRadioGroup' (name : String) (options : Reactive.Dynamic Spider (Array Str
 
 /-- Create a labeled checkbox with the label positioned beside the checkbox. -/
 def labeledCheckbox'' (name : String) (label : String) (initial : Bool := false)
-    (config : CheckboxConfig' := {}) (theme : Theme := .dark) : WidgetM CheckboxResult' := do
+    (config : CheckboxConfig' := {}) (_theme : Theme := .dark) : WidgetM CheckboxResult' := do
   checkbox'' name label initial config
 
 /-- Create a labeled radio group with a title above the options. -/

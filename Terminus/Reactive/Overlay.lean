@@ -71,7 +71,7 @@ the overlay content replaces the base content in the widget tree.
     Note: In the current implementation, overlays use conditional rendering.
     Full z-ordering support requires renderer changes tracked in REACTIVE_PLAN.md.
 -/
-def overlay' (visible : Reactive.Dynamic Spider Bool) (config : OverlayConfig := {})
+def overlay' (visible : Reactive.Dynamic Spider Bool) (_config : OverlayConfig := {})
     (baseContent : WidgetM α) (overlayContent : WidgetM β) : WidgetM α := do
   let (baseResult, baseRenders) ← runWidgetChildren baseContent
   let (_, overlayRenders) ← runWidgetChildren overlayContent
@@ -101,7 +101,7 @@ def overlay' (visible : Reactive.Dynamic Spider Bool) (config : OverlayConfig :=
 
 /-- Simpler overlay that only shows when visible (no base content parameter).
     Use this when you want to conditionally show a popup/dialog. -/
-def overlayWhen' (visible : Reactive.Dynamic Spider Bool) (config : OverlayConfig := {})
+def overlayWhen' (visible : Reactive.Dynamic Spider Bool) (_config : OverlayConfig := {})
     (content : WidgetM α) : WidgetM Unit := do
   let (_, contentRenders) ← runWidgetChildren content
 

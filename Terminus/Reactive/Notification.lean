@@ -143,7 +143,7 @@ def notifications' (config : NotificationConfig := {}) : WidgetM NotificationRes
   let currentTimeRef ← SpiderM.liftIO (IO.mkRef 0)
 
   -- Create trigger for re-renders
-  let (renderEvent, fireRender) ← newTriggerEvent (t := Spider) (a := Unit)
+  let (_renderEvent, fireRender) ← newTriggerEvent (t := Spider) (a := Unit)
 
   -- Subscribe to tick events for auto-dismiss
   let _unsub ← SpiderM.liftIO <| tickEvent.subscribe fun td => do

@@ -91,7 +91,7 @@ def dynImageFromBytes' (bytes : Reactive.Dynamic Spider ByteArray) (config : Ima
     imagePlaceholder' "Loading..." { width := 40, height := 20 }
     ```
 -/
-def imagePlaceholder' (altText : String) (config : ImageConfig := {}) : WidgetM Unit := do
+def imagePlaceholder' (altText : String) (_config : ImageConfig := {}) : WidgetM Unit := do
   emit do
     -- Create a bordered box with centered alt text
     let text := s!"[{altText}]"

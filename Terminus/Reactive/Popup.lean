@@ -56,7 +56,7 @@ structure PopupResult where
     popup.«show»
     ```
 -/
-def popup' (name : String) (config : PopupConfig := {}) (content : WidgetM Unit)
+def popup' (_name : String) (config : PopupConfig := {}) (content : WidgetM Unit)
     : WidgetM PopupResult := do
   let env ← SpiderM.getEnv
   -- Visibility state

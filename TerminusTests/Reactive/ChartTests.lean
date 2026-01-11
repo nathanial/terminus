@@ -154,7 +154,7 @@ test "sparkline' handles empty data" := do
       sparkline' #[] {}
     ).run events
 
-    let node ← SpiderM.liftIO render
+    let _node ← SpiderM.liftIO render
     -- Should be empty node
 
 test "sparklineInt' converts int data" := do
@@ -165,7 +165,7 @@ test "sparklineInt' converts int data" := do
       sparklineInt' #[1, 5, 3, 8, 2] {}
     ).run events
 
-    let node ← SpiderM.liftIO render
+    let _node ← SpiderM.liftIO render
     -- Should render something
 
 test "sparklineNat' converts nat data" := do
@@ -176,7 +176,7 @@ test "sparklineNat' converts nat data" := do
       sparklineNat' #[1, 5, 3, 8, 2] {}
     ).run events
 
-    let node ← SpiderM.liftIO render
+    let _node ← SpiderM.liftIO render
     -- Should render something
 
 test "labeledSparkline' shows label and value" := do
@@ -253,7 +253,7 @@ test "barChart' handles empty data" := do
       barChart' #[] {}
     ).run events
 
-    let node ← SpiderM.liftIO render
+    let _node ← SpiderM.liftIO render
     -- Should be empty
 
 -- ============================================================================
@@ -324,7 +324,7 @@ test "lineChart' handles empty series" := do
       lineChart' #[] {}
     ).run events
 
-    let node ← SpiderM.liftIO render
+    let _node ← SpiderM.liftIO render
     -- Should be empty
 
 -- ============================================================================
@@ -391,7 +391,7 @@ test "pieChart' handles empty data" := do
       pieChart' #[] {}
     ).run events
 
-    let node ← SpiderM.liftIO render
+    let _node ← SpiderM.liftIO render
     -- Should be empty
 
 test "pieChart' filters zero values" := do

@@ -136,7 +136,7 @@ def animatedSpinner' (label : Option String := none) (intervalMs : Nat := 80)
     (config : SpinnerConfig := {}) : WidgetM SpinnerResult := do
   -- Get tick events
   let tickEvent ← useTickW
-  let elapsedMs ← useElapsedMsW
+  let _elapsedMs ← useElapsedMsW
 
   -- Calculate frame index from elapsed time
   let frameIndexRef ← SpiderM.liftIO (IO.mkRef 0)

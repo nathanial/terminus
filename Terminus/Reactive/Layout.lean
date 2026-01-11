@@ -57,7 +57,7 @@ structure SplitResult where
       (do titledBlock' "Right" .rounded theme do ...)
     ```
 -/
-def horizontalSplit' (leftPercent : Nat := 50) (config : PaneConfig := {})
+def horizontalSplit' (_leftPercent : Nat := 50) (config : PaneConfig := {})
     (left : WidgetM α) (right : WidgetM β) : WidgetM (α × β) := do
   -- Run left pane and collect its children
   let (leftResult, leftChildren) ← runWidgetChildren left
@@ -106,7 +106,7 @@ def horizontalSplit' (leftPercent : Nat := 50) (config : PaneConfig := {})
       (do titledBlock' "Bottom" .rounded theme do ...)
     ```
 -/
-def verticalSplit' (topPercent : Nat := 50) (config : PaneConfig := {})
+def verticalSplit' (_topPercent : Nat := 50) (config : PaneConfig := {})
     (top : WidgetM α) (bottom : WidgetM β) : WidgetM (α × β) := do
   -- Run top pane
   let (topResult, topChildren) ← runWidgetChildren top
@@ -164,7 +164,7 @@ def splitPane' (direction : SplitDirection) (percent : Nat := 50)
 /-! ## Three-Pane Layouts -/
 
 /-- Three-pane horizontal layout: left | center | right -/
-def threeColumnSplit' (leftPercent centerPercent : Nat := 33)
+def threeColumnSplit' (_leftPercent _centerPercent : Nat := 33)
     (config : PaneConfig := {})
     (left : WidgetM α) (center : WidgetM β) (right : WidgetM γ)
     : WidgetM (α × β × γ) := do
@@ -196,7 +196,7 @@ def threeColumnSplit' (leftPercent centerPercent : Nat := 33)
   pure (leftResult, centerResult, rightResult)
 
 /-- Three-pane vertical layout: top / middle / bottom -/
-def threeRowSplit' (topPercent middlePercent : Nat := 33)
+def threeRowSplit' (_topPercent _middlePercent : Nat := 33)
     (config : PaneConfig := {})
     (top : WidgetM α) (middle : WidgetM β) (bottom : WidgetM γ)
     : WidgetM (α × β × γ) := do
@@ -244,7 +244,7 @@ inductive SidebarPosition where
   | right
   deriving Repr, BEq, Inhabited
 
-def sidebarLayout' (sidebarWidth : Nat := 20) (position : SidebarPosition := .left)
+def sidebarLayout' (_sidebarWidth : Nat := 20) (position : SidebarPosition := .left)
     (config : PaneConfig := {})
     (sidebar : WidgetM α) (content : WidgetM β) : WidgetM (α × β) :=
   match position with
@@ -256,12 +256,12 @@ def sidebarLayout' (sidebarWidth : Nat := 20) (position : SidebarPosition := .le
 /-! ## Header/Footer Layout -/
 
 /-- Layout with header and main content. -/
-def headerLayout' (headerHeight : Nat := 3) (config : PaneConfig := {})
+def headerLayout' (_headerHeight : Nat := 3) (config : PaneConfig := {})
     (header : WidgetM α) (content : WidgetM β) : WidgetM (α × β) :=
   verticalSplit' 10 config header content
 
 /-- Layout with main content and footer. -/
-def footerLayout' (footerHeight : Nat := 2) (config : PaneConfig := {})
+def footerLayout' (_footerHeight : Nat := 2) (config : PaneConfig := {})
     (content : WidgetM α) (footer : WidgetM β) : WidgetM (α × β) :=
   verticalSplit' 90 config content footer
 

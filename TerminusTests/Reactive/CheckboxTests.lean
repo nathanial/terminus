@@ -67,7 +67,7 @@ test "checkbox'' initial state is reflected in dynamic" := do
 
 test "checkbox'' toggles on space key when focused" := do
   let env ← SpiderEnv.new
-  let (cbResult, inputs, events) ← (do
+  let (cbResult, inputs, _events) ← (do
     let (events, inputs) ← createInputs
     -- Focus the checkbox
     SpiderM.liftIO <| events.registry.fireFocus (some "test-cb")
@@ -100,7 +100,7 @@ test "checkbox'' toggles on space key when focused" := do
 
 test "checkbox'' toggles on enter key when focused" := do
   let env ← SpiderEnv.new
-  let (cbResult, inputs, events) ← (do
+  let (cbResult, inputs, _events) ← (do
     let (events, inputs) ← createInputs
     SpiderM.liftIO <| events.registry.fireFocus (some "enter-cb")
     let (result, _render) ← (runWidget do
@@ -281,7 +281,7 @@ test "radioGroup' RadioState clamp selection" := do
 
 test "radioGroup' navigates with arrow keys when focused" := do
   let env ← SpiderEnv.new
-  let (rgResult, inputs, events) ← (do
+  let (rgResult, inputs, _events) ← (do
     let (events, inputs) ← createInputs
     SpiderM.liftIO <| events.registry.fireFocus (some "nav-radio")
     let (result, _render) ← (runWidget do
@@ -318,7 +318,7 @@ test "radioGroup' navigates with arrow keys when focused" := do
 
 test "radioGroup' wraps around when configured" := do
   let env ← SpiderEnv.new
-  let (rgResult, inputs, events) ← (do
+  let (rgResult, inputs, _events) ← (do
     let (events, inputs) ← createInputs
     SpiderM.liftIO <| events.registry.fireFocus (some "wrap-radio")
     let (result, _render) ← (runWidget do
@@ -349,7 +349,7 @@ test "radioGroup' wraps around when configured" := do
 
 test "radioGroup' does not wrap when wrapAround is false" := do
   let env ← SpiderEnv.new
-  let (rgResult, inputs, events) ← (do
+  let (rgResult, inputs, _events) ← (do
     let (events, inputs) ← createInputs
     SpiderM.liftIO <| events.registry.fireFocus (some "nowrap-radio")
     let (result, _render) ← (runWidget do

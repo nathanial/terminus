@@ -75,7 +75,7 @@ test "modal' renders with title and border" := do
 
 test "confirmDialog' emits confirmed event on Y key" := do
   let env ← SpiderEnv.new
-  let (confirmResult, inputs, visible, setVisible) ← (do
+  let (confirmResult, inputs, _visible, _setVisible) ← (do
     let (events, inputs) ← createInputs
     let (visEvent, setVis) ← Reactive.newTriggerEvent (t := Spider) (a := Bool)
     let visible ← Reactive.holdDyn true visEvent
@@ -102,7 +102,7 @@ test "confirmDialog' emits confirmed event on Y key" := do
 
 test "confirmDialog' emits cancelled event on Escape" := do
   let env ← SpiderEnv.new
-  let (confirmResult, inputs, visible, setVisible) ← (do
+  let (confirmResult, inputs, _visible, _setVisible) ← (do
     let (events, inputs) ← createInputs
     let (visEvent, setVis) ← Reactive.newTriggerEvent (t := Spider) (a := Bool)
     let visible ← Reactive.holdDyn true visEvent
@@ -129,7 +129,7 @@ test "confirmDialog' emits cancelled event on Escape" := do
 
 test "messageDialog' emits dismiss on Enter" := do
   let env ← SpiderEnv.new
-  let (dismissEvent, inputs, visible) ← (do
+  let (dismissEvent, inputs, _visible) ← (do
     let (events, inputs) ← createInputs
     let (visEvent, _setVis) ← Reactive.newTriggerEvent (t := Spider) (a := Bool)
     let visible ← Reactive.holdDyn true visEvent

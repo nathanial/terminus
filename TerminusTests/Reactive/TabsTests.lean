@@ -35,7 +35,7 @@ test "tabs' renders all labels" := do
 
 test "tabs' starts with initial tab selected" := do
   let env ← SpiderEnv.new
-  let (tabsResult, events, _) ← (do
+  let (tabsResult, _events, _) ← (do
     let (events, inputs) ← createInputs
     let (result, _render) ← (runWidget do
       tabs' #["One", "Two", "Three"] 1 {}  -- Start at index 1

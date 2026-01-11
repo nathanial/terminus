@@ -23,7 +23,7 @@ testSuite "Reactive Component Tests"
 test "textInput' renders with placeholder when empty" := do
   runSpider do
     let (events, _) ← createInputs
-    let (result, render) ← (runWidget do
+    let (_result, render) ← (runWidget do
       textInput' "test" "" { placeholder := "Enter text...", width := 15 }
     ).run events
 
@@ -33,7 +33,7 @@ test "textInput' renders with placeholder when empty" := do
 
 test "textInput' value dynamic updates on input" := do
   let env ← SpiderEnv.new
-  let (inputResult, inputs) ← (do
+  let (inputResult, _inputs) ← (do
     let (events, inputs) ← createInputs
     let (result, _render) ← (runWidget do
       textInput' "test-input" "" {}
@@ -42,9 +42,6 @@ test "textInput' value dynamic updates on input" := do
   ).run env
 
   env.postBuildTrigger ()
-
-  -- Set focus to the input
-  let (events, _) ← (createInputs).run env
 
   -- Initial value should be empty
   let v0 ← inputResult.value.sample
