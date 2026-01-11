@@ -11,6 +11,7 @@ import Terminus.Reactive.Demos.UnifiedCharts
 import Terminus.Reactive.Demos.UnifiedFeedback
 import Terminus.Reactive.Demos.UnifiedMedia
 import Terminus.Reactive.Demos.UnifiedAsync
+import Terminus.Reactive.Demos.UnifiedOverlay
 
 namespace Terminus.Reactive.Demos.UnifiedDemo
 
@@ -29,6 +30,7 @@ inductive DemoTab where
   | feedback
   | media
   | async
+  | overlay
   deriving Repr, BEq, Inhabited
 
 def DemoTab.label : DemoTab → String
@@ -40,10 +42,11 @@ def DemoTab.label : DemoTab → String
   | .feedback => "Feedback"
   | .media => "Media"
   | .async => "Async"
+  | .overlay => "Overlay"
 
 def DemoTab.allTabs : Array String := #[
   "Basics", "Input", "Navigation", "Data",
-  "Charts", "Feedback", "Media", "Async"
+  "Charts", "Feedback", "Media", "Async", "Overlay"
 ]
 
 def DemoTab.fromIndex : Nat → DemoTab
@@ -55,6 +58,7 @@ def DemoTab.fromIndex : Nat → DemoTab
   | 5 => .feedback
   | 6 => .media
   | 7 => .async
+  | 8 => .overlay
   | _ => .basics
 
 /-! ## Main Application -/
@@ -101,6 +105,7 @@ def mainContent (theme : Theme) (events : TerminusEvents) : WidgetM Unit := do
       | 5 => feedbackContent theme
       | 6 => mediaContent theme
       | 7 => asyncContent theme
+      | 8 => overlayContent theme
       | _ => basicsContent theme
 
 def footerContent (theme : Theme) : WidgetM Unit := do

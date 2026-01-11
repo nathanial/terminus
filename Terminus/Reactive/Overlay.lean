@@ -24,6 +24,10 @@ structure OverlayConfig where
   backdropStyle : Option Style := some { fg := .ansi .brightBlack }
   /-- Backdrop character (space for solid, special char for pattern). -/
   backdropChar : Char := ' '
+  /-- Border type. -/
+  border : BorderType := .rounded
+  /-- Border style. -/
+  borderStyle : Style := { fg := .ansi .white }
   deriving Repr, Inhabited
 
 /-- Configuration for modal dialogs. -/
@@ -83,10 +87,19 @@ def overlay' (visible : Reactive.Dynamic Spider Bool) (config : OverlayConfig :=
 
     if isVisible then
       let overlayNodes ← overlayRenders.mapM id
-      let overlayNode := if overlayNodes.size == 1 then
+      let innerNode := if overlayNodes.size == 1 then
         overlayNodes[0]!
       else
         RNode.column 0 {} overlayNodes
+
+      -- Wrap in block if border is requested
+      let overlayNode :=
+        if config.border != .none then
+          let title := none
+          let fillStyle := none -- Default overlay doesn't enforce fill, relies on content or backdrop
+          RNode.block title config.border config.borderStyle fillStyle innerNode
+        else
+          innerNode
 
       -- Use RNode.overlay for proper centering and backdrop support
       pure (RNode.overlay baseNode overlayNode config.backdropStyle)
@@ -138,13 +151,17 @@ def modal' (title : String) (theme : Theme) (config : ModalConfig := {})
     (content : WidgetM α) : WidgetM α := do
   -- Use fillStyle for opaque background
   let fillStyle : Style := { bg := theme.background }
-  titledBlock' title config.borderType theme (some fillStyle) content
+  -- Use white border for better visibility on dark backgrounds
+  let modalTheme := { theme with border := .ansi .white }
+  titledBlock' title config.borderType modalTheme (some fillStyle) content
 
 /-- Create an untitled modal (simple bordered box) with opaque background. -/
 def modalBox' (theme : Theme) (config : ModalConfig := {})
     (content : WidgetM α) : WidgetM α := do
   let fillStyle : Style := { bg := theme.background }
-  block' config.borderType theme (some fillStyle) content
+  -- Use white border for better visibility on dark backgrounds
+  let modalTheme := { theme with border := .ansi .white }
+  block' config.borderType modalTheme (some fillStyle) content
 
 /-- Create a modal that appears when visible.
     Combines overlayWhen' with modal'. Uses backdrop dimming. -/
@@ -377,7 +394,7 @@ def inputDialog' (prompt : String) (visible : Reactive.Dynamic Spider Bool) (the
         | .escape => fireCancelled ()
         | _ => pure ()
 
-  -- Emit the dialog with backdrop dimming
+  -- Emit the dialog content with backdrop dimming
   let backdropStyle : Style := { bg := .ansi .black, modifier := { dim := true } }
   overlayWhen' visible { backdropStyle := some backdropStyle } do
     let _ ← modal' "Input" theme {} do

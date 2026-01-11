@@ -55,6 +55,7 @@ def area (term : Terminal) : Rect := {
 
 /-- Clear the terminal screen -/
 def clear [Monad m] [TerminalEffect m] : m Unit := do
+  TerminalEffect.writeStdout (Ansi.bgColor .default)
   TerminalEffect.writeStdout Ansi.clearScreen
   TerminalEffect.writeStdout Ansi.cursorHome
 

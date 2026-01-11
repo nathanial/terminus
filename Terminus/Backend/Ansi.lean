@@ -145,13 +145,13 @@ def bgDefault : String := s!"{csi}49m"
 -- High-level color conversion
 
 def fgColor : Color → String
-  | .default => fgDefault
+  | .default => fgColor16 .white
   | .ansi c => fgColor16 c
   | .indexed n => fgColor256 n
   | .rgb r g b => fgRgb r g b
 
 def bgColor : Color → String
-  | .default => bgDefault
+  | .default => bgColor16 .black
   | .ansi c => bgColor16 c
   | .indexed n => bgColor256 n
   | .rgb r g b => bgRgb r g b
