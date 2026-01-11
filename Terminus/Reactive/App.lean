@@ -136,7 +136,9 @@ partial def runReactiveLoop [Monad m] [TerminalEffect m] [MonadLift IO m]
       -- Sample and render
       let rootNode ← liftM (m := IO) render
       let (width, height) ← getTerminalSize
-      let buffer := Terminus.Reactive.render rootNode width height
+      let renderResult := Terminus.Reactive.render rootNode width height
+      let buffer := renderResult.buffer
+      -- TODO: Process renderResult.commands for images, clipboard, etc.
 
       -- Log first frame's render output
       if frame == 0 then
@@ -274,6 +276,6 @@ def renderOnce (widget : WidgetM Unit) (width height : Nat) : IO Buffer := do
     let (events, _) ← createInputs
     let (_, render) ← (runWidget widget).run events
     let node ← SpiderM.liftIO render
-    pure (Terminus.Reactive.render node width height)
+    pure (Terminus.Reactive.render node width height).buffer
 
 end Terminus.Reactive

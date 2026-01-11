@@ -81,3 +81,6 @@ import Terminus.Reactive.Clear
 import Terminus.Reactive.Gauge
 import Terminus.Reactive.Sparkline
 import Terminus.Reactive.Charts
+import Terminus.Reactive.Canvas
+import Terminus.Reactive.Image
+import Terminus.Reactive.BigText

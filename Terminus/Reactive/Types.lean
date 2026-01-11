@@ -58,6 +58,9 @@ inductive RNode where
   | clipped (child : RNode)
   /-- Shifts child content by offset (for scrolling). -/
   | scrolled (offsetX offsetY : Nat) (child : RNode)
+  /-- Image node using terminal image protocol. -/
+  | image (source : ImageSource) (protocol : ImageProtocol) (width : Nat) (height : Nat)
+      (preserveAspect : Bool) (altText : String)
   deriving Repr, Inhabited
 
 namespace RNode

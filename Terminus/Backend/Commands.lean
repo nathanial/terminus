@@ -21,6 +21,11 @@ inductive ImageSource where
   | path (path : System.FilePath)
   deriving Inhabited
 
+instance : Repr ImageSource where
+  reprPrec s _ := match s with
+    | .bytes b => s!"ImageSource.bytes ({b.size} bytes)"
+    | .path p => s!"ImageSource.path \"{p}\""
+
 namespace ImageSource
 
 def key : ImageSource → String
@@ -33,7 +38,7 @@ end ImageSource
 inductive ImageProtocol where
   | iterm2
   | sixel
-  deriving BEq, Inhabited
+  deriving BEq, Inhabited, Repr
 
 namespace ImageProtocol
 

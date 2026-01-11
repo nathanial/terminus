@@ -22,7 +22,7 @@ testSuite "Reactive Rendering Tests"
 
 test "render text node to buffer" := do
   let node := RNode.text "Hello" {}
-  let buf := Terminus.Reactive.render node 20 5
+  let buf := Terminus.Reactive.renderOnly node 20 5
   -- Text should appear at position (0, 0)
   (buf.get 0 0).char ≡ 'H'
   (buf.get 1 0).char ≡ 'e'
@@ -36,7 +36,7 @@ test "render column with multiple text nodes" := do
     RNode.text "Line2" {}
   ]
   let node := RNode.column 0 {} children
-  let buf := Terminus.Reactive.render node 20 5
+  let buf := Terminus.Reactive.renderOnly node 20 5
   -- Line1 at row 0
   (buf.get 0 0).char ≡ 'L'
   (buf.get 1 0).char ≡ 'i'
@@ -50,7 +50,7 @@ test "render row with multiple text nodes" := do
     RNode.text "B" {}
   ]
   let node := RNode.row 0 {} children
-  let buf := Terminus.Reactive.render node 20 5
+  let buf := Terminus.Reactive.renderOnly node 20 5
   -- A at column 0
   (buf.get 0 0).char ≡ 'A'
   -- B at column 1
@@ -58,7 +58,7 @@ test "render row with multiple text nodes" := do
 
 test "render empty node produces empty buffer" := do
   let node := RNode.empty
-  let buf := Terminus.Reactive.render node 10 5
+  let buf := Terminus.Reactive.renderOnly node 10 5
   (buf.get 0 0).char ≡ ' '
   (buf.get 5 2).char ≡ ' '
 
@@ -270,14 +270,14 @@ test "buffer content changes when dynamic value changes" := do
 
     -- First render to buffer
     let node1 ← SpiderM.liftIO render
-    let buf1 := Terminus.Reactive.render node1 10 5
+    let buf1 := Terminus.Reactive.renderOnly node1 10 5
 
     -- Fire event
     SpiderM.liftIO (trigger ())
 
     -- Second render to buffer
     let node2 ← SpiderM.liftIO render
-    let buf2 := Terminus.Reactive.render node2 10 5
+    let buf2 := Terminus.Reactive.renderOnly node2 10 5
 
     -- Buffers should differ
     let cell1 := buf1.get 0 0
@@ -305,12 +305,12 @@ test "dynProgressBar updates buffer when progress changes" := do
     ).run events
 
     let node1 ← SpiderM.liftIO render
-    let buf1 := Terminus.Reactive.render node1 10 2
+    let buf1 := Terminus.Reactive.renderOnly node1 10 2
 
     SpiderM.liftIO (trigger 0.6)
 
     let node2 ← SpiderM.liftIO render
-    let buf2 := Terminus.Reactive.render node2 10 2
+    let buf2 := Terminus.Reactive.renderOnly node2 10 2
 
     -- Initial progress = 0.0 -> "-----"
     (buf1.get 0 0).char ≡ '-'
@@ -345,7 +345,7 @@ test "row' with emitDynamic updates buffer" := do
     ).run events
 
     let node1 ← SpiderM.liftIO render
-    let buf1 := Terminus.Reactive.render node1 20 2
+    let buf1 := Terminus.Reactive.renderOnly node1 20 2
 
     -- Check initial buffer has "Count:" and "0"
     (buf1.get 0 0).char ≡ 'C'
@@ -355,7 +355,7 @@ test "row' with emitDynamic updates buffer" := do
     SpiderM.liftIO (trigger ())
 
     let node2 ← SpiderM.liftIO render
-    let buf2 := Terminus.Reactive.render node2 20 2
+    let buf2 := Terminus.Reactive.renderOnly node2 20 2
 
     -- Check updated buffer has "1"
     (buf2.get 7 0).char ≡ '1'
@@ -381,7 +381,7 @@ test "column' with row' containing emitDynamic updates buffer" := do
     ).run events
 
     let node1 ← SpiderM.liftIO render
-    let buf1 := Terminus.Reactive.render node1 20 5
+    let buf1 := Terminus.Reactive.renderOnly node1 20 5
 
     -- Header on row 0
     (buf1.get 0 0).char ≡ 'H'
@@ -389,7 +389,7 @@ test "column' with row' containing emitDynamic updates buffer" := do
     SpiderM.liftIO (trigger ())
 
     let node2 ← SpiderM.liftIO render
-    let buf2 := Terminus.Reactive.render node2 20 5
+    let buf2 := Terminus.Reactive.renderOnly node2 20 5
 
     -- Verify buffers differ
     let diff := Buffer.diff buf1 buf2

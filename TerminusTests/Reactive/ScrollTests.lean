@@ -142,7 +142,7 @@ test "RNode.clipped renders content within bounds" := do
       .text "Line 3" {}
     ]
   )
-  let buf := Terminus.Reactive.render node 20 3
+  let buf := Terminus.Reactive.renderOnly node 20 3
   -- All 3 lines should fit in 3-row buffer
   (buf.get 0 0).char ≡ 'L'  -- Line 1
   (buf.get 0 1).char ≡ 'L'  -- Line 2
@@ -158,7 +158,7 @@ test "RNode.scrolled applies offset to content" := do
       ]
     )
   )
-  let buf := Terminus.Reactive.render node 20 3
+  let buf := Terminus.Reactive.renderOnly node 20 3
   -- With scroll offset of 1, Line 2 should be at row 0
   -- Note: exact behavior depends on how scroll offset is applied
   buf.width ≡ 20  -- Basic sanity check

@@ -65,12 +65,12 @@ test "reactive app loop updates buffer on tick events" := do
   env.postBuildTrigger ()
 
   let node1 ← render
-  let buf1 := Terminus.Reactive.render node1 10 2
+  let buf1 := Terminus.Reactive.renderOnly node1 10 2
 
   inputs.fireTick { frame := 1, elapsedMs := 16 }
 
   let node2 ← render
-  let buf2 := Terminus.Reactive.render node2 10 2
+  let buf2 := Terminus.Reactive.renderOnly node2 10 2
 
   (buf1.get 0 0).char ≡ '0'
   (buf2.get 0 0).char ≡ '1'
@@ -93,12 +93,12 @@ test "reactive app loop updates buffer on key events" := do
   env.postBuildTrigger ()
 
   let node1 ← render
-  let buf1 := Terminus.Reactive.render node1 10 2
+  let buf1 := Terminus.Reactive.renderOnly node1 10 2
 
   inputs.fireKey { event := KeyEvent.char 'a', focusedWidget := none }
 
   let node2 ← render
-  let buf2 := Terminus.Reactive.render node2 10 2
+  let buf2 := Terminus.Reactive.renderOnly node2 10 2
 
   (buf1.get 0 0).char ≡ '0'
   (buf2.get 0 0).char ≡ '1'
@@ -174,7 +174,7 @@ test "ReactiveDemo widget updates on tick and key events" := do
   env.postBuildTrigger ()
 
   let node1 ← appState.render
-  let buf1 := Terminus.Reactive.render node1 80 24
+  let buf1 := Terminus.Reactive.renderOnly node1 80 24
 
   (rnodeHasText node1 "0:00") ≡ true
   (rnodeHasText node1 "none") ≡ true
@@ -182,7 +182,7 @@ test "ReactiveDemo widget updates on tick and key events" := do
   inputs.fireTick { frame := 1, elapsedMs := 1500 }
 
   let node2 ← appState.render
-  let buf2 := Terminus.Reactive.render node2 80 24
+  let buf2 := Terminus.Reactive.renderOnly node2 80 24
 
   (rnodeHasText node2 "0:01") ≡ true
   ensure (!(Buffer.diff buf1 buf2).isEmpty) "expected buffer to change after tick"
@@ -190,7 +190,7 @@ test "ReactiveDemo widget updates on tick and key events" := do
   inputs.fireKey { event := KeyEvent.char 'a', focusedWidget := none }
 
   let node3 ← appState.render
-  let buf3 := Terminus.Reactive.render node3 80 24
+  let buf3 := Terminus.Reactive.renderOnly node3 80 24
 
   (rnodeHasText node3 "'a'") ≡ true
   ensure (!(Buffer.diff buf2 buf3).isEmpty) "expected buffer to change after key"
@@ -275,7 +275,7 @@ test "titledBlock with content renders correctly" := do
     ).run events
 
     let node ← SpiderM.liftIO render
-    let buf := Terminus.Reactive.render node 40 10
+    let buf := Terminus.Reactive.renderOnly node 40 10
 
     -- Title should appear in top border
     (buf.get 2 0).char ≡ 'T'  -- " Test Panel" starts at col 2
@@ -298,7 +298,7 @@ test "reactiveInputApp renders correctly" := do
   env.postBuildTrigger ()
 
   let node ← appState.render
-  let buf := Terminus.Reactive.render node 80 60
+  let buf := Terminus.Reactive.renderOnly node 80 60
 
   -- Check header is at top
   (buf.get 0 0).char ≡ '='

@@ -33,6 +33,7 @@ partial def naturalHeight (node : RNode) : Nat :=
   | .text _ _ => 1
   | .spacer _ h => h
   | .empty => 0
+  | .image _ _ _ h _ _ => h
   | .row _ style children =>
     let padding := style.padding * 2
     let maxChildHeight := children.foldl (fun acc c => max acc (naturalHeight c)) 0
@@ -54,6 +55,7 @@ partial def naturalWidth (node : RNode) : Nat :=
   | .text content _ => content.length
   | .spacer w _ => w
   | .empty => 0
+  | .image _ _ w _ _ _ => w
   | .row gap style children =>
     let padding := style.padding * 2
     let childWidths := children.foldl (fun acc c => acc + naturalWidth c) 0
@@ -157,6 +159,12 @@ partial def computeLayoutRec (node : RNode) (area : Rect) : StateM IdGen LayoutM
       let childLayouts ← computeLayoutRec child area
       result := result ++ childLayouts
       pure result
+
+  | .image _ _ w h _ _ =>
+    let imageRect := { area with
+      width := min w area.width
+      height := min h area.height }
+    pure #[(nodeId, imageRect)]
 
 /-- Look up rect by node ID in layout map. -/
 def lookupRect (layouts : LayoutMap) (nodeId : Nat) : Option Rect :=
@@ -319,10 +327,11 @@ def renderBlockBorderClipped (title : Option String) (borderType : BorderType) (
 
   result
 
-/-- Render state tracking node ID counter and buffer. -/
+/-- Render state tracking node ID counter, buffer, and terminal commands. -/
 structure RenderState where
   nextId : Nat := 0
   buf : Buffer
+  commands : Array TerminalCommand := #[]
 
 /-- Render an RNode recursively with proper clip context propagation. -/
 partial def renderNodeRecursive (node : RNode) (layouts : LayoutMap)
@@ -358,13 +367,34 @@ partial def renderNodeRecursive (node : RNode) (layouts : LayoutMap)
     | .scrolled _offsetX _offsetY child =>
       renderNodeRecursive child layouts clip
 
+    | .image source protocol _ _ preserveAspect altText =>
+      -- Add image command
+      let cmd : ImageCommand := {
+        rect := rect
+        source := source
+        protocol := protocol
+        preserveAspectRatio := preserveAspect
+      }
+      modify fun s => { s with commands := s.commands.push (.image cmd) }
+      -- Also render alt text as fallback (for terminals that don't support images)
+      let fallbackText := s!"[{altText}]"
+      modify fun s => { s with buf := renderTextClipped fallbackText Style.dim rect s.buf clip }
+
     | .spacer _ _ | .empty =>
       pure ()
 
+/-- Result of rendering an RNode tree. -/
+structure RenderResult where
+  /-- The rendered buffer. -/
+  buffer : Buffer
+  /-- Terminal commands (images, clipboard, etc.) -/
+  commands : Array TerminalCommand := #[]
+  deriving Inhabited
+
 /-- Render entire RNode tree to Buffer with clipping support. -/
-def renderTree (node : RNode) (layouts : LayoutMap) (buf : Buffer) : Buffer :=
+def renderTree (node : RNode) (layouts : LayoutMap) (buf : Buffer) : RenderResult :=
   let (_, st) := renderNodeRecursive node layouts {} |>.run { nextId := 0, buf := buf }
-  st.buf
+  { buffer := st.buf, commands := st.commands }
 
 /-! ## Main Render Function -/
 
@@ -374,15 +404,24 @@ def computeLayout (root : RNode) (width height : Nat) : LayoutMap :=
   let (layouts, _) := computeLayoutRec root area |>.run { nextId := 0 }
   layouts
 
-/-- Render an RNode tree to a Buffer.
+/-- Render an RNode tree to a Buffer and collect commands.
     This is the main entry point for rendering reactive widgets. -/
-def renderToBuffer (root : RNode) (width height : Nat) (buf : Buffer) : Buffer :=
+def renderToBuffer (root : RNode) (width height : Nat) (buf : Buffer) : RenderResult :=
   let layouts := computeLayout root width height
   renderTree root layouts buf
 
 /-- Create a fresh buffer and render an RNode tree to it. -/
-def render (root : RNode) (width height : Nat) : Buffer :=
+def render (root : RNode) (width height : Nat) : RenderResult :=
   let buf := Buffer.new width height
   renderToBuffer root width height buf
+
+/-- Render an RNode tree to just a Buffer (ignoring commands).
+    Use this for simple cases where image/clipboard commands aren't needed. -/
+def renderToBufferOnly (root : RNode) (width height : Nat) (buf : Buffer) : Buffer :=
+  (renderToBuffer root width height buf).buffer
+
+/-- Create a fresh buffer and render, returning just the buffer. -/
+def renderOnly (root : RNode) (width height : Nat) : Buffer :=
+  (render root width height).buffer
 
 end Terminus.Reactive
