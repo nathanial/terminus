@@ -286,7 +286,6 @@ def inputContent (theme : Theme) (_events : TerminusEvents) : WidgetM Unit := do
         titledBlock' "Form" .rounded theme do
           text' "Ctrl+Enter: submit | Esc: cancel" theme.captionStyle
 
-          let statusRef ← SpiderM.liftIO (IO.mkRef "Idle")
           let fields := #[
             { label := "Name", name := "name", required := true, placeholder := "Ada" },
             { label := "Email", name := "email", required := true, placeholder := "ada@example.com",
@@ -295,16 +294,17 @@ def inputContent (theme : Theme) (_events : TerminusEvents) : WidgetM Unit := do
 
           let form ← form' fields { fieldGap := 1, inputWidth := 18 } theme
 
-          let _ ← SpiderM.liftIO <| form.onSubmit.subscribe fun _ =>
-            statusRef.set "Submitted"
-          let _ ← SpiderM.liftIO <| form.onCancel.subscribe fun _ =>
-            statusRef.set "Cancelled"
+          -- FRP: Compose status from form events
+          let submitStatus ← Event.mapM (fun _ => "Submitted") form.onSubmit
+          let cancelStatus ← Event.mapM (fun _ => "Cancelled") form.onCancel
+          let statusEvent ← Event.leftmostM [submitStatus, cancelStatus]
+          let statusDyn ← Reactive.holdDyn "Idle" statusEvent
 
           spacer' 0 1
 
           emitDynamic do
             let ok ← form.isValid.sample
-            let status ← statusRef.get
+            let status ← statusDyn.sample
             let validity := if ok then "valid" else "invalid"
             pure (RNode.text s!"Status: {status} ({validity})" theme.captionStyle)
 
@@ -370,7 +370,6 @@ def dataContent (theme : Theme) (_events : TerminusEvents) : WidgetM Unit := do
       -- Menu
       column' (gap := 1) {} do
         titledBlock' "Menu Widget" .rounded theme do
-          let menuSelRef ← SpiderM.liftIO (IO.mkRef "None")
           let menuItems := #[
             MenuItem'.new "File" |>.withSubmenu #[
               MenuItem'.new "New",
@@ -386,13 +385,15 @@ def dataContent (theme : Theme) (_events : TerminusEvents) : WidgetM Unit := do
           ]
 
           let menuResult ← menu' "demo-menu" menuItems {}
-          let _ ← SpiderM.liftIO <| menuResult.onSelect.subscribe fun (_, label) =>
-            menuSelRef.set label
+
+          -- FRP: Create selection Dynamic from menu events
+          let selectionEvent ← Event.mapM (fun (_, label) => label) menuResult.onSelect
+          let selectedDyn ← Reactive.holdDyn "None" selectionEvent
 
           row' (gap := 1) {} do
             text' "Selected:" theme.captionStyle
             emitDynamic do
-              let sel ← menuSelRef.get
+              let sel ← selectedDyn.sample
               pure (RNode.text sel theme.bodyStyle)
 
       -- Table
@@ -425,19 +426,20 @@ def dataContent (theme : Theme) (_events : TerminusEvents) : WidgetM Unit := do
       -- Calendar
       column' (gap := 1) {} do
         titledBlock' "Calendar" .rounded theme do
-          let calDateRef ← SpiderM.liftIO (IO.mkRef "2024-01-15")
           let today := CalendarDate.new 2024 1 15
           let calResult ← calendar' "demo-calendar" 2024 1 (some 15) {
             today := some today
           }
 
-          let _ ← SpiderM.liftIO <| calResult.onSelect.subscribe fun date =>
-            calDateRef.set s!"{date.year}-{date.month}-{date.day}"
+          -- FRP: Create date Dynamic from calendar events
+          let dateEvent ← Event.mapM (fun date =>
+            s!"{date.year}-{date.month}-{date.day}") calResult.onSelect
+          let dateDyn ← Reactive.holdDyn "2024-01-15" dateEvent
 
           row' (gap := 1) {} do
             text' "Date:" theme.captionStyle
             emitDynamic do
-              let date ← calDateRef.get
+              let date ← dateDyn.sample
               pure (RNode.text date theme.primaryStyle)
 
     spacer' 0 1
@@ -589,13 +591,13 @@ def feedbackContent (theme : Theme) : WidgetM Unit := do
 
     let keyEvents ← useKeyEventW
     let focusedInput ← useFocusedInputW
-    let logCountRef ← SpiderM.liftIO (IO.mkRef 0)
-    let loggerResultRef ← SpiderM.liftIO (IO.mkRef (none : Option LoggerResult))
-    let notifResultRef ← SpiderM.liftIO (IO.mkRef (none : Option NotificationResult))
-    let dialogStatusRef ← SpiderM.liftIO (IO.mkRef "Idle")
-    let inputValueRef ← SpiderM.liftIO (IO.mkRef "(none)")
-    let popupResultRef ← SpiderM.liftIO (IO.mkRef (none : Option PopupResult))
 
+    -- Filter out keys when input dialog is focused
+    -- Create a behavior that's true when NOT focused on the input dialog
+    let notDialogFocused ← Dynamic.map' focusedInput (· != some "input-dialog-field")
+    let unfocusedKeys ← Event.gateM notDialogFocused.current keyEvents
+
+    -- Dialog visibility triggers (still need triggers for bidirectional control)
     let (modalVisEvent, fireModalVisible) ← Reactive.newTriggerEvent (t := Spider) (a := Bool)
     let modalVisible ← Reactive.holdDyn false modalVisEvent
     let (confirmVisEvent, fireConfirmVisible) ← Reactive.newTriggerEvent (t := Spider) (a := Bool)
@@ -608,6 +610,53 @@ def feedbackContent (theme : Theme) : WidgetM Unit := do
     let warningVisible ← Reactive.holdDyn false warningVisEvent
     let (inputVisEvent, fireInputVisible) ← Reactive.newTriggerEvent (t := Spider) (a := Bool)
     let inputVisible ← Reactive.holdDyn false inputVisEvent
+
+    -- Popup visibility as FRP toggle
+    let popupToggleKeys ← Event.filterM (fun kd =>
+      kd.event.code == .char 'p' || kd.event.code == .char 'P') unfocusedKeys
+    let popupToggleVoid ← Event.voidM popupToggleKeys
+    let popupVisible ← Reactive.foldDyn (fun _ v => !v) false popupToggleVoid
+
+    -- FRP: Key events for logging
+    let infoLogKeys ← Event.filterM (fun kd =>
+      kd.event.code == .char 'l' || kd.event.code == .char 'L') unfocusedKeys
+    let errorLogKeys ← Event.filterM (fun kd =>
+      kd.event.code == .char 'e' || kd.event.code == .char 'E') unfocusedKeys
+    let warnLogKeys ← Event.filterM (fun kd =>
+      kd.event.code == .char 'w' || kd.event.code == .char 'W') unfocusedKeys
+    let clearKeys ← Event.filterM (fun kd =>
+      kd.event.code == .char 'c' || kd.event.code == .char 'C') unfocusedKeys
+
+    -- FRP: Key events for notifications
+    let notifyKeys ← Event.filterM (fun kd =>
+      kd.event.code == .char 'n' || kd.event.code == .char 'N') unfocusedKeys
+    let dismissKeys ← Event.filterM (fun kd =>
+      kd.event.code == .char 'd' || kd.event.code == .char 'D') unfocusedKeys
+
+    -- FRP: Count log entries for numbering
+    let allLogKeys ← Event.leftmostM [infoLogKeys, errorLogKeys, warnLogKeys, notifyKeys]
+    let allLogVoid ← Event.voidM allLogKeys
+    let logCountDyn ← Reactive.foldDyn (fun _ n => n + 1) 0 allLogVoid
+
+    -- FRP: Create log entry events with counts
+    let infoEntries ← Event.attachWithM (fun count _ =>
+      LogEntry.info s!"Info message #{count + 1}"
+    ) logCountDyn.current infoLogKeys
+    let errorEntries ← Event.attachWithM (fun count _ =>
+      LogEntry.error s!"Error message #{count + 1}"
+    ) logCountDyn.current errorLogKeys
+    let warnEntries ← Event.attachWithM (fun count _ =>
+      LogEntry.warn s!"Warning #{count + 1}"
+    ) logCountDyn.current warnLogKeys
+    let allLogEntries ← Event.leftmostM [infoEntries, errorEntries, warnEntries]
+    let clearEvents ← Event.voidM clearKeys
+
+    -- FRP: Create notification events
+    let notifyEntries ← Event.attachWithM (fun count _ =>
+      (NotificationLevel.success, s!"Notification #{count + 1}!")
+    ) logCountDyn.current notifyKeys
+    let dismissOneEvents ← Event.voidM dismissKeys
+    let dismissAllEvents ← Event.voidM clearKeys
 
     row' (gap := 2) {} do
       -- Spinners
@@ -629,24 +678,22 @@ def feedbackContent (theme : Theme) : WidgetM Unit := do
             text' "Arc:" theme.captionStyle
             let _ ← animatedSpinner' none 80 { style := .arc }
 
-      -- Logger
+      -- Logger (FRP: event-driven)
       column' (gap := 1) {} do
         titledBlock' "Logger" .rounded theme do
-          let logResult ← logger' {
+          let _ ← loggerWithEvents' allLogEntries clearEvents {
             maxLines := 6
             showLevel := true
             showTimestamp := false
           }
-          SpiderM.liftIO (loggerResultRef.set (some logResult))
 
-      -- Notifications
+      -- Notifications (FRP: event-driven)
       column' (gap := 1) {} do
         titledBlock' "Notifications" .rounded theme do
-          let notifResult ← notifications' {
+          notificationsWithEvents' notifyEntries dismissOneEvents dismissAllEvents {
             durationMs := 0
             maxVisible := 4
           }
-          SpiderM.liftIO (notifResultRef.set (some notifResult))
 
     spacer' 0 1
 
@@ -667,123 +714,106 @@ def feedbackContent (theme : Theme) : WidgetM Unit := do
           let warningDismiss ← warningDialog' "Please review the warning." warningVisible theme
           let inputResult ← inputDialog' "Enter your name:" inputVisible theme "Your name"
 
-          let _ ← SpiderM.liftIO <| confirmResult.confirmed.subscribe fun _ => do
-            dialogStatusRef.set "Confirmed"
-            fireConfirmVisible false
-          let _ ← SpiderM.liftIO <| confirmResult.cancelled.subscribe fun _ => do
-            dialogStatusRef.set "Cancelled"
-            fireConfirmVisible false
+          -- FRP: Compose dialog status from all events
+          let confirmedStatus ← Event.mapM (fun _ => "Confirmed") confirmResult.confirmed
+          let cancelledStatus ← Event.mapM (fun _ => "Cancelled") confirmResult.cancelled
+          let confirmStatusEvent ← Event.leftmostM [confirmedStatus, cancelledStatus]
+          let messageStatusEvent ← Event.mapM (fun _ => "Message dismissed") messageDismiss
+          let errorStatusEvent ← Event.mapM (fun _ => "Error dismissed") errorDismiss
+          let warningStatusEvent ← Event.mapM (fun _ => "Warning dismissed") warningDismiss
+          let inputSubmitStatusEvent ← Event.mapM (fun _ => "Input submitted") inputResult.submitted
+          let inputCancelStatusEvent ← Event.mapM (fun _ => "Input cancelled") inputResult.cancelled
 
-          let _ ← SpiderM.liftIO <| messageDismiss.subscribe fun _ => do
-            dialogStatusRef.set "Message dismissed"
-            fireMessageVisible false
-          let _ ← SpiderM.liftIO <| errorDismiss.subscribe fun _ => do
-            dialogStatusRef.set "Error dismissed"
-            fireErrorVisible false
-          let _ ← SpiderM.liftIO <| warningDismiss.subscribe fun _ => do
-            dialogStatusRef.set "Warning dismissed"
-            fireWarningVisible false
+          -- Key open events for status
+          let modalOpenKeys ← Event.filterM (fun kd =>
+            kd.event.code == .char 'o' || kd.event.code == .char 'O') unfocusedKeys
+          let confirmOpenKeys ← Event.filterM (fun kd =>
+            kd.event.code == .char 'f' || kd.event.code == .char 'F') unfocusedKeys
+          let messageOpenKeys ← Event.filterM (fun kd =>
+            kd.event.code == .char 'm' || kd.event.code == .char 'M') unfocusedKeys
+          let inputOpenKeys ← Event.filterM (fun kd =>
+            kd.event.code == .char 'i' || kd.event.code == .char 'I') unfocusedKeys
+          let errorOpenKeys ← Event.filterM (fun kd =>
+            kd.event.code == .char 'x' || kd.event.code == .char 'X') unfocusedKeys
+          let warningOpenKeys ← Event.filterM (fun kd =>
+            kd.event.code == .char 'v' || kd.event.code == .char 'V') unfocusedKeys
+          let escapeKeys ← Event.filterM (fun kd => kd.event.code == .escape) unfocusedKeys
 
-          let _ ← SpiderM.liftIO <| inputResult.submitted.subscribe fun value => do
-            inputValueRef.set value
-            dialogStatusRef.set "Input submitted"
-            fireInputVisible false
-          let _ ← SpiderM.liftIO <| inputResult.cancelled.subscribe fun _ => do
-            dialogStatusRef.set "Input cancelled"
-            fireInputVisible false
+          let modalOpenStatus ← Event.mapM (fun _ => "Modal opened") modalOpenKeys
+          let confirmOpenStatus ← Event.mapM (fun _ => "Confirm opened") confirmOpenKeys
+          let messageOpenStatus ← Event.mapM (fun _ => "Message opened") messageOpenKeys
+          let inputOpenStatus ← Event.mapM (fun _ => "Input opened") inputOpenKeys
+          let errorOpenStatus ← Event.mapM (fun _ => "Error opened") errorOpenKeys
+          let warningOpenStatus ← Event.mapM (fun _ => "Warning opened") warningOpenKeys
+
+          -- Escape closes modal only when it's visible
+          let escapeWhenModal ← Event.attachWithM (fun vis _ => vis) modalVisible.current escapeKeys
+          let modalCloseEvents ← Event.filterM (fun vis => vis) escapeWhenModal
+          let modalCloseStatus ← Event.mapM (fun _ => "Modal closed") modalCloseEvents
+
+          let allStatusEvents ← Event.leftmostM [
+            confirmStatusEvent, messageStatusEvent, errorStatusEvent,
+            warningStatusEvent, inputSubmitStatusEvent, inputCancelStatusEvent,
+            modalOpenStatus, confirmOpenStatus, messageOpenStatus,
+            inputOpenStatus, errorOpenStatus, warningOpenStatus, modalCloseStatus
+          ]
+          let dialogStatusDyn ← Reactive.holdDyn "Idle" allStatusEvents
+
+          -- FRP: Input value from dialog submissions
+          let inputValueDyn ← Reactive.holdDyn "(none)" inputResult.submitted
+
+          -- Wire key events to visibility triggers using performEvent_ (FRP-friendly)
+          let modalOpenAction ← Event.mapM (fun _ => fireModalVisible true) modalOpenKeys
+          let confirmOpenAction ← Event.mapM (fun _ => fireConfirmVisible true) confirmOpenKeys
+          let messageOpenAction ← Event.mapM (fun _ => fireMessageVisible true) messageOpenKeys
+          let inputOpenAction ← Event.mapM (fun _ => fireInputVisible true) inputOpenKeys
+          let errorOpenAction ← Event.mapM (fun _ => fireErrorVisible true) errorOpenKeys
+          let warningOpenAction ← Event.mapM (fun _ => fireWarningVisible true) warningOpenKeys
+          let modalCloseAction ← Event.mapM (fun _ => fireModalVisible false) modalCloseEvents
+
+          performEvent_ modalOpenAction
+          performEvent_ confirmOpenAction
+          performEvent_ messageOpenAction
+          performEvent_ inputOpenAction
+          performEvent_ errorOpenAction
+          performEvent_ warningOpenAction
+          performEvent_ modalCloseAction
+
+          -- Wire dialog result events to close visibility using performEvent_
+          let confirmCloseAction1 ← Event.mapM (fun _ => fireConfirmVisible false) confirmResult.confirmed
+          let confirmCloseAction2 ← Event.mapM (fun _ => fireConfirmVisible false) confirmResult.cancelled
+          let messageCloseAction ← Event.mapM (fun _ => fireMessageVisible false) messageDismiss
+          let errorCloseAction ← Event.mapM (fun _ => fireErrorVisible false) errorDismiss
+          let warningCloseAction ← Event.mapM (fun _ => fireWarningVisible false) warningDismiss
+          let inputCloseAction1 ← Event.mapM (fun _ => fireInputVisible false) inputResult.submitted
+          let inputCloseAction2 ← Event.mapM (fun _ => fireInputVisible false) inputResult.cancelled
+
+          performEvent_ confirmCloseAction1
+          performEvent_ confirmCloseAction2
+          performEvent_ messageCloseAction
+          performEvent_ errorCloseAction
+          performEvent_ warningCloseAction
+          performEvent_ inputCloseAction1
+          performEvent_ inputCloseAction2
 
           spacer' 0 1
 
           emitDynamic do
-            let status ← dialogStatusRef.get
-            let inputValue ← inputValueRef.get
+            let status ← dialogStatusDyn.sample
+            let inputValue ← inputValueDyn.sample
             pure (RNode.text s!"Last: {status} | Input: {inputValue}" theme.captionStyle)
 
-      -- Popup
+      -- Popup (FRP: visibility-driven)
       column' (gap := 1) {} do
         titledBlock' "Popup" .rounded theme do
           text' "P: toggle popup" theme.captionStyle
-          let popupResult ← popup' "demo-popup" { title := some "Popup" } do
+          popupWhen' "demo-popup" popupVisible { title := some "Popup" } do
             text' "This is a popup panel." theme.bodyStyle
             text' "Press P to toggle visibility." theme.captionStyle
-          SpiderM.liftIO (popupResultRef.set (some popupResult))
           emitDynamic do
-            let visible ← popupResult.visible.sample
+            let visible ← popupVisible.sample
             let label := if visible then "Visible" else "Hidden"
             pure (RNode.text s!"Status: {label}" theme.captionStyle)
-
-    -- Key handler for logging and dialogs
-    let _unsub ← SpiderM.liftIO <| keyEvents.subscribe fun kd => do
-      let focus ← focusedInput.sample
-      if focus == some "input-dialog-field" then
-        pure ()
-      else
-        match kd.event.code with
-        | .char 'l' | .char 'L' =>
-          let count ← logCountRef.get
-          logCountRef.set (count + 1)
-          match (← loggerResultRef.get) with
-          | some logger => logger.log .info s!"Info message #{count + 1}"
-          | none => pure ()
-        | .char 'e' | .char 'E' =>
-          let count ← logCountRef.get
-          logCountRef.set (count + 1)
-          match (← loggerResultRef.get) with
-          | some logger => logger.log .error s!"Error message #{count + 1}"
-          | none => pure ()
-        | .char 'w' | .char 'W' =>
-          let count ← logCountRef.get
-          logCountRef.set (count + 1)
-          match (← loggerResultRef.get) with
-          | some logger => logger.log .warn s!"Warning #{count + 1}"
-          | none => pure ()
-        | .char 'n' | .char 'N' =>
-          let count ← logCountRef.get
-          logCountRef.set (count + 1)
-          match (← notifResultRef.get) with
-          | some notif => notif.«show» .success s!"Notification #{count + 1}!"
-          | none => pure ()
-        | .char 'd' | .char 'D' =>
-          match (← notifResultRef.get) with
-          | some notif => notif.dismiss
-          | none => pure ()
-        | .char 'c' | .char 'C' =>
-          match (← loggerResultRef.get) with
-          | some logger => logger.clear
-          | none => pure ()
-          match (← notifResultRef.get) with
-          | some notif => notif.dismissAll
-          | none => pure ()
-        | .char 'p' | .char 'P' =>
-          match (← popupResultRef.get) with
-          | some popup => popup.toggle
-          | none => pure ()
-        | .char 'o' | .char 'O' =>
-          dialogStatusRef.set "Modal opened"
-          fireModalVisible true
-        | .char 'f' | .char 'F' =>
-          dialogStatusRef.set "Confirm opened"
-          fireConfirmVisible true
-        | .char 'm' | .char 'M' =>
-          dialogStatusRef.set "Message opened"
-          fireMessageVisible true
-        | .char 'i' | .char 'I' =>
-          dialogStatusRef.set "Input opened"
-          fireInputVisible true
-        | .char 'x' | .char 'X' =>
-          dialogStatusRef.set "Error opened"
-          fireErrorVisible true
-        | .char 'v' | .char 'V' =>
-          dialogStatusRef.set "Warning opened"
-          fireWarningVisible true
-        | .escape =>
-          let isVisible ← modalVisible.sample
-          if isVisible then
-            dialogStatusRef.set "Modal closed"
-            fireModalVisible false
-          else
-            pure ()
-        | _ => pure ()
 
 /-! ## Media Tab Content -/
 
@@ -877,35 +907,44 @@ def asyncContent (theme : Theme) : WidgetM Unit := do
             | none => pure (RNode.text "No data yet" theme.captionStyle)
             | some data => pure (RNode.text s!"Result: {data}" { fg := .ansi .green })
       )
-      -- Right: Streaming
+      -- Right: Streaming (FRP: using foldDyn for chunk accumulation)
       (do
         titledBlock' "Streaming Demo" .rounded theme do
           text' "Press S to stream:" theme.bodyStyle
 
-          let (_chunkEvent, _fireChunk) ← Reactive.newTriggerEvent (t := Spider) (a := String)
+          -- FRP: Trigger events for streaming state
+          let (chunkEvent, fireChunk) ← Reactive.newTriggerEvent (t := Spider) (a := String)
+          let (resetEvent, fireReset) ← Reactive.newTriggerEvent (t := Spider) (a := Unit)
           let (streamingEvent, fireStreaming) ← Reactive.newTriggerEvent (t := Spider) (a := Bool)
-          let (chunksEvent, fireChunks) ← Reactive.newTriggerEvent (t := Spider) (a := Array String)
 
-          let chunksRef ← SpiderM.liftIO (IO.mkRef #[])
           let env ← SpiderM.getEnv
 
-          let keyEvent ← useKeyEventW
-          let _unsub ← SpiderM.liftIO <| keyEvent.subscribe fun kd => do
-            if kd.event.code == .char 's' || kd.event.code == .char 'S' then
-              chunksRef.set #[]
-              env.withFrame do
-                fireStreaming true
-                fireChunks #[]
-              let _ ← IO.asTask (prio := .dedicated) do
-                for i in [1:5] do
-                  IO.sleep 400
-                  let chunk := s!"Chunk {i}"
-                  let newChunks ← chunksRef.modifyGet fun cs => (cs.push chunk, cs.push chunk)
-                  env.withFrame (fireChunks newChunks)
-                env.withFrame (fireStreaming false)
+          -- FRP: Accumulate chunks using foldDyn (either add chunk or reset)
+          let addChunkEvents ← Event.mapM (fun chunk => (true, chunk)) chunkEvent
+          let resetEvents ← Event.mapM (fun _ => (false, "")) resetEvent
+          let allChunkEvents ← Event.leftmostM [addChunkEvents, resetEvents]
+          let chunksDyn ← Reactive.foldDyn (fun (isAdd, chunk) chunks =>
+            if isAdd then chunks.push chunk else #[]
+          ) (#[] : Array String) allChunkEvents
 
           let streamingDyn ← Reactive.holdDyn false streamingEvent
-          let chunksDyn ← Reactive.holdDyn #[] chunksEvent
+
+          let keyEvent ← useKeyEventW
+          let streamKeys ← Event.filterM (fun kd =>
+            kd.event.code == .char 's' || kd.event.code == .char 'S') keyEvent
+
+          -- FRP: Map stream keys to IO actions and use performEvent_
+          let streamAction ← Event.mapM (fun _ => do
+            env.withFrame do
+              fireReset ()
+              fireStreaming true
+            let _ ← IO.asTask (prio := .dedicated) do
+              for i in [1:5] do
+                IO.sleep 400
+                env.withFrame (fireChunk s!"Chunk {i}")
+              env.withFrame (fireStreaming false)
+          ) streamKeys
+          performEvent_ streamAction
 
           spacer' 1 1
 
@@ -955,16 +994,16 @@ def app : ReactiveTermM ReactiveAppState := do
 
           spacer' 0 1
 
-          -- Handle Tab key for automatic focus cycling
+          -- Handle Tab key for automatic focus cycling using FRP
           let keyEvents ← useKeyEventW
-          let _tabUnsub ← SpiderM.liftIO <| keyEvents.subscribe fun kd => do
-            match kd.event.code with
-            | .tab =>
-              if kd.event.modifiers.shift then
-                events.registry.focusPrev
-              else
-                events.registry.focusNext
-            | _ => pure ()
+          let tabKeys ← Event.filterM (fun kd => kd.event.code == .tab) keyEvents
+          let focusAction ← Event.mapM (fun kd =>
+            if kd.event.modifiers.shift then
+              events.registry.focusPrev
+            else
+              events.registry.focusNext
+          ) tabKeys
+          performEvent_ focusAction
 
           -- Content area based on selected tab (rebuilds on change)
           let _ ← dynWidget tabResult.activeTab fun idx => do

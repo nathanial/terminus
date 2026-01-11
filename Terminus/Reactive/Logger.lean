@@ -214,6 +214,92 @@ def logger' (config : LoggerConfig := {}) : WidgetM LoggerResult := do
     clear := clearFn
   }
 
+/-! ## FRP-Friendly Logger
+
+The `loggerWithEvents'` variant accepts Events instead of exposing imperative
+log/clear methods. This allows for fully declarative FRP composition.
+-/
+
+/-- Create an event-driven log display widget.
+
+    Unlike `logger'` which returns imperative `log` and `clear` methods,
+    this variant is driven by input Events. This makes it easy to compose
+    log entries from multiple sources using FRP primitives.
+
+    Example:
+    ```
+    -- Create log events from key presses
+    let keyEvents ← useKeyEventW
+    let infoKeys ← Event.filterM (fun kd =>
+      kd.event.code == .char 'l') keyEvents
+    let logEntries ← Event.mapM (fun _ => LogEntry.info "Key pressed") infoKeys
+
+    -- Create clear event
+    let clearKeys ← Event.filterM (fun kd =>
+      kd.event.code == .char 'c') keyEvents
+    let clearEvents ← Event.voidM clearKeys
+
+    -- Logger driven by events
+    let entries ← loggerWithEvents' logEntries clearEvents { maxLines := 50 }
+    ```
+-/
+def loggerWithEvents' (logEvents : Reactive.Event Spider LogEntry)
+    (clearEvents : Reactive.Event Spider Unit) (config : LoggerConfig := {})
+    : WidgetM (Reactive.Dynamic Spider (Array LogEntry)) := do
+
+  -- Create a combined event that either adds an entry or clears
+  -- Use Sum type for proper type-safe discrimination
+  let addEvent ← Event.mapM (fun entry => Sum.inl entry) logEvents
+  let clearEvent ← Event.mapM (fun _ => Sum.inr ()) clearEvents
+  let combinedEvent ← Event.leftmostM [addEvent, clearEvent]
+
+  -- Fold over events to build entries array
+  let entriesDyn ← Reactive.foldDyn (fun action entries =>
+    match action with
+    | .inl entry =>
+      if entries.size >= config.maxLines then
+        entries.extract 1 entries.size |>.push entry
+      else
+        entries.push entry
+    | .inr _ => #[]  -- Clear
+  ) #[] combinedEvent
+
+  -- Emit render function
+  emitDynamic do
+    let entries ← entriesDyn.sample
+
+    if entries.isEmpty then
+      pure (RNode.text "(no log entries)" config.debugStyle)
+    else
+      -- Build log lines
+      let mut nodes : Array RNode := #[]
+      for entry in entries do
+        let levelStyle := config.styleFor entry.level
+
+        -- Build the line
+        let mut parts : Array RNode := #[]
+
+        -- Timestamp
+        if config.showTimestamp then
+          match entry.timestamp with
+          | some ts =>
+            if !ts.isEmpty then
+              parts := parts.push (RNode.text (ts ++ " ") config.timestampStyle)
+          | none => pure ()
+
+        -- Level tag
+        if config.showLevel then
+          parts := parts.push (RNode.text (entry.level.tag ++ " ") levelStyle)
+
+        -- Message
+        parts := parts.push (RNode.text entry.message levelStyle)
+
+        nodes := nodes.push (RNode.row 0 {} parts)
+
+      pure (RNode.column 0 {} nodes)
+
+  pure entriesDyn
+
 /-! ## Convenience Functions -/
 
 /-- Create a simple logger with default settings. -/

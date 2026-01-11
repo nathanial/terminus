@@ -5,6 +5,7 @@
 import Terminus.Reactive.Monad
 import Terminus.Reactive.Components
 import Terminus.Reactive.Containers
+import Terminus.Reactive.Overlay
 import Reactive
 
 open Reactive Reactive.Host
@@ -104,6 +105,48 @@ def popup' (_name : String) (config : PopupConfig := {}) (content : WidgetM Unit
     hide := hideFn
     toggle := toggleFn
   }
+
+/-! ## FRP-Friendly Popup
+
+The `popupWhen'` variant accepts a visibility Dynamic, making it easy to compose
+with other reactive primitives. This is the preferred API for FRP-style code.
+-/
+
+/-- Create a popup controlled by a visibility Dynamic.
+
+    Unlike `popup'` which returns imperative show/hide methods, this variant
+    is driven by a Dynamic Bool that controls visibility. This makes it easy
+    to compose with other FRP primitives like `useToggle`.
+
+    Example:
+    ```
+    -- Create visibility from a toggle event
+    let keyEvents ← useKeyEventW
+    let toggleKeys ← Event.filterM (fun kd =>
+      kd.event.code == .char 'p' || kd.event.code == .char 'P') keyEvents
+    let visible ← useToggle toggleKeys
+
+    -- Popup appears/disappears based on the Dynamic
+    popupWhen' "my-popup" visible {} do
+      text' "This is popup content"
+    ```
+-/
+def popupWhen' (_name : String) (visible : Reactive.Dynamic Spider Bool)
+    (config : PopupConfig := {}) (content : WidgetM Unit) : WidgetM Unit := do
+  let (_, childRenders) ← runWidgetChildren content
+
+  overlayWhen' visible {} do
+    emit do
+      let nodes ← childRenders.mapM id
+      let inner := RNode.column 0 {} nodes
+      pure (RNode.block config.title config.borderType config.borderStyle inner)
+
+/-- Create a simple message popup controlled by visibility Dynamic. -/
+def messagePopupWhen' (_name : String) (visible : Reactive.Dynamic Spider Bool)
+    (title : String) (message : String) (config : PopupConfig := {})
+    : WidgetM Unit := do
+  popupWhen' _name visible { config with title := some title } do
+    text' message config.contentStyle
 
 /-- Create a simple message popup.
 

@@ -225,6 +225,107 @@ def notifications' (config : NotificationConfig := {}) : WidgetM NotificationRes
     dismissAll := dismissAllFn
   }
 
+/-! ## FRP-Friendly Notifications
+
+The `notificationsWithEvents'` variant accepts Events instead of exposing imperative
+show/dismiss methods. This allows for fully declarative FRP composition.
+-/
+
+/-- Create an event-driven notification widget.
+
+    Unlike `notifications'` which returns imperative `show` and `dismiss` methods,
+    this variant is driven by input Events. This makes it easy to compose
+    notifications from multiple sources using FRP primitives.
+
+    Example:
+    ```
+    -- Create show events from key presses
+    let keyEvents ← useKeyEventW
+    let notifyKeys ← Event.filterM (fun kd =>
+      kd.event.code == .char 'n') keyEvents
+    let showEvents ← Event.mapM (fun _ =>
+      (NotificationLevel.success, "Action completed!")) notifyKeys
+
+    -- Create dismiss events
+    let dismissKeys ← Event.filterM (fun kd =>
+      kd.event.code == .char 'd') keyEvents
+    let dismissEvents ← Event.voidM dismissKeys
+
+    -- Notifications driven by events
+    notificationsWithEvents' showEvents dismissEvents dismissEvents { durationMs := 3000 }
+    ```
+-/
+-- Actions for notification state machine
+private inductive NotifAction where
+  | add (entry : NotificationEntry)
+  | dismissOne
+  | dismissAll
+  | tick (currentTime : Nat)
+
+def notificationsWithEvents' (showEvents : Reactive.Event Spider (NotificationLevel × String))
+    (dismissEvents : Reactive.Event Spider Unit)
+    (dismissAllEvents : Reactive.Event Spider Unit)
+    (config : NotificationConfig := {}) : WidgetM Unit := do
+  -- Get tick events for auto-dismiss timing
+  let tickEvent ← useTickW
+
+  -- Track current time from ticks
+  let currentTimeDyn ← Reactive.foldDyn (fun td _ => td.elapsedMs) 0 tickEvent
+
+  -- Create entries from show events (attach current time)
+  let newEntryEvents ← Event.attachWithM (fun currentTime pair =>
+    let (level, message) := pair
+    NotificationEntry.mk 0 level message currentTime
+  ) currentTimeDyn.current showEvents
+
+  -- Map each event type to NotifAction
+  let addEvents ← Event.mapM NotifAction.add newEntryEvents
+  let dismissOneEvents ← Event.mapM (fun _ => NotifAction.dismissOne) dismissEvents
+  let dismissAllEvts ← Event.mapM (fun _ => NotifAction.dismissAll) dismissAllEvents
+  let tickEventsAction ← Event.mapM (fun td => NotifAction.tick td.elapsedMs) tickEvent
+
+  let allEvents ← Event.leftmostM [addEvents, dismissOneEvents, dismissAllEvts, tickEventsAction]
+
+  -- Fold over all events to maintain entries state
+  let entriesDyn ← Reactive.foldDyn (fun action entries =>
+    match action with
+    | .add entry =>
+      if entries.size >= config.maxVisible then
+        entries.extract 1 entries.size |>.push entry
+      else
+        entries.push entry
+    | .dismissOne =>
+      if entries.isEmpty then entries
+      else entries.extract 1 entries.size
+    | .dismissAll => #[]
+    | .tick currentTime =>
+      if config.durationMs > 0 then
+        entries.filter fun entry =>
+          currentTime - entry.createdAt < config.durationMs
+      else
+        entries
+  ) (#[] : Array NotificationEntry) allEvents
+
+  -- Emit render function
+  emitDynamic do
+    let entries ← entriesDyn.sample
+
+    if entries.isEmpty then
+      pure RNode.empty
+    else
+      -- Build notification nodes
+      let mut nodes : Array RNode := #[]
+      for entry in entries do
+        let style := config.styleFor entry.level
+        let symbol := entry.level.symbol
+
+        -- Simple notification format: [symbol] message
+        let text := s!"[{symbol}] {entry.message}"
+        nodes := nodes.push (RNode.text text style)
+
+      -- Stack vertically
+      pure (RNode.column 0 {} nodes)
+
 /-! ## Convenience Functions -/
 
 /-- Create a notification area at a specific position. -/
