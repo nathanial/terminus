@@ -105,35 +105,37 @@ def reactiveEditorApp : ReactiveTermM ReactiveAppState := do
               text' "[Submit]" theme.primaryStyle
               text' "[Cancel]" theme.captionStyle
 
-          -- Form status
-          titledBlock' "Form Status" .single theme do
-            column' (gap := 0) {} do
-              row' (gap := 1) {} do
-                text' "Name:" theme.captionStyle
-                emitDynamic do
-                  let name ← nameInput.value.sample
-                  let display := if name.isEmpty then "(empty)" else name
-                  pure (RNode.text display theme.bodyStyle)
+            spacer' 1 1
 
-              row' (gap := 1) {} do
-                text' "Email:" theme.captionStyle
-                emitDynamic do
-                  let email ← emailInput.value.sample
-                  let display := if email.isEmpty then "(empty)" else email
-                  pure (RNode.text display theme.bodyStyle)
+            -- Form status (inline with form to access the bindings)
+            titledBlock' "Form Status" .single theme do
+              column' (gap := 0) {} do
+                row' (gap := 1) {} do
+                  text' "Name:" theme.captionStyle
+                  emitDynamic do
+                    let name ← nameInput.value.sample
+                    let display := if name.isEmpty then "(empty)" else name
+                    pure (RNode.text display theme.bodyStyle)
 
-              row' (gap := 1) {} do
-                text' "Priority:" theme.captionStyle
-                emitDynamic do
-                  let prio ← priority.selectedValue.sample
-                  pure (RNode.text prio theme.bodyStyle)
+                row' (gap := 1) {} do
+                  text' "Email:" theme.captionStyle
+                  emitDynamic do
+                    let email ← emailInput.value.sample
+                    let display := if email.isEmpty then "(empty)" else email
+                    pure (RNode.text display theme.bodyStyle)
 
-              row' (gap := 1) {} do
-                text' "Newsletter:" theme.captionStyle
-                emitDynamic do
-                  let sub ← newsletter.checked.sample
-                  let display := if sub then "Yes" else "No"
-                  pure (RNode.text display theme.bodyStyle)
+                row' (gap := 1) {} do
+                  text' "Priority:" theme.captionStyle
+                  emitDynamic do
+                    let prio ← priority.selectedValue.sample
+                    pure (RNode.text prio theme.bodyStyle)
+
+                row' (gap := 1) {} do
+                  text' "Newsletter:" theme.captionStyle
+                  emitDynamic do
+                    let checked ← newsletter.checked.sample
+                    let display := if checked == true then "Yes" else "No"
+                    pure (RNode.text display theme.bodyStyle)
 
       -- Footer
       emitDynamic do
