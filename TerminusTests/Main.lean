@@ -13,37 +13,6 @@ import TerminusTests.RectTests
 import TerminusTests.StyleTests
 import TerminusTests.LayoutTests
 
--- Widget tests
-import TerminusTests.WidgetTests
-import TerminusTests.TableTests
-import TerminusTests.BarChartTests
-
--- Form widget tests
-import TerminusTests.CheckboxTests
-import TerminusTests.RadioGroupTests
-import TerminusTests.SpinnerTests
-import TerminusTests.FormTests
-import TerminusTests.FocusTests
-
--- Chart widget tests
-import TerminusTests.LineChartTests
-import TerminusTests.PieChartTests
-import TerminusTests.SparklineTests
-import TerminusTests.LineGaugeTests
-
--- Additional widget tests
-import TerminusTests.CalendarTests
-import TerminusTests.MenuTests
-import TerminusTests.TreeTests
-import TerminusTests.PopupTests
-import TerminusTests.ClearTests
-import TerminusTests.ScrollbarTests
-import TerminusTests.ScrollViewTests
-import TerminusTests.LoggerTests
-import TerminusTests.BigTextTests
-import TerminusTests.CanvasTests
-import TerminusTests.ImageTests
-
 -- Reactive tests
 import TerminusTests.Reactive.Common
 import TerminusTests.Reactive.RenderingTests

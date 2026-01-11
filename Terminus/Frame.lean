@@ -2,7 +2,6 @@
 
 import Terminus.Core.Buffer
 import Terminus.Core.Rect
-import Terminus.Widgets.Widget
 import Terminus.Backend.Commands
 import Terminus.Backend.Terminal
 import Terminus.Input.Key
@@ -39,9 +38,6 @@ def size (f : Frame) : Rect := f.area
 /-- Widget-like rendering that can also emit terminal commands. -/
 class FrameWidget (α : Type) where
   render : α → Rect → Frame → Frame
-
-instance [Widget α] : FrameWidget α where
-  render w area f := { f with buffer := Widget.render w area f.buffer }
 
 /-- Render a widget into the frame at the given area -/
 def render [FrameWidget α] (f : Frame) (widget : α) (area : Rect) : Frame :=

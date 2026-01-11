@@ -12,6 +12,90 @@ namespace Terminus.Reactive
 
 open Reactive Reactive.Host
 
+/-! ## Text Layout Types -/
+
+/-- Text alignment options -/
+inductive Alignment where
+  | left
+  | center
+  | right
+  deriving Repr, BEq, Inhabited
+
+/-- Wrap mode for long lines -/
+inductive WrapMode where
+  | noWrap    -- Truncate at boundary
+  | wrap      -- Wrap at word boundaries
+  | charWrap  -- Wrap at character boundaries
+  deriving Repr, BEq, Inhabited
+
+/-! ## Border Types -/
+
+/-- Border style variants -/
+inductive BorderType where
+  | none
+  | single
+  | double
+  | rounded
+  | thick
+  deriving Repr, BEq, Inhabited
+
+/-- Border character set -/
+structure BorderChars where
+  topLeft : Char
+  topRight : Char
+  bottomLeft : Char
+  bottomRight : Char
+  horizontal : Char
+  vertical : Char
+  deriving Repr, Inhabited
+
+namespace BorderChars
+
+def single : BorderChars := {
+  topLeft := '┌'
+  topRight := '┐'
+  bottomLeft := '└'
+  bottomRight := '┘'
+  horizontal := '─'
+  vertical := '│'
+}
+
+def double : BorderChars := {
+  topLeft := '╔'
+  topRight := '╗'
+  bottomLeft := '╚'
+  bottomRight := '╝'
+  horizontal := '═'
+  vertical := '║'
+}
+
+def rounded : BorderChars := {
+  topLeft := '╭'
+  topRight := '╮'
+  bottomLeft := '╰'
+  bottomRight := '╯'
+  horizontal := '─'
+  vertical := '│'
+}
+
+def thick : BorderChars := {
+  topLeft := '┏'
+  topRight := '┓'
+  bottomLeft := '┗'
+  bottomRight := '┛'
+  horizontal := '━'
+  vertical := '┃'
+}
+
+def fromType : BorderType → BorderChars
+  | .none => single -- Will not be drawn anyway
+  | .single => single
+  | .double => double
+  | .rounded => rounded
+  | .thick => thick
+
+end BorderChars
+
 /-! ## Layout Style
 
 Simple constraints for reactive terminal layout.
@@ -40,7 +124,7 @@ structure NodeId where
 
 /-- Render node tree - describes the visual structure of terminal UI.
     This is rendered to a Buffer after layout computation. -/
-inductive RNode where
+inductive RNode : Type where
   /-- Text content with styling. -/
   | text (content : String) (style : Style)
   /-- Block container with optional title and border. -/

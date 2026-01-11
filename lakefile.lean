@@ -18,48 +18,6 @@ lean_lib TerminusTests where
   precompileModules := false
 
 @[default_target]
-lean_exe «hello» where
-  root := `examples.HelloWorld
-
-lean_exe «bigtext» where
-  root := `examples.BigText
-
-lean_exe «counter» where
-  root := `examples.Counter
-
-lean_exe «dashboard» where
-  root := `examples.Dashboard
-
-lean_exe «charts» where
-  root := `examples.Charts
-
-lean_exe «fileexplorer» where
-  root := `examples.FileExplorer
-
-lean_exe «texteditor» where
-  root := `examples.TextEditor
-
-lean_exe «kitchensink» where
-  root := `examples.KitchenSink
-
-lean_exe «menu» where
-  root := `examples.Menu
-
-lean_exe «piechart» where
-  root := `examples.PieChart
-
-lean_exe «logger» where
-  root := `examples.Logger
-
-lean_exe «image» where
-  root := `examples.Image
-
-lean_exe «form» where
-  root := `examples.Form
-
-lean_exe «mouse» where
-  root := `examples.MouseDemo
-
 lean_exe «reactive_demo» where
   root := `examples.ReactiveDemo
 

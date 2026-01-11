@@ -8,8 +8,7 @@ import TerminusTests.Reactive.Common
 
 namespace TerminusTests.Reactive.TreeTests
 
--- Hide Terminus.TreeNode to avoid ambiguity with Terminus.Reactive.TreeNode
-open Terminus hiding TreeNode
+open Terminus
 open Terminus.Reactive
 open Crucible
 open Reactive Reactive.Host
