@@ -4,22 +4,25 @@
 -/
 import Terminus.Reactive
 
-open Terminus.Reactive
+open Terminus Terminus.Reactive
 open Reactive Reactive.Host
 
 /-- Simple color palette for the game demo. -/
 def gameColors : Array Color := #[
-  .ansi .red,
-  .ansi .green,
-  .ansi .blue,
-  .ansi .yellow,
-  .ansi .magenta,
-  .ansi .cyan
+  Color.ansi .red,
+  Color.ansi .green,
+  Color.ansi .blue,
+  Color.ansi .yellow,
+  Color.ansi .magenta,
+  Color.ansi .cyan
 ]
 
 /-- Get a color from the palette by index. -/
 def getColor (idx : Nat) : Color :=
-  gameColors[idx % gameColors.size]!
+  if h : idx % gameColors.size < gameColors.size then
+    gameColors[idx % gameColors.size]
+  else
+    Color.ansi .white
 
 def reactiveGameApp : ReactiveTermM ReactiveAppState := do
   let theme := Theme.dark
@@ -29,9 +32,8 @@ def reactiveGameApp : ReactiveTermM ReactiveAppState := do
   let gridHeight := 6
 
   -- Cell state: each cell has a color index (0-5) or none (empty)
-  let initialCells : Array (Array (Option Nat)) :=
-    #[].push (Array.mkArray gridWidth (none : Option Nat)) |>.toArray
-      |> fun _ => Array.mkArray gridHeight (Array.mkArray gridWidth (none : Option Nat))
+  let emptyRow : Array (Option Nat) := Array.mkEmpty gridWidth |>.append (List.replicate gridWidth none).toArray
+  let initialCells : Array (Array (Option Nat)) := Array.mkEmpty gridHeight |>.append (List.replicate gridHeight emptyRow).toArray
   let cellsRef ← SpiderM.liftIO (IO.mkRef initialCells)
 
   -- Score tracking
@@ -72,8 +74,8 @@ def reactiveGameApp : ReactiveTermM ReactiveAppState := do
       if h : y < cells.size then
         let row := cells[y]
         if h2 : x < row.size then
-          let newRow := row.set ⟨x, h2⟩ (some colorIdx)
-          let newCells := cells.set ⟨y, h⟩ newRow
+          let newRow := row.set x (some colorIdx)
+          let newCells := cells.set y newRow
           cellsRef.set newCells
           let s ← scoreRef.get
           scoreRef.set (s + 10)
@@ -103,15 +105,15 @@ def reactiveGameApp : ReactiveTermM ReactiveAppState := do
               | some colorIdx =>
                 let baseColor := getColor colorIdx
                 let style : Style := if isCursor then
-                  { fg := baseColor, bg := .ansi .white }
+                  { fg := baseColor, bg := Color.ansi .white }
                 else
                   { fg := baseColor }
                 pure { content := "██", style }
               | none =>
                 let style : Style := if isCursor then
-                  { fg := .ansi .brightBlack, bg := .ansi .blue }
+                  { fg := Color.ansi .brightBlack, bg := Color.ansi .blue }
                 else
-                  { fg := .ansi .brightBlack }
+                  { fg := Color.ansi .brightBlack }
                 pure { content := "· ", style }
             ) { borderType := .rounded, focusName := "game-grid" }
 
@@ -127,7 +129,7 @@ def reactiveGameApp : ReactiveTermM ReactiveAppState := do
             text' "Score:" theme.captionStyle
             emitDynamic do
               let s ← scoreDyn.sample
-              pure (RNode.text (toString s) { fg := .ansi .green, modifier := { bold := true } })
+              pure (RNode.text (toString s) { fg := Color.ansi .green, modifier := { bold := true } })
 
         -- Right panel: Animation demos
         column' (gap := 1) {} do
@@ -140,7 +142,7 @@ def reactiveGameApp : ReactiveTermM ReactiveAppState := do
                 let isRunning ← flashAnim.isRunning.sample
                 if isRunning then
                   let intensity := (255.0 * (1.0 - progress)).toUInt8
-                  pure (RNode.text "████" { fg := .rgb intensity intensity intensity })
+                  pure (RNode.text "████" { fg := Color.rgb intensity intensity intensity })
                 else
                   pure (RNode.text "    " {})
 
@@ -150,9 +152,9 @@ def reactiveGameApp : ReactiveTermM ReactiveAppState := do
               emitDynamic do
                 let on ← pulse.sample
                 if on then
-                  pure (RNode.text "●" { fg := .ansi .green })
+                  pure (RNode.text "●" { fg := Color.ansi .green })
                 else
-                  pure (RNode.text "○" { fg := .ansi .brightBlack })
+                  pure (RNode.text "○" { fg := Color.ansi .brightBlack })
 
             -- Color cycle indicator
             row' (gap := 1) {} do
@@ -170,11 +172,11 @@ def reactiveGameApp : ReactiveTermM ReactiveAppState := do
               let barWidth := 20
               let filledWidth := (progress * Float.ofNat barWidth).toUInt64.toNat
               let emptyWidth := barWidth - filledWidth
-              let bar := String.mk (List.replicate filledWidth '█') ++
-                         String.mk (List.replicate emptyWidth '░')
+              let bar := String.ofList (List.replicate filledWidth '█') ++
+                         String.ofList (List.replicate emptyWidth '░')
               let percent := (progress * 100.0).toUInt64.toNat
               pure (RNode.row 0 {} #[
-                RNode.text bar { fg := .ansi .cyan },
+                RNode.text bar { fg := Color.ansi .cyan },
                 RNode.text s!" {percent}%" theme.captionStyle
               ])
 
