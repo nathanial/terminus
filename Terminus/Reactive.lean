@@ -35,6 +35,8 @@
   - **Containers**: `row'`, `column'`, `block'`, `titledPanel'`
   - **Input**: `textInput'`, `labeledTextInput'`
   - **List**: `selectableList'`, `dynSelectableList'`, `numberedList'`
+  - **Tabs**: `tabs'`, `numberedTabs'`, `dynTabs'`
+  - **Tree**: `tree'`, `forest'`, `TreeNode`
   - **Overlay**: `overlay'`, `modal'`, `confirmDialog'`, `messageDialog'`
   - **ScrollView**: `scrollView'`, `vscrollView'`, `hscrollView'`
   - **Render**: `render`, `renderToBuffer`, `computeLayout`, `ClipContext`
@@ -48,6 +50,8 @@ import Terminus.Reactive.Containers
 import Terminus.Reactive.Hooks
 import Terminus.Reactive.Input
 import Terminus.Reactive.List
+import Terminus.Reactive.Tabs
+import Terminus.Reactive.Tree
 import Terminus.Reactive.Overlay
 import Terminus.Reactive.ScrollView
 import Terminus.Reactive.App

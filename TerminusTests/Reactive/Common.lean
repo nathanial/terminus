@@ -3,6 +3,7 @@
 import Terminus.Reactive
 import Terminus.Backend.TerminalMock
 import Reactive
+import Staple
 
 namespace TerminusTests.Reactive.Common
 
@@ -67,6 +68,17 @@ partial def rnodeHasText (node : RNode) (needle : String) : Bool :=
   | .column _ _ children => children.any (fun child => rnodeHasText child needle)
   | .clipped child => rnodeHasText child needle
   | .scrolled _ _ child => rnodeHasText child needle
+  | .spacer _ _ | .empty => false
+
+/-- Check if any text node in the RNode tree contains the given substring. -/
+partial def rnodeContainsText (node : RNode) (needle : String) : Bool :=
+  match node with
+  | .text content _ => Staple.String.containsSubstr content needle
+  | .block _ _ _ child => rnodeContainsText child needle
+  | .row _ _ children => children.any (fun child => rnodeContainsText child needle)
+  | .column _ _ children => children.any (fun child => rnodeContainsText child needle)
+  | .clipped child => rnodeContainsText child needle
+  | .scrolled _ _ child => rnodeContainsText child needle
   | .spacer _ _ | .empty => false
 
 end TerminusTests.Reactive.Common

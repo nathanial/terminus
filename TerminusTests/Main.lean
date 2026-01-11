@@ -52,6 +52,8 @@ import TerminusTests.Reactive.ComponentTests
 import TerminusTests.Reactive.OverlayTests
 import TerminusTests.Reactive.ScrollTests
 import TerminusTests.Reactive.IntegrationTests
+import TerminusTests.Reactive.TabsTests
+import TerminusTests.Reactive.TreeTests
 
 open Crucible
 
