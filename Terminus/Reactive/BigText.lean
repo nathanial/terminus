@@ -295,8 +295,9 @@ private def getBigFont (config : BigTextConfig) : BigFont :=
   | .slant => BigFont.slant config.onChar offChar
   | .small => BigFont.small config.onChar offChar
 
-/-- Render a single line of big text to RNodes -/
-private def renderBigTextLine (text : String) (config : BigTextConfig) : Array RNode := Id.run do
+/-- Render a single line of big text to RNodes.
+    This is useful when you need to build RNodes directly (e.g., in emitDynamic blocks). -/
+def renderBigTextLine (text : String) (config : BigTextConfig) : Array RNode := Id.run do
   let font := getBigFont config
   let chars := text.toList
 

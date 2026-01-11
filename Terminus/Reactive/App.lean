@@ -138,7 +138,7 @@ partial def runReactiveLoop [Monad m] [TerminalEffect m] [MonadLift IO m]
       let (width, height) ← getTerminalSize
       let renderResult := Terminus.Reactive.render rootNode width height
       let buffer := renderResult.buffer
-      -- TODO: Process renderResult.commands for images, clipboard, etc.
+      let commands := renderResult.commands.toList
 
       -- Log first frame's render output
       if frame == 0 then
@@ -163,7 +163,7 @@ partial def runReactiveLoop [Monad m] [TerminalEffect m] [MonadLift IO m]
           row5 := row5 ++ (term.currentBuffer.get x 5).char.toString
         deps.log s!"Row 5: '{row5}'"
 
-      let term ← term.flush
+      let term ← term.flush commands
       liftM (m := IO) <| termRef.set term
 
       deps.onFrame frame buffer
