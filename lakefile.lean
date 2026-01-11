@@ -2,7 +2,7 @@ import Lake
 open Lake DSL
 
 package «terminus» where
-  precompileModules := true
+  -- precompileModules := true  -- disabled to test TerminusTests build
 
 require crucible from git "https://github.com/nathanial/crucible" @ "v0.0.7"
 require raster from git "https://github.com/nathanial/raster" @ "v0.0.2"
@@ -12,9 +12,14 @@ require chronicle from git "https://github.com/nathanial/chronicle" @ "v0.0.2"
 lean_lib «Terminus» where
   roots := #[`Terminus]
 
+-- Test library for reactive tests (not yet migrated)
 lean_lib «Tests» where
-  roots := #[`Tests]
+  roots := #[`Tests.ReactiveTests]
 
+-- Test library matching collimator pattern
+lean_lib TerminusTests where
+  globs := #[.submodules `TerminusTests]
+  precompileModules := false
 
 @[default_target]
 lean_exe «hello» where
@@ -65,12 +70,12 @@ lean_exe «reactive_demo» where
 lean_exe «reactive_input» where
   root := `examples.ReactiveInput
 
-@[test_driver]
-lean_exe «tests» where
-  root := `Tests.Main
-
 lean_exe «reactive_tests» where
   root := `Tests.ReactiveTests
+
+@[test_driver]
+lean_exe terminus_tests where
+  root := `TerminusTests.Main
 
 -- FFI: Build C code and link it
 target ffi.o pkg : System.FilePath := do
