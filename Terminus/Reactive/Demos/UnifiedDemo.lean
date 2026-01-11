@@ -144,9 +144,28 @@ def basicsContent (theme : Theme) : WidgetM Unit := do
               let key ← lastKey.sample
               pure (RNode.text key theme.primaryStyle)
 
+    spacer' 0 1
+
+    row' (gap := 2) {} do
+      -- Paragraphs
+      column' (gap := 1) {} do
+        titledBlock' "Paragraph" .rounded theme do
+          paragraph' "Wrapped paragraph text demonstrates alignment and wrapping behavior in a constrained width." {
+            wrapMode := .wrap
+            maxWidth := some 28
+          }
+          spacer' 0 1
+          centeredParagraph' "Centered paragraph" { maxWidth := some 28 }
+
+      -- Clear widget
+      column' (gap := 1) {} do
+        titledBlock' "Clear" .rounded theme do
+          text' "Clears a styled region:" theme.captionStyle
+          clear' { width := 14, height := 3, fillChar := '.', style := { fg := .ansi .cyan } }
+
 /-! ## Input Tab Content -/
 
-def inputContent (theme : Theme) (events : TerminusEvents) : WidgetM Unit := do
+def inputContent (theme : Theme) (_events : TerminusEvents) : WidgetM Unit := do
   column' (gap := 1) {} do
     text' "Text input, checkboxes, radio buttons, and lists." theme.captionStyle
 
@@ -175,7 +194,7 @@ def inputContent (theme : Theme) (events : TerminusEvents) : WidgetM Unit := do
           let cb1 ← checkbox'' "cb-agree" "I agree to terms" false {
             checkedStyle := { fg := .ansi .green }
           }
-          let cb2 ← checkbox'' "cb-notify" "Send notifications" true {}
+          let _ ← checkbox'' "cb-notify" "Send notifications" true {}
 
           row' (gap := 1) {} do
             text' "Agree:" theme.captionStyle
@@ -228,9 +247,70 @@ def inputContent (theme : Theme) (events : TerminusEvents) : WidgetM Unit := do
               let (line, col) ← editor.cursorPos.sample
               pure (RNode.text s!"Ln {line + 1}, Col {col + 1}" theme.primaryStyle)
 
+    row' (gap := 2) {} do
+      -- List variants
+      column' (gap := 1) {} do
+        titledBlock' "List Variants" .rounded theme do
+          text' "String list:" theme.captionStyle
+          let colors := #["Red", "Green", "Blue", "Orange"]
+          let colorList ← stringList' colors 0 {
+            maxVisible := some 3
+            focusName := "color-list"
+            selectedStyle := { bg := .ansi .blue, fg := .ansi .white }
+          }
+
+          row' (gap := 1) {} do
+            text' "Picked:" theme.captionStyle
+            emitDynamic do
+              let item ← colorList.selectedItem.sample
+              pure (RNode.text (item.getD "(none)") theme.primaryStyle)
+
+          spacer' 0 1
+
+          text' "Numbered list (1-9):" theme.captionStyle
+          let steps := #["One", "Two", "Three", "Four"]
+          let numbered ← numberedList' steps 0 {
+            maxVisible := some 4
+            focusName := "numbered-list"
+            selectedStyle := { fg := .ansi .cyan }
+          }
+
+          row' (gap := 1) {} do
+            text' "Chosen:" theme.captionStyle
+            emitDynamic do
+              let item ← numbered.selectedItem.sample
+              pure (RNode.text (item.getD "(none)") theme.primaryStyle)
+
+      -- Form
+      column' (gap := 1) {} do
+        titledBlock' "Form" .rounded theme do
+          text' "Ctrl+Enter: submit | Esc: cancel" theme.captionStyle
+
+          let statusRef ← SpiderM.liftIO (IO.mkRef "Idle")
+          let fields := #[
+            { label := "Name", name := "name", required := true, placeholder := "Ada" },
+            { label := "Email", name := "email", required := true, placeholder := "ada@example.com",
+              validate := fun v => if v.length < 3 then some "Too short" else none }
+          ]
+
+          let form ← form' fields { fieldGap := 1, inputWidth := 18 } theme
+
+          let _ ← SpiderM.liftIO <| form.onSubmit.subscribe fun _ =>
+            statusRef.set "Submitted"
+          let _ ← SpiderM.liftIO <| form.onCancel.subscribe fun _ =>
+            statusRef.set "Cancelled"
+
+          spacer' 0 1
+
+          emitDynamic do
+            let ok ← form.isValid.sample
+            let status ← statusRef.get
+            let validity := if ok then "valid" else "invalid"
+            pure (RNode.text s!"Status: {status} ({validity})" theme.captionStyle)
+
 /-! ## Navigation Tab Content -/
 
-def navigationContent (theme : Theme) (events : TerminusEvents) : WidgetM Unit := do
+def navigationContent (theme : Theme) (_events : TerminusEvents) : WidgetM Unit := do
   column' (gap := 1) {} do
     text' "Tabs and tree widgets for navigation." theme.captionStyle
 
@@ -282,7 +362,7 @@ def navigationContent (theme : Theme) (events : TerminusEvents) : WidgetM Unit :
 
 /-! ## Data Tab Content -/
 
-def dataContent (theme : Theme) (events : TerminusEvents) : WidgetM Unit := do
+def dataContent (theme : Theme) (_events : TerminusEvents) : WidgetM Unit := do
   column' (gap := 1) {} do
     text' "Menu, table, and calendar widgets." theme.captionStyle
 
@@ -360,6 +440,59 @@ def dataContent (theme : Theme) (events : TerminusEvents) : WidgetM Unit := do
               let date ← calDateRef.get
               pure (RNode.text date theme.primaryStyle)
 
+    spacer' 0 1
+
+    row' (gap := 2) {} do
+      -- Scrolling widgets
+      column' (gap := 1) {} do
+        titledBlock' "ScrollView" .rounded theme do
+          text' "Tab to focus, arrows to scroll" theme.captionStyle
+          let scroll ← scrollView' { maxVisible := 4, focusName := "demo-scroll" } do
+            for i in [1:9] do
+              text' s!"Item {i}" theme.bodyStyle
+
+          emitDynamic do
+            let state ← scroll.scrollState.sample
+            pure (RNode.text s!"Offset: {state.offsetY}" theme.captionStyle)
+
+        titledBlock' "Scrollbars" .rounded theme do
+          text' "Vertical:" theme.captionStyle
+          scrollbar' 2 10 4 { length := 6 }
+          spacer' 0 1
+          text' "Horizontal:" theme.captionStyle
+          hScrollbar' 3 12 6 12
+
+      -- Grid widgets
+      column' (gap := 1) {} do
+        titledBlock' "Grid Widgets" .rounded theme do
+          text' "Static grid:" theme.captionStyle
+          grid' 3 2 (fun x y => do
+            pure { content := s!"{x}{y}", style := { fg := .ansi .cyan } }
+          ) { borderType := .rounded }
+
+          spacer' 0 1
+
+          text' "Cursor grid (arrows):" theme.captionStyle
+          let cursor ← cursorGrid' 4 3 (fun _ _ isCursor => do
+            if isCursor then
+              pure { content := "[]", style := { fg := .ansi .yellow } }
+            else
+              pure { content := " .", style := { fg := .ansi .brightBlack } }
+          ) { focusName := "cursor-grid", borderType := .rounded }
+
+          emitDynamic do
+            let (cx, cy) ← cursor.cursorPos.sample
+            pure (RNode.text s!"Cursor: {cx},{cy}" theme.captionStyle)
+
+          spacer' 0 1
+
+          text' "Char grid:" theme.captionStyle
+          let cells : Array (Array (Char × Style)) := #[
+            #[('A', { fg := .ansi .red }), ('B', { fg := .ansi .green })],
+            #[('C', { fg := .ansi .yellow }), ('D', { fg := .ansi .cyan })]
+          ]
+          charGrid' cells { borderType := .rounded }
+
 /-! ## Charts Tab Content -/
 
 def chartsContent (theme : Theme) : WidgetM Unit := do
@@ -407,15 +540,56 @@ def chartsContent (theme : Theme) : WidgetM Unit := do
             PieSlice.styled "D" 15 { fg := .ansi .magenta }
           ] { radius := 6 }
 
+    spacer' 0 1
+
+    row' (gap := 2) {} do
+      -- Line chart
+      column' (gap := 1) {} do
+        titledBlock' "Line Chart" .rounded theme do
+          lineChart' #[
+            DataSeries.labeled "Sales" #[10.0, 18.0, 25.0, 20.0, 30.0, 28.0],
+            DataSeries.labeled "Costs" #[8.0, 12.0, 15.0, 14.0, 20.0, 18.0]
+          ] {
+            width := 32
+            height := 8
+            showLegend := true
+          }
+
+      -- Vertical gauge
+      column' (gap := 1) {} do
+        titledBlock' "Vertical Gauge" .rounded theme do
+          row' (gap := 2) {} do
+            vGauge' 0.65 { height := 8 }
+            vGauge' 0.35 { height := 8, filledStyle := { fg := .ansi .yellow } }
+
 /-! ## Feedback Tab Content -/
 
 def feedbackContent (theme : Theme) : WidgetM Unit := do
   column' (gap := 1) {} do
     text' "L: log info | E: error | W: warn | N: notify | D: dismiss | C: clear" theme.captionStyle
+    text' "P: popup | O: modal | F: confirm | M: message | I: input | X: error | V: warning" theme.captionStyle
 
+    let keyEvents ← useKeyEventW
+    let focusedInput ← useFocusedInputW
     let logCountRef ← SpiderM.liftIO (IO.mkRef 0)
     let loggerResultRef ← SpiderM.liftIO (IO.mkRef (none : Option LoggerResult))
     let notifResultRef ← SpiderM.liftIO (IO.mkRef (none : Option NotificationResult))
+    let dialogStatusRef ← SpiderM.liftIO (IO.mkRef "Idle")
+    let inputValueRef ← SpiderM.liftIO (IO.mkRef "(none)")
+    let popupResultRef ← SpiderM.liftIO (IO.mkRef (none : Option PopupResult))
+
+    let (modalVisEvent, fireModalVisible) ← Reactive.newTriggerEvent (t := Spider) (a := Bool)
+    let modalVisible ← Reactive.holdDyn false modalVisEvent
+    let (confirmVisEvent, fireConfirmVisible) ← Reactive.newTriggerEvent (t := Spider) (a := Bool)
+    let confirmVisible ← Reactive.holdDyn false confirmVisEvent
+    let (messageVisEvent, fireMessageVisible) ← Reactive.newTriggerEvent (t := Spider) (a := Bool)
+    let messageVisible ← Reactive.holdDyn false messageVisEvent
+    let (errorVisEvent, fireErrorVisible) ← Reactive.newTriggerEvent (t := Spider) (a := Bool)
+    let errorVisible ← Reactive.holdDyn false errorVisEvent
+    let (warningVisEvent, fireWarningVisible) ← Reactive.newTriggerEvent (t := Spider) (a := Bool)
+    let warningVisible ← Reactive.holdDyn false warningVisEvent
+    let (inputVisEvent, fireInputVisible) ← Reactive.newTriggerEvent (t := Spider) (a := Bool)
+    let inputVisible ← Reactive.holdDyn false inputVisEvent
 
     row' (gap := 2) {} do
       -- Spinners
@@ -456,46 +630,142 @@ def feedbackContent (theme : Theme) : WidgetM Unit := do
           }
           SpiderM.liftIO (notifResultRef.set (some notifResult))
 
-    -- Key handler for logging
-    let keyEvents ← useKeyEventW
+    spacer' 0 1
+
+    row' (gap := 2) {} do
+      -- Dialogs
+      column' (gap := 1) {} do
+        titledBlock' "Dialogs" .rounded theme do
+          text' "O: modal | F: confirm | M: message" theme.captionStyle
+          text' "I: input | X: error | V: warning | Esc: close modal" theme.captionStyle
+
+          let _ ← modalWhen' modalVisible "Modal" theme {} do
+            text' "This is a modal dialog." theme.bodyStyle
+            text' "Press Esc to close." theme.captionStyle
+
+          let confirmResult ← confirmDialog' "Proceed with action?" confirmVisible theme
+          let messageDismiss ← messageDialog' "Operation completed successfully!" messageVisible theme
+          let errorDismiss ← errorDialog' "Something went wrong." errorVisible theme
+          let warningDismiss ← warningDialog' "Please review the warning." warningVisible theme
+          let inputResult ← inputDialog' "Enter your name:" inputVisible theme "Your name"
+
+          let _ ← SpiderM.liftIO <| confirmResult.confirmed.subscribe fun _ => do
+            dialogStatusRef.set "Confirmed"
+            fireConfirmVisible false
+          let _ ← SpiderM.liftIO <| confirmResult.cancelled.subscribe fun _ => do
+            dialogStatusRef.set "Cancelled"
+            fireConfirmVisible false
+
+          let _ ← SpiderM.liftIO <| messageDismiss.subscribe fun _ => do
+            dialogStatusRef.set "Message dismissed"
+            fireMessageVisible false
+          let _ ← SpiderM.liftIO <| errorDismiss.subscribe fun _ => do
+            dialogStatusRef.set "Error dismissed"
+            fireErrorVisible false
+          let _ ← SpiderM.liftIO <| warningDismiss.subscribe fun _ => do
+            dialogStatusRef.set "Warning dismissed"
+            fireWarningVisible false
+
+          let _ ← SpiderM.liftIO <| inputResult.submitted.subscribe fun value => do
+            inputValueRef.set value
+            dialogStatusRef.set "Input submitted"
+            fireInputVisible false
+          let _ ← SpiderM.liftIO <| inputResult.cancelled.subscribe fun _ => do
+            dialogStatusRef.set "Input cancelled"
+            fireInputVisible false
+
+          spacer' 0 1
+
+          emitDynamic do
+            let status ← dialogStatusRef.get
+            let inputValue ← inputValueRef.get
+            pure (RNode.text s!"Last: {status} | Input: {inputValue}" theme.captionStyle)
+
+      -- Popup
+      column' (gap := 1) {} do
+        titledBlock' "Popup" .rounded theme do
+          text' "P: toggle popup" theme.captionStyle
+          let popupResult ← popup' "demo-popup" { title := some "Popup" } do
+            text' "This is a popup panel." theme.bodyStyle
+            text' "Press P to toggle visibility." theme.captionStyle
+          SpiderM.liftIO (popupResultRef.set (some popupResult))
+          emitDynamic do
+            let visible ← popupResult.visible.sample
+            let label := if visible then "Visible" else "Hidden"
+            pure (RNode.text s!"Status: {label}" theme.captionStyle)
+
+    -- Key handler for logging and dialogs
     let _unsub ← SpiderM.liftIO <| keyEvents.subscribe fun kd => do
-      match kd.event.code with
-      | .char 'l' | .char 'L' =>
-        let count ← logCountRef.get
-        logCountRef.set (count + 1)
-        match (← loggerResultRef.get) with
-        | some logger => logger.log .info s!"Info message #{count + 1}"
-        | none => pure ()
-      | .char 'e' | .char 'E' =>
-        let count ← logCountRef.get
-        logCountRef.set (count + 1)
-        match (← loggerResultRef.get) with
-        | some logger => logger.log .error s!"Error message #{count + 1}"
-        | none => pure ()
-      | .char 'w' | .char 'W' =>
-        let count ← logCountRef.get
-        logCountRef.set (count + 1)
-        match (← loggerResultRef.get) with
-        | some logger => logger.log .warn s!"Warning #{count + 1}"
-        | none => pure ()
-      | .char 'n' | .char 'N' =>
-        let count ← logCountRef.get
-        logCountRef.set (count + 1)
-        match (← notifResultRef.get) with
-        | some notif => notif.«show» .success s!"Notification #{count + 1}!"
-        | none => pure ()
-      | .char 'd' | .char 'D' =>
-        match (← notifResultRef.get) with
-        | some notif => notif.dismiss
-        | none => pure ()
-      | .char 'c' | .char 'C' =>
-        match (← loggerResultRef.get) with
-        | some logger => logger.clear
-        | none => pure ()
-        match (← notifResultRef.get) with
-        | some notif => notif.dismissAll
-        | none => pure ()
-      | _ => pure ()
+      let focus ← focusedInput.sample
+      if focus == some "input-dialog-field" then
+        pure ()
+      else
+        match kd.event.code with
+        | .char 'l' | .char 'L' =>
+          let count ← logCountRef.get
+          logCountRef.set (count + 1)
+          match (← loggerResultRef.get) with
+          | some logger => logger.log .info s!"Info message #{count + 1}"
+          | none => pure ()
+        | .char 'e' | .char 'E' =>
+          let count ← logCountRef.get
+          logCountRef.set (count + 1)
+          match (← loggerResultRef.get) with
+          | some logger => logger.log .error s!"Error message #{count + 1}"
+          | none => pure ()
+        | .char 'w' | .char 'W' =>
+          let count ← logCountRef.get
+          logCountRef.set (count + 1)
+          match (← loggerResultRef.get) with
+          | some logger => logger.log .warn s!"Warning #{count + 1}"
+          | none => pure ()
+        | .char 'n' | .char 'N' =>
+          let count ← logCountRef.get
+          logCountRef.set (count + 1)
+          match (← notifResultRef.get) with
+          | some notif => notif.«show» .success s!"Notification #{count + 1}!"
+          | none => pure ()
+        | .char 'd' | .char 'D' =>
+          match (← notifResultRef.get) with
+          | some notif => notif.dismiss
+          | none => pure ()
+        | .char 'c' | .char 'C' =>
+          match (← loggerResultRef.get) with
+          | some logger => logger.clear
+          | none => pure ()
+          match (← notifResultRef.get) with
+          | some notif => notif.dismissAll
+          | none => pure ()
+        | .char 'p' | .char 'P' =>
+          match (← popupResultRef.get) with
+          | some popup => popup.toggle
+          | none => pure ()
+        | .char 'o' | .char 'O' =>
+          dialogStatusRef.set "Modal opened"
+          fireModalVisible true
+        | .char 'f' | .char 'F' =>
+          dialogStatusRef.set "Confirm opened"
+          fireConfirmVisible true
+        | .char 'm' | .char 'M' =>
+          dialogStatusRef.set "Message opened"
+          fireMessageVisible true
+        | .char 'i' | .char 'I' =>
+          dialogStatusRef.set "Input opened"
+          fireInputVisible true
+        | .char 'x' | .char 'X' =>
+          dialogStatusRef.set "Error opened"
+          fireErrorVisible true
+        | .char 'v' | .char 'V' =>
+          dialogStatusRef.set "Warning opened"
+          fireWarningVisible true
+        | .escape =>
+          let isVisible ← modalVisible.sample
+          if isVisible then
+            dialogStatusRef.set "Modal closed"
+            fireModalVisible false
+          else
+            pure ()
+        | _ => pure ()
 
 /-! ## Media Tab Content -/
 
@@ -594,7 +864,7 @@ def asyncContent (theme : Theme) : WidgetM Unit := do
         titledBlock' "Streaming Demo" .rounded theme do
           text' "Press S to stream:" theme.bodyStyle
 
-          let (chunkEvent, _fireChunk) ← Reactive.newTriggerEvent (t := Spider) (a := String)
+          let (_chunkEvent, _fireChunk) ← Reactive.newTriggerEvent (t := Spider) (a := String)
           let (streamingEvent, fireStreaming) ← Reactive.newTriggerEvent (t := Spider) (a := Bool)
           let (chunksEvent, fireChunks) ← Reactive.newTriggerEvent (t := Spider) (a := Array String)
 
