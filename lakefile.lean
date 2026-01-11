@@ -69,6 +69,9 @@ lean_exe «reactive_input» where
 lean_exe «reactive_nav» where
   root := `examples.ReactiveNav
 
+lean_exe «reactive_game» where
+  root := `examples.ReactiveGame
+
 @[test_driver]
 lean_exe terminus_tests where
   root := `TerminusTests.Main

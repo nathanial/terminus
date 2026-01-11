@@ -39,6 +39,8 @@
   - **Tree**: `tree'`, `forest'`, `TreeNode`
   - **Overlay**: `overlay'`, `modal'`, `confirmDialog'`, `messageDialog'`
   - **ScrollView**: `scrollView'`, `vscrollView'`, `hscrollView'`
+  - **Grid**: `grid'`, `dynGrid'`, `cursorGrid'`, `GridCell`
+  - **Animation**: `useAnimation`, `usePulse`, `useCycle`, `AnimPhase`, `Easing`
   - **Render**: `render`, `renderToBuffer`, `computeLayout`, `ClipContext`
   - **App**: `runReactiveApp`, `runSimpleApp`
 -/
@@ -54,4 +56,6 @@ import Terminus.Reactive.Tabs
 import Terminus.Reactive.Tree
 import Terminus.Reactive.Overlay
 import Terminus.Reactive.ScrollView
+import Terminus.Reactive.Grid
+import Terminus.Reactive.Animation
 import Terminus.Reactive.App
