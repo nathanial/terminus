@@ -127,9 +127,9 @@ structure NodeId where
 inductive RNode : Type where
   /-- Text content with styling. -/
   | text (content : String) (style : Style)
-  /-- Block container with optional title and border. -/
+  /-- Block container with optional title, border, and background fill. -/
   | block (title : Option String) (borderType : BorderType) (borderStyle : Style)
-      (child : RNode)
+      (fillStyle : Option Style) (child : RNode)
   /-- Row container (horizontal flex layout). -/
   | row (gap : Nat) (style : RStyle) (children : Array RNode)
   /-- Column container (vertical flex layout). -/
@@ -144,6 +144,11 @@ inductive RNode : Type where
   | scrolled (offsetX offsetY : Nat) (child : RNode)
   /-- Dock a footer at the bottom with fixed height. -/
   | dockBottom (footerHeight : Nat) (content : RNode) (footer : RNode)
+  /-- Overlay content centered on top of base content.
+      - base: underlying content that renders first
+      - content: overlay content centered on screen
+      - backdropStyle: optional style for backdrop (fills screen behind overlay) -/
+  | overlay (base : RNode) (content : RNode) (backdropStyle : Option Style)
   /-- Image node using terminal image protocol. -/
   | image (source : ImageSource) (protocol : ImageProtocol) (width : Nat) (height : Nat)
       (preserveAspect : Bool) (altText : String)

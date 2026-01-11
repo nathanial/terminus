@@ -43,13 +43,16 @@ partial def naturalHeight (node : RNode) : Nat :=
     let childHeights := children.foldl (fun acc c => acc + naturalHeight c) 0
     let gapTotal := if children.size > 1 then gap * (children.size - 1) else 0
     padding + childHeights + gapTotal
-  | .block _ _ _ child =>
+  | .block _ _ _ _ child =>
     -- Border adds 2 (top + bottom)
     2 + naturalHeight child
   | .clipped child => naturalHeight child
   | .scrolled _ _ child => naturalHeight child
   | .dockBottom footerHeight content _footer =>
     footerHeight + naturalHeight content
+  | .overlay _base content _ =>
+    -- Overlay takes the content's natural height (base doesn't affect overlay size)
+    naturalHeight content
 
 /-- Compute the natural/minimum width of an RNode (for layout purposes). -/
 partial def naturalWidth (node : RNode) : Nat :=
@@ -67,16 +70,20 @@ partial def naturalWidth (node : RNode) : Nat :=
     let padding := style.padding * 2
     let maxChildWidth := children.foldl (fun acc c => max acc (naturalWidth c)) 0
     padding + maxChildWidth
-  | .block _ _ _ child =>
+  | .block _ _ _ _ child =>
     -- Border adds 2 (left + right)
     2 + naturalWidth child
   | .clipped child => naturalWidth child
   | .scrolled _ _ child => naturalWidth child
   | .dockBottom _footerHeight content footer =>
     max (naturalWidth content) (naturalWidth footer)
+  | .overlay _base content _ =>
+    -- Overlay takes the content's natural width
+    naturalWidth content
 
-/-- Compute layout for RNode tree recursively using internal Layout system. -/
-partial def computeLayoutRec (node : RNode) (area : Rect) : StateM IdGen LayoutMap := do
+/-- Compute layout for RNode tree recursively using internal Layout system.
+    `area` is the current layout area, `fullArea` is the full screen for overlay centering. -/
+partial def computeLayoutRec (node : RNode) (area : Rect) (fullArea : Rect) : StateM IdGen LayoutMap := do
   let (nodeId, gen) ← get >>= fun g => pure g.fresh
   set gen
 
@@ -102,7 +109,7 @@ partial def computeLayoutRec (node : RNode) (area : Rect) : StateM IdGen LayoutM
         for h : i in [:children.size] do
           let child := children[i]
           let childRect := childRects.getD i innerArea
-          let childLayouts ← computeLayoutRec child childRect
+          let childLayouts ← computeLayoutRec child childRect fullArea
           result := result ++ childLayouts
         pure result
 
@@ -122,20 +129,47 @@ partial def computeLayoutRec (node : RNode) (area : Rect) : StateM IdGen LayoutM
         for h : i in [:children.size] do
           let child := children[i]
           let childRect := childRects.getD i innerArea
-          let childLayouts ← computeLayoutRec child childRect
+          let childLayouts ← computeLayoutRec child childRect fullArea
           result := result ++ childLayouts
         pure result
 
-  | .block _ _ _ child =>
+  | .block _ _ _ _ child =>
     -- Block has 1-cell border padding
     let innerArea := area.inner 1
     let mut result : LayoutMap := #[(nodeId, area)]
     -- Only layout child if there's space inside the block
     if innerArea.isEmpty then pure result
     else
-      let childLayouts ← computeLayoutRec child innerArea
+      let childLayouts ← computeLayoutRec child innerArea fullArea
       result := result ++ childLayouts
       pure result
+
+  | .overlay base content _ =>
+    -- Layout base content using current area
+    let mut result : LayoutMap := #[(nodeId, fullArea)]
+    let baseLayouts ← computeLayoutRec base area fullArea
+    result := result ++ baseLayouts
+
+    -- Compute overlay content's natural size
+    let overlayNatWidth := naturalWidth content
+    let overlayNatHeight := naturalHeight content
+
+    -- Center the overlay in the FULL SCREEN area (not parent area)
+    let overlayWidth := min overlayNatWidth fullArea.width
+    let overlayHeight := min overlayNatHeight fullArea.height
+    let overlayX := fullArea.x + (fullArea.width - overlayWidth) / 2
+    let overlayY := fullArea.y + (fullArea.height - overlayHeight) / 2
+
+    let overlayRect : Rect := {
+      x := overlayX
+      y := overlayY
+      width := overlayWidth
+      height := overlayHeight
+    }
+
+    let contentLayouts ← computeLayoutRec content overlayRect fullArea
+    result := result ++ contentLayouts
+    pure result
 
   | .dockBottom footerHeight content footer =>
     let footerH := min footerHeight area.height
@@ -143,8 +177,8 @@ partial def computeLayoutRec (node : RNode) (area : Rect) : StateM IdGen LayoutM
     let contentRect := { area with height := contentH }
     let footerRect := { area with y := area.y + contentH, height := footerH }
     let mut result : LayoutMap := #[(nodeId, area)]
-    let contentLayouts ← computeLayoutRec content contentRect
-    let footerLayouts ← computeLayoutRec footer footerRect
+    let contentLayouts ← computeLayoutRec content contentRect fullArea
+    let footerLayouts ← computeLayoutRec footer footerRect fullArea
     result := result ++ contentLayouts ++ footerLayouts
     pure result
 
@@ -162,7 +196,7 @@ partial def computeLayoutRec (node : RNode) (area : Rect) : StateM IdGen LayoutM
     -- Skip child if area is empty
     if area.isEmpty then pure result
     else
-      let childLayouts ← computeLayoutRec child area
+      let childLayouts ← computeLayoutRec child area fullArea
       result := result ++ childLayouts
       pure result
 
@@ -171,7 +205,7 @@ partial def computeLayoutRec (node : RNode) (area : Rect) : StateM IdGen LayoutM
     -- Skip child if area is empty
     if area.isEmpty then pure result
     else
-      let childLayouts ← computeLayoutRec child area
+      let childLayouts ← computeLayoutRec child area fullArea
       result := result ++ childLayouts
       pure result
 
@@ -362,10 +396,32 @@ partial def renderNodeRecursive (node : RNode) (layouts : LayoutMap)
     | .text content style =>
       modify fun s => { s with buf := renderTextClipped content style rect s.buf clip }
 
-    | .block title borderType borderStyle child =>
+    | .block title borderType borderStyle fillStyle child =>
+      -- Fill background first if specified
+      match fillStyle with
+      | some style =>
+        let innerRect := rect.inner 1
+        if !innerRect.isEmpty then
+          let bgCell := Cell.styled ' ' style
+          modify fun s => { s with buf := s.buf.fillRect innerRect bgCell }
+      | none => pure ()
       -- For blocks, the rect is the border rect; content is inside
       modify fun s => { s with buf := renderBlockBorderClipped title borderType borderStyle rect s.buf clip }
       renderNodeRecursive child layouts clip
+
+    | .overlay base content backdropStyle =>
+      -- 1. Render base content first
+      renderNodeRecursive base layouts clip
+
+      -- 2. Render backdrop if specified (fills entire area)
+      match backdropStyle with
+      | some style =>
+        let bgCell := Cell.styled ' ' style
+        modify fun s => { s with buf := s.buf.fillRect rect bgCell }
+      | none => pure ()
+
+      -- 3. Render overlay content on top
+      renderNodeRecursive content layouts clip
 
     | .row _ _ children =>
       for child in children do
@@ -420,7 +476,7 @@ def renderTree (node : RNode) (layouts : LayoutMap) (buf : Buffer) : RenderResul
 /-- Compute layout for an RNode tree. -/
 def computeLayout (root : RNode) (width height : Nat) : LayoutMap :=
   let area : Rect := { x := 0, y := 0, width, height }
-  let (layouts, _) := computeLayoutRec root area |>.run { nextId := 0 }
+  let (layouts, _) := computeLayoutRec root area area |>.run { nextId := 0 }
   layouts
 
 /-- Render an RNode tree to a Buffer and collect commands.

@@ -96,8 +96,9 @@ def popup' (_name : String) (config : PopupConfig := {}) (content : WidgetM Unit
       let nodes ← childRenders.mapM id
       let inner := RNode.column 0 {} nodes
 
-      -- Wrap in block with optional title
-      pure (RNode.block config.title config.borderType config.borderStyle inner)
+      -- Wrap in block with optional title and opaque background
+      let fillStyle : Style := { bg := .default }
+      pure (RNode.block config.title config.borderType config.borderStyle (some fillStyle) inner)
 
   pure {
     visible := visibleDyn
@@ -139,7 +140,9 @@ def popupWhen' (_name : String) (visible : Reactive.Dynamic Spider Bool)
     emit do
       let nodes ← childRenders.mapM id
       let inner := RNode.column 0 {} nodes
-      pure (RNode.block config.title config.borderType config.borderStyle inner)
+      -- Use opaque background for popup
+      let fillStyle : Style := { bg := .default }
+      pure (RNode.block config.title config.borderType config.borderStyle (some fillStyle) inner)
 
 /-- Create a simple message popup controlled by visibility Dynamic. -/
 def messagePopupWhen' (_name : String) (visible : Reactive.Dynamic Spider Bool)

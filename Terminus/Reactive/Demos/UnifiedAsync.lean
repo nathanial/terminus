@@ -13,7 +13,7 @@ def simulateSlowLoad : IO String := do
   pure "Data loaded successfully!"
 
 def asyncLoadSection (theme : Theme) : WidgetM Unit := do
-  titledBlock' "Async Operation" .rounded theme do
+  titledBlock' "Async Operation" .rounded theme none do
     text' "Press Space to trigger:" theme.bodyStyle
 
     let keyEvent ← useKeyEventW
@@ -37,7 +37,7 @@ def asyncLoadSection (theme : Theme) : WidgetM Unit := do
       | some data => pure (RNode.text s!"Result: {data}" { fg := .ansi .green })
 
 def streamingSection (theme : Theme) : WidgetM Unit := do
-  titledBlock' "Streaming Demo" .rounded theme do
+  titledBlock' "Streaming Demo" .rounded theme none do
     text' "Press S to stream:" theme.bodyStyle
 
     -- FRP: Trigger events for streaming state

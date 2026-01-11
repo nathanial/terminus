@@ -15,7 +15,7 @@ def dataContent (theme : Theme) (_events : TerminusEvents) : WidgetM Unit := do
     row' (gap := 2) {} do
       -- Menu
       column' (gap := 1) {} do
-        titledBlock' "Menu Widget" .rounded theme do
+        titledBlock' "Menu Widget" .rounded theme none do
           let menuItems := #[
             MenuItem'.new "File" |>.withSubmenu #[
               MenuItem'.new "New",
@@ -44,7 +44,7 @@ def dataContent (theme : Theme) (_events : TerminusEvents) : WidgetM Unit := do
 
       -- Table
       column' (gap := 1) {} do
-        titledBlock' "Table Widget" .rounded theme do
+        titledBlock' "Table Widget" .rounded theme none do
           let columns := #[
             { header := "Name", width := .fixed 10 : TableColumn' },
             { header := "Role", width := .fixed 8 : TableColumn' }
@@ -71,7 +71,7 @@ def dataContent (theme : Theme) (_events : TerminusEvents) : WidgetM Unit := do
 
       -- Calendar
       column' (gap := 1) {} do
-        titledBlock' "Calendar" .rounded theme do
+        titledBlock' "Calendar" .rounded theme none do
           let today := CalendarDate.new 2024 1 15
           let calResult ← calendar' "demo-calendar" 2024 1 (some 15) {
             today := some today
@@ -93,7 +93,7 @@ def dataContent (theme : Theme) (_events : TerminusEvents) : WidgetM Unit := do
     row' (gap := 2) {} do
       -- Scrolling widgets
       column' (gap := 1) {} do
-        titledBlock' "ScrollView" .rounded theme do
+        titledBlock' "ScrollView" .rounded theme none do
           text' "Tab to focus, arrows to scroll" theme.captionStyle
           let scroll ← scrollView' { maxVisible := 4, focusName := "demo-scroll" } do
             for i in [1:9] do
@@ -103,7 +103,7 @@ def dataContent (theme : Theme) (_events : TerminusEvents) : WidgetM Unit := do
             let state ← scroll.scrollState.sample
             pure (RNode.text s!"Offset: {state.offsetY}" theme.captionStyle)
 
-        titledBlock' "Scrollbars" .rounded theme do
+        titledBlock' "Scrollbars" .rounded theme none do
           text' "Vertical:" theme.captionStyle
           scrollbar' 2 10 4 { length := 6 }
           spacer' 0 1
@@ -112,7 +112,7 @@ def dataContent (theme : Theme) (_events : TerminusEvents) : WidgetM Unit := do
 
       -- Grid widgets
       column' (gap := 1) {} do
-        titledBlock' "Grid Widgets" .rounded theme do
+        titledBlock' "Grid Widgets" .rounded theme none do
           text' "Static grid:" theme.captionStyle
           grid' 3 2 (fun x y => do
             pure { content := s!"{x}{y}", style := { fg := .ansi .cyan } }
@@ -143,7 +143,7 @@ def dataContent (theme : Theme) (_events : TerminusEvents) : WidgetM Unit := do
 
           spacer' 0 1
 
-          titledBlock' "DataGrid" .rounded theme do
+          titledBlock' "DataGrid" .rounded theme none do
             text' "Enter to edit; arrows to move" theme.captionStyle
             let gridData := #[
               #["1", "Ada", "42"],

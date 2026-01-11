@@ -54,7 +54,7 @@ def reactiveInputApp : ReactiveTermM ReactiveAppState := do
     column' (gap := 1) {} do
       text' "=== Reactive Input Demo ===" theme.heading1Style
       text' "Tab: cycle focus" theme.captionStyle
-      titledBlock' "1. Text Input" .rounded theme do
+      titledBlock' "1. Text Input" .rounded theme none do
         text' "Type here:" theme.bodyStyle
         text' "Value: (empty)" theme.bodyStyle
         text' "Submitted: (none)" theme.bodyStyle
@@ -313,7 +313,7 @@ test "titledBlock with content renders correctly" := do
     let theme := Theme.dark
 
     let (_, render) ← (runWidget do
-      titledBlock' "Test Panel" .rounded theme do
+      titledBlock' "Test Panel" .rounded theme none do
         text' "Line 1" {}
         text' "Line 2" {}
     ).run events

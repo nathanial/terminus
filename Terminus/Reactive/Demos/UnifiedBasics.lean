@@ -15,7 +15,7 @@ def basicsContent (theme : Theme) : WidgetM Unit := do
     row' (gap := 3) {} do
       -- Progress bars
       column' (gap := 1) {} do
-        titledBlock' "Progress Bars" .rounded theme do
+        titledBlock' "Progress Bars" .rounded theme none do
           -- Animated progress
           let tickEvents ← useTickW
           let progress ← Reactive.foldDyn (fun td _ =>
@@ -40,7 +40,7 @@ def basicsContent (theme : Theme) : WidgetM Unit := do
 
       -- Animations
       column' (gap := 1) {} do
-        titledBlock' "Animations" .rounded theme do
+        titledBlock' "Animations" .rounded theme none do
           let pulse ← usePulse 500
           let colorCycle ← useCycle 2000
 
@@ -69,7 +69,7 @@ def basicsContent (theme : Theme) : WidgetM Unit := do
 
       -- Time tracking
       column' (gap := 1) {} do
-        titledBlock' "Time & Keys" .rounded theme do
+        titledBlock' "Time & Keys" .rounded theme none do
           let elapsedMs ← useElapsedMsW
           let keyEvents ← useKeyEventW
           let keyCount ← Reactive.foldDyn (fun _ n => n + 1) 0 keyEvents
@@ -101,7 +101,7 @@ def basicsContent (theme : Theme) : WidgetM Unit := do
     row' (gap := 2) {} do
       -- Paragraphs
       column' (gap := 1) {} do
-        titledBlock' "Paragraph" .rounded theme do
+        titledBlock' "Paragraph" .rounded theme none do
           paragraph' "This is a paragraph widget that supports automatic word wrapping. It handles long text gracefully by wrapping it to the next line." {
             maxWidth := some 30
             alignment := .left
@@ -110,7 +110,7 @@ def basicsContent (theme : Theme) : WidgetM Unit := do
 
       -- Dividers
       column' (gap := 1) {} do
-        titledBlock' "Dividers" .rounded theme do
+        titledBlock' "Dividers" .rounded theme none do
           text' "Horizontal:" theme.captionStyle
           text' "━━━━━━━━━━━━━━━━━━━━" theme.bodyStyle
           spacer' 0 1
@@ -121,6 +121,6 @@ def basicsContent (theme : Theme) : WidgetM Unit := do
 
       -- Clear
       column' (gap := 1) {} do
-        titledBlock' "Clear" .rounded theme do
+        titledBlock' "Clear" .rounded theme none do
           text' "Clears a styled region:" theme.captionStyle
           clear' { width := 14, height := 3, fillChar := '.', style := { fg := .ansi .cyan } }

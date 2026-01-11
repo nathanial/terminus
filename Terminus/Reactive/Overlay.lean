@@ -53,7 +53,7 @@ the overlay content replaces the base content in the widget tree.
 /-- Create an overlay that shows content when visible.
 
     When `visible` is true, both the base content and overlay content are rendered,
-    with the overlay appearing on top.
+    with the overlay appearing centered on top with an optional backdrop.
 
     Example:
     ```
@@ -67,11 +67,8 @@ the overlay content replaces the base content in the widget tree.
       modal' "Confirm" theme do
         text' "Are you sure?" theme.bodyStyle
     ```
-
-    Note: In the current implementation, overlays use conditional rendering.
-    Full z-ordering support requires renderer changes tracked in REACTIVE_PLAN.md.
 -/
-def overlay' (visible : Reactive.Dynamic Spider Bool) (_config : OverlayConfig := {})
+def overlay' (visible : Reactive.Dynamic Spider Bool) (config : OverlayConfig := {})
     (baseContent : WidgetM α) (overlayContent : WidgetM β) : WidgetM α := do
   let (baseResult, baseRenders) ← runWidgetChildren baseContent
   let (_, overlayRenders) ← runWidgetChildren overlayContent
@@ -91,17 +88,17 @@ def overlay' (visible : Reactive.Dynamic Spider Bool) (_config : OverlayConfig :
       else
         RNode.column 0 {} overlayNodes
 
-      -- For now, render overlay after base in a column
-      -- Full overlay support (z-ordering, centering) requires RNode.overlay
-      pure (RNode.column 0 {} #[baseNode, overlayNode])
+      -- Use RNode.overlay for proper centering and backdrop support
+      pure (RNode.overlay baseNode overlayNode config.backdropStyle)
     else
       pure baseNode
 
   pure baseResult
 
 /-- Simpler overlay that only shows when visible (no base content parameter).
-    Use this when you want to conditionally show a popup/dialog. -/
-def overlayWhen' (visible : Reactive.Dynamic Spider Bool) (_config : OverlayConfig := {})
+    Use this when you want to conditionally show a popup/dialog.
+    The content will be centered on screen with an optional backdrop. -/
+def overlayWhen' (visible : Reactive.Dynamic Spider Bool) (config : OverlayConfig := {})
     (content : WidgetM α) : WidgetM Unit := do
   let (_, contentRenders) ← runWidgetChildren content
 
@@ -109,12 +106,14 @@ def overlayWhen' (visible : Reactive.Dynamic Spider Bool) (_config : OverlayConf
     let isVisible ← visible.sample
     if isVisible then
       let nodes ← contentRenders.mapM id
-      if nodes.isEmpty then
-        pure RNode.empty
+      let contentNode := if nodes.isEmpty then
+        RNode.empty
       else if nodes.size == 1 then
-        pure nodes[0]!
+        nodes[0]!
       else
-        pure (RNode.column 0 {} nodes)
+        RNode.column 0 {} nodes
+      -- Use RNode.overlay with empty base - content will be centered
+      pure (RNode.overlay RNode.empty contentNode config.backdropStyle)
     else
       pure RNode.empty
 
@@ -123,7 +122,7 @@ def overlayWhen' (visible : Reactive.Dynamic Spider Bool) (_config : OverlayConf
 Modals are overlays with borders and titles, typically used for dialogs.
 -/
 
-/-- Create a modal dialog box.
+/-- Create a modal dialog box with opaque background.
 
     Example:
     ```
@@ -137,18 +136,23 @@ Modals are overlays with borders and titles, typically used for dialogs.
 -/
 def modal' (title : String) (theme : Theme) (config : ModalConfig := {})
     (content : WidgetM α) : WidgetM α := do
-  titledBlock' title config.borderType theme content
+  -- Use fillStyle for opaque background
+  let fillStyle : Style := { bg := theme.background }
+  titledBlock' title config.borderType theme (some fillStyle) content
 
-/-- Create an untitled modal (simple bordered box). -/
+/-- Create an untitled modal (simple bordered box) with opaque background. -/
 def modalBox' (theme : Theme) (config : ModalConfig := {})
     (content : WidgetM α) : WidgetM α := do
-  block' config.borderType theme content
+  let fillStyle : Style := { bg := theme.background }
+  block' config.borderType theme (some fillStyle) content
 
 /-- Create a modal that appears when visible.
-    Combines overlayWhen' with modal'. -/
+    Combines overlayWhen' with modal'. Uses backdrop dimming. -/
 def modalWhen' (visible : Reactive.Dynamic Spider Bool) (title : String) (theme : Theme)
     (config : ModalConfig := {}) (content : WidgetM α) : WidgetM Unit := do
-  overlayWhen' visible {} do
+  -- Use backdrop style for dimming effect
+  let backdropStyle : Style := { bg := .ansi .black, modifier := { dim := true } }
+  overlayWhen' visible { backdropStyle := some backdropStyle } do
     let _ ← modal' title theme config content
     pure ()
 
@@ -200,8 +204,9 @@ def confirmDialog' (message : String) (visible : Reactive.Dynamic Spider Bool) (
       | .char 'n' | .char 'N' | .escape => fireCancelled ()
       | _ => pure ()
 
-  -- Emit the dialog content
-  overlayWhen' visible {} do
+  -- Emit the dialog content with backdrop dimming
+  let backdropStyle : Style := { bg := .ansi .black, modifier := { dim := true } }
+  overlayWhen' visible { backdropStyle := some backdropStyle } do
     let _ ← modal' "Confirm" theme {} do
       text' message theme.bodyStyle
       spacer' 1 1
@@ -235,8 +240,9 @@ def messageDialog' (message : String) (visible : Reactive.Dynamic Spider Bool) (
       | .enter | .escape | .space => fireDismiss ()
       | _ => pure ()
 
-  -- Emit the dialog content
-  overlayWhen' visible {} do
+  -- Emit the dialog content with backdrop dimming
+  let backdropStyle : Style := { bg := .ansi .black, modifier := { dim := true } }
+  overlayWhen' visible { backdropStyle := some backdropStyle } do
     let _ ← modal' "Message" theme {} do
       text' message theme.bodyStyle
       spacer' 1 1
@@ -262,8 +268,10 @@ def errorDialog' (message : String) (visible : Reactive.Dynamic Spider Bool) (th
       | .enter | .escape | .space => fireDismiss ()
       | _ => pure ()
 
-  overlayWhen' visible {} do
-    let _ ← titledBlock' "Error" .rounded { theme with border := theme.error } do
+  let backdropStyle : Style := { bg := .ansi .black, modifier := { dim := true } }
+  overlayWhen' visible { backdropStyle := some backdropStyle } do
+    let fillStyle : Style := { bg := theme.background }
+    let _ ← titledBlock' "Error" .rounded { theme with border := theme.error } (some fillStyle) do
       text' message { fg := theme.error }
       spacer' 1 1
       text' "[OK]" theme.primaryStyle
@@ -286,8 +294,10 @@ def warningDialog' (message : String) (visible : Reactive.Dynamic Spider Bool) (
       | .enter | .escape | .space => fireDismiss ()
       | _ => pure ()
 
-  overlayWhen' visible {} do
-    let _ ← titledBlock' "Warning" .rounded { theme with border := theme.warning } do
+  let backdropStyle : Style := { bg := .ansi .black, modifier := { dim := true } }
+  overlayWhen' visible { backdropStyle := some backdropStyle } do
+    let fillStyle : Style := { bg := theme.background }
+    let _ ← titledBlock' "Warning" .rounded { theme with border := theme.warning } (some fillStyle) do
       text' message { fg := theme.warning }
       spacer' 1 1
       text' "[OK]" theme.primaryStyle
@@ -367,8 +377,9 @@ def inputDialog' (prompt : String) (visible : Reactive.Dynamic Spider Bool) (the
         | .escape => fireCancelled ()
         | _ => pure ()
 
-  -- Emit the dialog
-  overlayWhen' visible {} do
+  -- Emit the dialog with backdrop dimming
+  let backdropStyle : Style := { bg := .ansi .black, modifier := { dim := true } }
+  overlayWhen' visible { backdropStyle := some backdropStyle } do
     let _ ← modal' "Input" theme {} do
       text' prompt theme.bodyStyle
       spacer' 1 1

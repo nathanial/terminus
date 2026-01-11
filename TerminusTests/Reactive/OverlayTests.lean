@@ -68,7 +68,7 @@ test "modal' renders with title and border" := do
     let node ← SpiderM.liftIO render
     -- Modal wraps in a block with title
     match node with
-    | .block title _ _ child =>
+    | .block title _ _ _ child =>
       SpiderM.liftIO (title ≡ some "Test Modal")
       SpiderM.liftIO (ensure (rnodeHasText child "Modal body") "expected modal body")
     | _ => SpiderM.liftIO (ensure false "expected block node")

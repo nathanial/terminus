@@ -63,39 +63,39 @@ Blocks add borders and optional titles around content.
 
 /-- Create a block container with a border. -/
 def block' (borderType : BorderType := .rounded) (theme : Theme)
-    (children : WidgetM α) : WidgetM α := do
+    (fillStyle : Option Style := none) (children : WidgetM α) : WidgetM α := do
   let (result, childRenders) ← runWidgetChildren children
   emit do
     let nodes ← childRenders.mapM id
     let inner := RNode.column 0 {} nodes
-    pure (RNode.block none borderType (theme.borderStyle) inner)
+    pure (RNode.block none borderType (theme.borderStyle) fillStyle inner)
   pure result
 
 /-- Create a block container with a title and border. -/
 def titledBlock' (title : String) (borderType : BorderType := .rounded) (theme : Theme)
-    (children : WidgetM α) : WidgetM α := do
+    (fillStyle : Option Style := none) (children : WidgetM α) : WidgetM α := do
   let (result, childRenders) ← runWidgetChildren children
   emit do
     let nodes ← childRenders.mapM id
     let inner := RNode.column 0 {} nodes
-    pure (RNode.block (some title) borderType (theme.borderStyle) inner)
+    pure (RNode.block (some title) borderType (theme.borderStyle) fillStyle inner)
   pure result
 
 /-- Create a single-line bordered block. -/
 def singleBlock' (theme : Theme) (children : WidgetM α) : WidgetM α :=
-  block' (borderType := .single) theme children
+  block' (borderType := .single) theme none children
 
 /-- Create a double-line bordered block. -/
 def doubleBlock' (theme : Theme) (children : WidgetM α) : WidgetM α :=
-  block' (borderType := .double) theme children
+  block' (borderType := .double) theme none children
 
 /-- Create a rounded bordered block. -/
 def roundedBlock' (theme : Theme) (children : WidgetM α) : WidgetM α :=
-  block' (borderType := .rounded) theme children
+  block' (borderType := .rounded) theme none children
 
 /-- Create a thick bordered block. -/
 def thickBlock' (theme : Theme) (children : WidgetM α) : WidgetM α :=
-  block' (borderType := .thick) theme children
+  block' (borderType := .thick) theme none children
 
 /-! ## Panel Containers
 
@@ -104,21 +104,21 @@ Panels are styled blocks with padding and themed borders.
 
 /-- Create a titled panel container. -/
 def titledPanel' (title : String) (borderType : BorderType := .rounded) (theme : Theme)
-    (children : WidgetM α) : WidgetM α := do
+    (fillStyle : Option Style := none) (children : WidgetM α) : WidgetM α := do
   let (result, childRenders) ← runWidgetChildren children
   emit do
     let nodes ← childRenders.mapM id
     let inner := RNode.column 1 {} nodes  -- 1 cell gap between children
-    pure (RNode.block (some title) borderType (theme.borderStyle) inner)
+    pure (RNode.block (some title) borderType (theme.borderStyle) fillStyle inner)
   pure result
 
 /-- Create an outlined panel (simple border). -/
 def outlinedPanel' (theme : Theme) (children : WidgetM α) : WidgetM α :=
-  block' (borderType := .single) theme children
+  block' (borderType := .single) theme none children
 
 /-- Create an elevated panel (double border for emphasis). -/
 def elevatedPanel' (theme : Theme) (children : WidgetM α) : WidgetM α :=
-  block' (borderType := .double) theme children
+  block' (borderType := .double) theme none children
 
 /-! ## Flex Containers
 

@@ -53,24 +53,26 @@ def bufferRowPrefix (buf : Buffer) (row len : Nat) : String :=
 partial def rnodeHasChar (node : RNode) (c : Char) : Bool :=
   match node with
   | .text content _ => content.toList.any (fun ch => ch == c)
-  | .block _ _ _ child => rnodeHasChar child c
+  | .block _ _ _ _ child => rnodeHasChar child c
   | .row _ _ children => children.any (fun child => rnodeHasChar child c)
   | .column _ _ children => children.any (fun child => rnodeHasChar child c)
   | .clipped child => rnodeHasChar child c
   | .scrolled _ _ child => rnodeHasChar child c
   | .dockBottom _ content footer => rnodeHasChar content c || rnodeHasChar footer c
+  | .overlay base content _ => rnodeHasChar base c || rnodeHasChar content c
   | .image _ _ _ _ _ altText => altText.toList.any (fun ch => ch == c)
   | .spacer _ _ | .empty => false
 
 partial def rnodeHasText (node : RNode) (needle : String) : Bool :=
   match node with
   | .text content _ => content == needle
-  | .block _ _ _ child => rnodeHasText child needle
+  | .block _ _ _ _ child => rnodeHasText child needle
   | .row _ _ children => children.any (fun child => rnodeHasText child needle)
   | .column _ _ children => children.any (fun child => rnodeHasText child needle)
   | .clipped child => rnodeHasText child needle
   | .scrolled _ _ child => rnodeHasText child needle
   | .dockBottom _ content footer => rnodeHasText content needle || rnodeHasText footer needle
+  | .overlay base content _ => rnodeHasText base needle || rnodeHasText content needle
   | .image _ _ _ _ _ altText => altText == needle
   | .spacer _ _ | .empty => false
 
@@ -78,7 +80,7 @@ partial def rnodeHasText (node : RNode) (needle : String) : Bool :=
 partial def rnodeContainsText (node : RNode) (needle : String) : Bool :=
   match node with
   | .text content _ => Staple.String.containsSubstr content needle
-  | .block title _ _ child =>
+  | .block title _ _ _ child =>
     let titleMatch := match title with
       | some t => Staple.String.containsSubstr t needle
       | none => false
@@ -88,6 +90,7 @@ partial def rnodeContainsText (node : RNode) (needle : String) : Bool :=
   | .clipped child => rnodeContainsText child needle
   | .scrolled _ _ child => rnodeContainsText child needle
   | .dockBottom _ content footer => rnodeContainsText content needle || rnodeContainsText footer needle
+  | .overlay base content _ => rnodeContainsText base needle || rnodeContainsText content needle
   | .image _ _ _ _ _ altText => Staple.String.containsSubstr altText needle
   | .spacer _ _ | .empty => false
 

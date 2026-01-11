@@ -324,7 +324,7 @@ def dataGrid' (data : Array (Array String)) (config : DataGridConfig := {})
       if config.borderType == .none then
         pure emptyNode
       else
-        pure (RNode.block config.title config.borderType config.borderStyle emptyNode)
+        pure (RNode.block config.title config.borderType config.borderStyle none emptyNode)
     else
       let visibleRows := visibleCount config.maxVisibleRows rows
       let visibleCols := visibleCount config.maxVisibleCols cols
@@ -379,7 +379,7 @@ def dataGrid' (data : Array (Array String)) (config : DataGridConfig := {})
       if config.borderType == .none then
         pure inner
       else
-        pure (RNode.block config.title config.borderType config.borderStyle inner)
+        pure (RNode.block config.title config.borderType config.borderStyle none inner)
 
   pure {
     data := dataDyn

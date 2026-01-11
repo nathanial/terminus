@@ -36,7 +36,7 @@ def mediaContent (theme : Theme) : WidgetM Unit := do
 
     -- Canvas
     when' isCanvas do
-      titledBlock' "Canvas Drawing" .rounded theme do
+      titledBlock' "Canvas Drawing" .rounded theme none do
         let grid := BrailleGrid.new 25 6
           |>.drawRect 2 2 15 15 { fg := .ansi .cyan }
           |>.drawLine 0 0 48 22 { fg := .ansi .green }
@@ -46,14 +46,14 @@ def mediaContent (theme : Theme) : WidgetM Unit := do
 
     -- BigText
     when' isBigText do
-      titledBlock' "BigText Rendering" .rounded theme do
+      titledBlock' "BigText Rendering" .rounded theme none do
         bigText' "LEAN" { font := .block, style := { fg := .ansi .cyan } }
         spacer' 0 1
         bigText' "TERMINUS" { font := .small, style := { fg := .ansi .green } }
 
     -- Image
     when' isImage do
-      titledBlock' "Image Widget" .rounded theme do
+      titledBlock' "Image Widget" .rounded theme none do
         image' nibblePngPath {
           width := 30
           height := 10

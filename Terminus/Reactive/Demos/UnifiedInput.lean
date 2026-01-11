@@ -15,7 +15,7 @@ def inputContent (theme : Theme) (_events : TerminusEvents) : WidgetM Unit := do
     row' (gap := 2) {} do
       -- Text input
       column' (gap := 1) {} do
-        titledBlock' "Text Input" .rounded theme do
+        titledBlock' "Text Input" .rounded theme none do
           let input ← textInput' "demo-input" "" {
             placeholder := "Type here..."
             width := 20
@@ -32,7 +32,7 @@ def inputContent (theme : Theme) (_events : TerminusEvents) : WidgetM Unit := do
 
       -- Checkbox
       column' (gap := 1) {} do
-        titledBlock' "Checkbox" .rounded theme do
+        titledBlock' "Checkbox" .rounded theme none do
           let cb1 ← checkbox' "tos-check" "Terms of Service" false {
             checkedIcon := "[x] "
             uncheckedIcon := "[ ] "
@@ -46,7 +46,7 @@ def inputContent (theme : Theme) (_events : TerminusEvents) : WidgetM Unit := do
 
       -- Radio group
       column' (gap := 1) {} do
-        titledBlock' "Radio Group" .rounded theme do
+        titledBlock' "Radio Group" .rounded theme none do
           let radio ← radioGroup' "priority" #["Low", "Medium", "High"] (some 1) {
             selectedStyle := { fg := .ansi .cyan }
           }
@@ -60,7 +60,7 @@ def inputContent (theme : Theme) (_events : TerminusEvents) : WidgetM Unit := do
     row' (gap := 2) {} do
       -- Selectable list
       column' (gap := 1) {} do
-        titledBlock' "Selectable List" .rounded theme do
+        titledBlock' "Selectable List" .rounded theme none do
           let fruits := #["Apple", "Banana", "Cherry", "Date", "Elderberry"]
           let list ← selectableList' fruits 1 {
             focusName := "fruit-list"
@@ -76,7 +76,7 @@ def inputContent (theme : Theme) (_events : TerminusEvents) : WidgetM Unit := do
 
       -- Text Area
       column' (gap := 1) {} do
-        titledBlock' "Text Area" .rounded theme do
+        titledBlock' "Text Area" .rounded theme none do
           let editor ← textArea' "editor" "Hello, World!\nMulti-line text." {
             showLineNumbers := true
             maxVisibleLines := some 4
@@ -92,7 +92,7 @@ def inputContent (theme : Theme) (_events : TerminusEvents) : WidgetM Unit := do
     row' (gap := 2) {} do
       -- List variants
       column' (gap := 1) {} do
-        titledBlock' "List Variants" .rounded theme do
+        titledBlock' "List Variants" .rounded theme none do
           text' "String list:" theme.captionStyle
           let colors := #["Red", "Green", "Blue", "Orange"]
           let colorList ← stringList' colors 0 {
@@ -125,7 +125,7 @@ def inputContent (theme : Theme) (_events : TerminusEvents) : WidgetM Unit := do
 
       -- Form
       column' (gap := 1) {} do
-        titledBlock' "Form" .rounded theme do
+        titledBlock' "Form" .rounded theme none do
           text' "Ctrl+Enter: submit | Esc: cancel" theme.captionStyle
 
           let fields := #[

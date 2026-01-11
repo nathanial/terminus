@@ -425,7 +425,7 @@ def inlineLabeledInput' (label : String) (name : String) (initial : String := ""
 /-- Create a field group with a border. -/
 def fieldGroup' (title : String) (theme : Theme := .dark)
     (content : WidgetM α) : WidgetM α :=
-  titledBlock' title .rounded theme content
+  titledBlock' title .rounded theme none content
 
 /-- Create a submit button. -/
 def submitButton' (label : String := "Submit") (enabled : Reactive.Dynamic Spider Bool)

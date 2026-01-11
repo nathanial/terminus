@@ -53,7 +53,7 @@ def feedbackLoggingSection (theme : Theme) (unfocusedKeys : Reactive.Event Spide
   row' (gap := 2) {} do
     -- Spinners
     column' (gap := 1) {} do
-      titledBlock' "Spinners" .rounded theme do
+      titledBlock' "Spinners" .rounded theme none do
         row' (gap := 1) {} do
           text' "Dots:" theme.captionStyle
           let _ ← animatedSpinner' (some "Processing") 100 { style := .dots }
@@ -72,7 +72,7 @@ def feedbackLoggingSection (theme : Theme) (unfocusedKeys : Reactive.Event Spide
 
     -- Logger (FRP: event-driven)
     column' (gap := 1) {} do
-      titledBlock' "Logger" .rounded theme do
+      titledBlock' "Logger" .rounded theme none do
         let _ ← loggerWithEvents' allLogEntries clearEvents {
           maxLines := 6
           showLevel := true
@@ -81,7 +81,7 @@ def feedbackLoggingSection (theme : Theme) (unfocusedKeys : Reactive.Event Spide
 
     -- Notifications (FRP: event-driven)
     column' (gap := 1) {} do
-      titledBlock' "Notifications" .rounded theme do
+      titledBlock' "Notifications" .rounded theme none do
         notificationsWithEvents' notifyEntries dismissOneEvents dismissAllEvents {
           durationMs := 0
           maxVisible := 4
@@ -103,7 +103,7 @@ def feedbackDialogsSection (theme : Theme) (unfocusedKeys : Reactive.Event Spide
   let inputVisible ← Reactive.holdDyn false inputVisEvent
 
   column' (gap := 1) {} do
-    titledBlock' "Dialogs" .rounded theme do
+    titledBlock' "Dialogs" .rounded theme none do
       text' "O: modal | F: confirm | M: message" theme.captionStyle
       text' "I: input | X: error | V: warning | Esc: close modal" theme.captionStyle
 
@@ -215,7 +215,7 @@ def feedbackPopupSection (theme : Theme) (unfocusedKeys : Reactive.Event Spider 
 
   -- Popup (FRP: visibility-driven)
   column' (gap := 1) {} do
-    titledBlock' "Popup" .rounded theme do
+    titledBlock' "Popup" .rounded theme none do
       text' "P: toggle popup" theme.captionStyle
       popupWhen' "demo-popup" popupVisible { title := some "Popup" } do
         text' "This is a popup panel." theme.bodyStyle

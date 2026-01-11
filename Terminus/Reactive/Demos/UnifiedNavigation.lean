@@ -15,7 +15,7 @@ def navigationContent (theme : Theme) (_events : TerminusEvents) : WidgetM Unit 
     row' (gap := 2) {} do
       -- Tabs demo
       column' (gap := 1) {} do
-        titledBlock' "Tabs Widget" .rounded theme do
+        titledBlock' "Tabs Widget" .rounded theme none do
           let tabResult ← tabs' #["Home", "Settings", "Help"] 0 {
             focusName := "inner-tabs"
             activeStyle := { fg := .ansi .cyan, modifier := { bold := true } }
@@ -31,7 +31,7 @@ def navigationContent (theme : Theme) (_events : TerminusEvents) : WidgetM Unit 
 
       -- Tree demo
       column' (gap := 1) {} do
-        titledBlock' "Tree Widget" .rounded theme do
+        titledBlock' "Tree Widget" .rounded theme none do
           let fileTree := TreeNode.branch "project" #[
             TreeNode.branch "src" #[
               TreeNode.leaf "Main.lean",
