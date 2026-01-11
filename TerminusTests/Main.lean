@@ -44,6 +44,15 @@ import TerminusTests.BigTextTests
 import TerminusTests.CanvasTests
 import TerminusTests.ImageTests
 
+-- Reactive tests
+import TerminusTests.Reactive.Common
+import TerminusTests.Reactive.RenderingTests
+import TerminusTests.Reactive.WidgetTests
+import TerminusTests.Reactive.ComponentTests
+import TerminusTests.Reactive.OverlayTests
+import TerminusTests.Reactive.ScrollTests
+import TerminusTests.Reactive.IntegrationTests
+
 open Crucible
 
 def main : IO UInt32 := do

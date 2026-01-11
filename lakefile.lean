@@ -12,11 +12,7 @@ require chronicle from git "https://github.com/nathanial/chronicle" @ "v0.0.2"
 lean_lib «Terminus» where
   roots := #[`Terminus]
 
--- Test library for reactive tests (not yet migrated)
-lean_lib «Tests» where
-  roots := #[`Tests.ReactiveTests]
-
--- Test library matching collimator pattern
+-- Test library using globs pattern (matches collimator)
 lean_lib TerminusTests where
   globs := #[.submodules `TerminusTests]
   precompileModules := false
@@ -69,9 +65,6 @@ lean_exe «reactive_demo» where
 
 lean_exe «reactive_input» where
   root := `examples.ReactiveInput
-
-lean_exe «reactive_tests» where
-  root := `Tests.ReactiveTests
 
 @[test_driver]
 lean_exe terminus_tests where
