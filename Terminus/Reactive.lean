@@ -41,6 +41,8 @@
   - **ScrollView**: `scrollView'`, `vscrollView'`, `hscrollView'`
   - **Grid**: `grid'`, `dynGrid'`, `cursorGrid'`, `GridCell`
   - **Animation**: `useAnimation`, `usePulse`, `useCycle`, `AnimPhase`, `Easing`
+  - **TextArea**: `textArea'`, `labeledTextArea'`, `textDisplay'`
+  - **Form**: `form'`, `optionSelector'`, `checkbox'`, `submitButton'`
   - **Render**: `render`, `renderToBuffer`, `computeLayout`, `ClipContext`
   - **App**: `runReactiveApp`, `runSimpleApp`
 -/
@@ -58,4 +60,6 @@ import Terminus.Reactive.Overlay
 import Terminus.Reactive.ScrollView
 import Terminus.Reactive.Grid
 import Terminus.Reactive.Animation
+import Terminus.Reactive.TextArea
+import Terminus.Reactive.Form
 import Terminus.Reactive.App

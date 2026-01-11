@@ -74,7 +74,11 @@ partial def rnodeHasText (node : RNode) (needle : String) : Bool :=
 partial def rnodeContainsText (node : RNode) (needle : String) : Bool :=
   match node with
   | .text content _ => Staple.String.containsSubstr content needle
-  | .block _ _ _ child => rnodeContainsText child needle
+  | .block title _ _ child =>
+    let titleMatch := match title with
+      | some t => Staple.String.containsSubstr t needle
+      | none => false
+    titleMatch || rnodeContainsText child needle
   | .row _ _ children => children.any (fun child => rnodeContainsText child needle)
   | .column _ _ children => children.any (fun child => rnodeContainsText child needle)
   | .clipped child => rnodeContainsText child needle

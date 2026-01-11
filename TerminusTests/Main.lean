@@ -56,6 +56,8 @@ import TerminusTests.Reactive.TabsTests
 import TerminusTests.Reactive.TreeTests
 import TerminusTests.Reactive.GridTests
 import TerminusTests.Reactive.AnimationTests
+import TerminusTests.Reactive.TextAreaTests
+import TerminusTests.Reactive.FormTests
 
 open Crucible
 
