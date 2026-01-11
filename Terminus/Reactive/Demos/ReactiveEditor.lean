@@ -11,27 +11,31 @@ open Reactive Reactive.Host
 def reactiveEditorApp : ReactiveTermM ReactiveAppState := do
   let theme := Theme.dark
 
-  -- Track which panel is active
-  let panelRef ← SpiderM.liftIO (IO.mkRef (0 : Nat))
-  let (panelEvent, firePanel) ← newTriggerEvent (t := Spider) (a := Nat)
-  let panelDyn ← holdDyn 0 panelEvent
+  -- Define focusable widget names in order
+  let focusableNames := #["editor", "name", "email", "priority", "newsletter"]
+  let focusIndexRef ← SpiderM.liftIO (IO.mkRef 0)
 
-  -- Get events for panel switching
+  -- Get events for focus cycling
   let keyEvents ← useKeyEvent
+  let events ← getEvents
 
-  -- Tab key switches panels
+  -- Tab key cycles focus between widgets
   let _unsub ← SpiderM.liftIO <| keyEvents.subscribe fun kd => do
     let ke := kd.event
     match ke.code with
     | .tab =>
-      let current ← panelRef.get
-      let next := if ke.modifiers.shift then
-        if current > 0 then current - 1 else 2
+      let idx ← focusIndexRef.get
+      let nextIdx := if ke.modifiers.shift then
+        if idx > 0 then idx - 1 else focusableNames.size - 1
       else
-        if current < 2 then current + 1 else 0
-      panelRef.set next
-      firePanel next
+        (idx + 1) % focusableNames.size
+      focusIndexRef.set nextIdx
+      if h : nextIdx < focusableNames.size then
+        events.registry.fireFocus (some focusableNames[nextIdx])
     | _ => pure ()
+
+  -- Set initial focus to the editor
+  SpiderM.liftIO <| events.registry.fireFocus (some "editor")
 
   -- Build UI
   let (_, render) ← runWidget do
@@ -137,13 +141,11 @@ def reactiveEditorApp : ReactiveTermM ReactiveAppState := do
                     let display := if checked == true then "Yes" else "No"
                     pure (RNode.text display theme.bodyStyle)
 
-      -- Footer
+      -- Footer showing current focus
+      let focusedInput ← useFocusedInputW
       emitDynamic do
-        let panel ← panelDyn.sample
-        let panelName := match panel with
-          | 0 => "Editor"
-          | 1 => "Form"
-          | _ => "Status"
-        pure (RNode.text s!"Active panel: {panelName}" theme.captionStyle)
+        let focused ← focusedInput.sample
+        let focusName := focused.getD "(none)"
+        pure (RNode.text s!"Focused: {focusName}" theme.captionStyle)
 
   pure { render }

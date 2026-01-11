@@ -247,6 +247,103 @@ test "textDisplay' shows content" := do
     SpiderM.liftIO (ensure (rnodeContainsText node "Line 1") "should contain Line 1")
     SpiderM.liftIO (ensure (rnodeContainsText node "Line 2") "should contain Line 2")
 
+-- ============================================================================
+-- TextArea Keyboard Input Tests
+-- ============================================================================
+
+test "textArea' accepts character input when focused" := do
+  let env ← SpiderEnv.new
+  let (result, inputs) ← (do
+    let (events, inputs) ← createInputs
+    SpiderM.liftIO <| events.registry.fireFocus (some "editor")
+    let (res, _render) ← (runWidget do
+      textArea' "editor" "" {}
+    ).run events
+    pure (res, inputs)
+  ).run env
+
+  env.postBuildTrigger ()
+
+  -- Type 'H'
+  inputs.fireKey { event := KeyEvent.char 'H', focusedWidget := some "editor" }
+  let content1 ← result.content.sample
+  ensure (content1 == "H") "should have 'H'"
+
+  -- Type 'i'
+  inputs.fireKey { event := KeyEvent.char 'i', focusedWidget := some "editor" }
+  let content2 ← result.content.sample
+  ensure (content2 == "Hi") "should have 'Hi'"
+
+  env.currentScope.dispose
+
+test "textArea' backspace removes character" := do
+  let env ← SpiderEnv.new
+  let (result, inputs) ← (do
+    let (events, inputs) ← createInputs
+    SpiderM.liftIO <| events.registry.fireFocus (some "editor")
+    let (res, _render) ← (runWidget do
+      textArea' "editor" "Hello" {}
+    ).run events
+    pure (res, inputs)
+  ).run env
+
+  env.postBuildTrigger ()
+
+  -- Move cursor to end first (5 right moves)
+  for _ in [:5] do
+    inputs.fireKey { event := KeyEvent.right, focusedWidget := some "editor" }
+
+  -- Backspace
+  inputs.fireKey { event := { code := .backspace }, focusedWidget := some "editor" }
+  let content ← result.content.sample
+  ensure (content == "Hell") "should have 'Hell' after backspace"
+
+  env.currentScope.dispose
+
+test "textArea' enter creates newline" := do
+  let env ← SpiderEnv.new
+  let (result, inputs) ← (do
+    let (events, inputs) ← createInputs
+    SpiderM.liftIO <| events.registry.fireFocus (some "editor")
+    let (res, _render) ← (runWidget do
+      textArea' "editor" "Hello" {}
+    ).run events
+    pure (res, inputs)
+  ).run env
+
+  env.postBuildTrigger ()
+
+  -- Move to end
+  for _ in [:5] do
+    inputs.fireKey { event := KeyEvent.right, focusedWidget := some "editor" }
+
+  -- Press enter
+  inputs.fireKey { event := KeyEvent.enter, focusedWidget := some "editor" }
+  let content ← result.content.sample
+  ensure (content == "Hello\n") "should have newline"
+
+  env.currentScope.dispose
+
+test "textArea' ignores input when not focused" := do
+  let env ← SpiderEnv.new
+  let (result, inputs) ← (do
+    let (events, inputs) ← createInputs
+    -- Do NOT focus the editor
+    let (res, _render) ← (runWidget do
+      textArea' "editor" "" {}
+    ).run events
+    pure (res, inputs)
+  ).run env
+
+  env.postBuildTrigger ()
+
+  -- Try to type (should be ignored because not focused)
+  inputs.fireKey { event := KeyEvent.char 'H', focusedWidget := none }
+  let content ← result.content.sample
+  ensure (content == "") "should still be empty when not focused"
+
+  env.currentScope.dispose
+
 #generate_tests
 
 end TerminusTests.Reactive.TextAreaTests
