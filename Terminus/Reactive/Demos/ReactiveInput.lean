@@ -19,7 +19,7 @@ def reactiveInputApp : ReactiveTermM ReactiveAppState := do
   let resultMsg ← holdDyn "" resultMsgEvent
 
   -- Define focusable component names in order
-  let focusableNames := #["demo-input", "fruit-list", "color-list", "scroll-demo"]
+  let focusableNames := #["demo-input", "fruit-list", "agree-cb", "notify-cb", "priority-radio", "color-list", "scroll-demo"]
   let focusIndexRef ← SpiderM.liftIO (IO.mkRef 0)
 
   -- Subscribe to Tab key to cycle focus
@@ -106,10 +106,50 @@ def reactiveInputApp : ReactiveTermM ReactiveAppState := do
               let sel ← lastSelected.sample
               pure (RNode.text sel theme.primaryStyle)
 
-      -- Row 2: Numbered List (left) | ScrollView (right)
+      -- Row 2: Checkbox (left) | RadioGroup (right)
       row' (gap := 2) {} do
-        -- Section 3: Numbered List Demo
-        titledBlock' "3. Numbered List" .rounded theme do
+        -- Section 3: Checkbox Demo
+        titledBlock' "3. Checkbox" .rounded theme do
+          text' "Space/Enter to toggle:" theme.bodyStyle
+
+          let agree ← checkbox'' "agree-cb" "I agree to the terms" false {
+            checkedStyle := { fg := .ansi .green }
+            focusedStyle := { fg := .ansi .cyan }
+          }
+
+          let notify ← checkbox'' "notify-cb" "Send me notifications" true {}
+
+          row' (gap := 1) {} do
+            text' "Agree:" theme.captionStyle
+            emitDynamic do
+              let checked ← agree.checked.sample
+              pure (RNode.text (if checked then "Yes" else "No") theme.primaryStyle)
+
+          row' (gap := 1) {} do
+            text' "Notify:" theme.captionStyle
+            emitDynamic do
+              let checked ← notify.checked.sample
+              pure (RNode.text (if checked then "Yes" else "No") theme.primaryStyle)
+
+        -- Section 4: RadioGroup Demo
+        titledBlock' "4. RadioGroup" .rounded theme do
+          text' "Arrows/j/k to navigate:" theme.bodyStyle
+
+          let priority ← radioGroup' "priority-radio" #["Low", "Medium", "High", "Critical"] (some 1) {
+            selectedStyle := { fg := .ansi .cyan }
+            focusedStyle := { bg := .ansi .blue }
+          }
+
+          row' (gap := 1) {} do
+            text' "Priority:" theme.captionStyle
+            emitDynamic do
+              let label ← priority.selectedLabel.sample
+              pure (RNode.text (label.getD "(none)") theme.primaryStyle)
+
+      -- Row 3: Numbered List (left) | ScrollView (right)
+      row' (gap := 2) {} do
+        -- Section 5: Numbered List Demo
+        titledBlock' "5. Numbered List" .rounded theme do
           text' "Press 1-5 to quick-select:" theme.bodyStyle
 
           let colors := #["Red", "Green", "Blue", "Yellow", "Purple"]
@@ -127,8 +167,8 @@ def reactiveInputApp : ReactiveTermM ReactiveAppState := do
                 | none => "(none)"
               pure (RNode.text display theme.primaryStyle)
 
-        -- Section 4: ScrollView Demo
-        titledBlock' "4. ScrollView" .rounded theme do
+        -- Section 6: ScrollView Demo
+        titledBlock' "6. ScrollView" .rounded theme do
           text' "Arrows/j/k to scroll:" theme.bodyStyle
 
           let _scroll ← scrollView' { maxVisible := 3, showVerticalScrollbar := true, focusName := "scroll-demo" } do

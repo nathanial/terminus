@@ -78,6 +78,12 @@ lean_exe «reactive_editor» where
 lean_exe «reactive_async» where
   root := `examples.ReactiveAsync
 
+lean_exe «reactive_data» where
+  root := `examples.ReactiveData
+
+lean_exe «reactive_feedback» where
+  root := `examples.ReactiveFeedback
+
 @[test_driver]
 lean_exe terminus_tests where
   root := `TerminusTests.Main

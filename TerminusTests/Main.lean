@@ -60,6 +60,10 @@ import TerminusTests.Reactive.TextAreaTests
 import TerminusTests.Reactive.FormTests
 import TerminusTests.Reactive.AsyncTests
 import TerminusTests.Reactive.LayoutTests
+import TerminusTests.Reactive.CheckboxTests
+import TerminusTests.Reactive.FeedbackTests
+import TerminusTests.Reactive.NavigationTests
+import TerminusTests.Reactive.UtilityTests
 
 open Crucible
 
