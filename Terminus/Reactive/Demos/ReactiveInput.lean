@@ -45,114 +45,100 @@ def reactiveInputApp : ReactiveTermM ReactiveAppState := do
     column' (gap := 1) (style := {}) do
       -- Header
       text' "=== Reactive Input Demo ===" theme.heading1Style
-      text' "Press Tab to cycle focus, C for confirm dialog, Ctrl+C to quit" theme.captionStyle
-      text' "" {}
+      text' "Tab: cycle focus | C: confirm dialog | Ctrl+C: quit" theme.captionStyle
 
-      -- Section 1: Text Input Demo
-      titledBlock' "1. Text Input" .rounded theme do
-        text' "Type in the input field below:" theme.bodyStyle
-        spacer' 1 1
+      -- Row 1: Text Input (left) | Selectable List (right)
+      row' (gap := 2) {} do
+        -- Section 1: Text Input Demo
+        titledBlock' "1. Text Input" .rounded theme do
+          text' "Type in the field below:" theme.bodyStyle
 
-        -- Create a text input
-        let input ← textInput' "demo-input" "" {
-          placeholder := "Enter text here..."
-          width := 30
-          focusedStyle := { fg := .ansi .cyan }
-        }
+          let input ← textInput' "demo-input" "" {
+            placeholder := "Enter text..."
+            width := 25
+            focusedStyle := { fg := .ansi .cyan }
+          }
 
-        spacer' 1 1
+          row' (gap := 1) {} do
+            text' "Value:" theme.captionStyle
+            emitDynamic do
+              let val ← input.value.sample
+              pure (RNode.text (if val.isEmpty then "(empty)" else s!"\"{val}\"") theme.primaryStyle)
 
-        -- Show current value
-        row' (gap := 1) {} do
-          text' "Current value:" theme.captionStyle
-          emitDynamic do
-            let val ← input.value.sample
-            pure (RNode.text (if val.isEmpty then "(empty)" else s!"\"{val}\"") theme.primaryStyle)
-
-        -- Show submit events
-        row' (gap := 1) {} do
-          text' "Last submitted:" theme.captionStyle
           let submitted ← holdDyn "(none)" input.onSubmit
-          emitDynamic do
-            let val ← submitted.sample
-            pure (RNode.text s!"\"{val}\"" theme.primaryStyle)
+          row' (gap := 1) {} do
+            text' "Submitted:" theme.captionStyle
+            emitDynamic do
+              let val ← submitted.sample
+              pure (RNode.text s!"\"{val}\"" theme.primaryStyle)
 
-      -- Section 2: Selectable List Demo
-      titledBlock' "2. Selectable List" .rounded theme do
-        text' "Navigate with arrows/j/k, Enter to select:" theme.bodyStyle
-        spacer' 1 1
+        -- Section 2: Selectable List Demo
+        titledBlock' "2. Selectable List" .rounded theme do
+          text' "Arrows/j/k, Enter to select:" theme.bodyStyle
 
-        -- SelectableList handles its own scrolling via maxVisible
-        let fruits := #["Apple", "Banana", "Cherry", "Date", "Elderberry",
-                        "Fig", "Grape", "Honeydew", "Kiwi", "Lemon"]
-        let list ← selectableList' fruits 0 {
-          maxVisible := some 4
-          selectedStyle := { bg := .ansi .blue, fg := .ansi .white }
-          focusName := "fruit-list"
-        }
+          let fruits := #["Apple", "Banana", "Cherry", "Date", "Elderberry",
+                          "Fig", "Grape", "Honeydew", "Kiwi", "Lemon"]
+          let list ← selectableList' fruits 0 {
+            maxVisible := some 4
+            selectedStyle := { bg := .ansi .blue, fg := .ansi .white }
+            focusName := "fruit-list"
+          }
 
-        spacer' 1 1
+          row' (gap := 1) {} do
+            text' "Index:" theme.captionStyle
+            emitDynamic do
+              let idx ← list.selectedIndex.sample
+              pure (RNode.text (toString idx) theme.primaryStyle)
 
-        -- Show selection info
-        row' (gap := 1) {} do
-          text' "Selected index:" theme.captionStyle
-          emitDynamic do
-            let idx ← list.selectedIndex.sample
-            pure (RNode.text (toString idx) theme.primaryStyle)
+          row' (gap := 1) {} do
+            text' "Item:" theme.captionStyle
+            emitDynamic do
+              let item ← list.selectedItem.sample
+              let display := match item with
+                | some s => s
+                | none => "(none)"
+              pure (RNode.text display theme.primaryStyle)
 
-        row' (gap := 1) {} do
-          text' "Selected item:" theme.captionStyle
-          emitDynamic do
-            let item ← list.selectedItem.sample
-            let display := match item with
-              | some s => s
-              | none => "(none)"
-            pure (RNode.text display theme.primaryStyle)
+          let lastSelected ← holdDyn "(none)" list.onSelect
+          row' (gap := 1) {} do
+            text' "Confirmed:" theme.captionStyle
+            emitDynamic do
+              let sel ← lastSelected.sample
+              pure (RNode.text sel theme.primaryStyle)
 
-        -- Track last selected via Enter
-        let lastSelected ← holdDyn "(none)" list.onSelect
-        row' (gap := 1) {} do
-          text' "Last confirmed:" theme.captionStyle
-          emitDynamic do
-            let sel ← lastSelected.sample
-            pure (RNode.text sel theme.primaryStyle)
+      -- Row 2: Numbered List (left) | ScrollView (right)
+      row' (gap := 2) {} do
+        -- Section 3: Numbered List Demo
+        titledBlock' "3. Numbered List" .rounded theme do
+          text' "Press 1-5 to quick-select:" theme.bodyStyle
 
-      -- Section 3: Numbered List Demo
-      titledBlock' "3. Numbered List" .rounded theme do
-        text' "Press 1-5 to quick-select:" theme.bodyStyle
-        spacer' 1 1
+          let colors := #["Red", "Green", "Blue", "Yellow", "Purple"]
+          let numList ← numberedList' colors 0 {
+            selectedStyle := { bg := .ansi .magenta, fg := .ansi .white }
+            focusName := "color-list"
+          }
 
-        let colors := #["Red", "Green", "Blue", "Yellow", "Purple"]
-        let numList ← numberedList' colors 0 {
-          selectedStyle := { bg := .ansi .magenta, fg := .ansi .white }
-          focusName := "color-list"
-        }
+          row' (gap := 1) {} do
+            text' "Selected:" theme.captionStyle
+            emitDynamic do
+              let item ← numList.selectedItem.sample
+              let display := match item with
+                | some s => s
+                | none => "(none)"
+              pure (RNode.text display theme.primaryStyle)
 
-        spacer' 1 1
+        -- Section 4: ScrollView Demo
+        titledBlock' "4. ScrollView" .rounded theme do
+          text' "Arrows/j/k to scroll:" theme.bodyStyle
 
-        row' (gap := 1) {} do
-          text' "Selected:" theme.captionStyle
-          emitDynamic do
-            let item ← numList.selectedItem.sample
-            let display := match item with
-              | some s => s
-              | none => "(none)"
-            pure (RNode.text display theme.primaryStyle)
-
-      -- Section 4: ScrollView Demo (for scrollable text content)
-      titledBlock' "4. ScrollView Demo" .rounded theme do
-        text' "Use arrows/j/k to scroll content:" theme.bodyStyle
-        spacer' 1 1
-
-        -- ScrollView for text content that doesn't have its own scrolling
-        let _scroll ← scrollView' { maxVisible := 3, showVerticalScrollbar := true, focusName := "scroll-demo" } do
-          text' "Line 1: The quick brown fox" theme.bodyStyle
-          text' "Line 2: jumps over the lazy dog." theme.bodyStyle
-          text' "Line 3: Pack my box with" theme.bodyStyle
-          text' "Line 4: five dozen liquor jugs." theme.bodyStyle
-          text' "Line 5: How vexingly quick" theme.bodyStyle
-          text' "Line 6: daft zebras jump!" theme.bodyStyle
-          pure ()
+          let _scroll ← scrollView' { maxVisible := 3, showVerticalScrollbar := true, focusName := "scroll-demo" } do
+            text' "Line 1: The quick brown fox" theme.bodyStyle
+            text' "Line 2: jumps over the lazy dog." theme.bodyStyle
+            text' "Line 3: Pack my box with" theme.bodyStyle
+            text' "Line 4: five dozen liquor jugs." theme.bodyStyle
+            text' "Line 5: How vexingly quick" theme.bodyStyle
+            text' "Line 6: daft zebras jump!" theme.bodyStyle
+            pure ()
 
       -- Confirm Dialog (overlay)
       let confirm ← confirmDialog' "Do you want to proceed with this action?" showConfirm theme
@@ -175,7 +161,6 @@ def reactiveInputApp : ReactiveTermM ReactiveAppState := do
           pure (RNode.text s!"Dialog result: {msg}" theme.primaryStyle)
 
       -- Status bar showing current focus
-      text' "" {}
       let focusedInput ← useFocusedInputW
       emitDynamic do
         let focused ← focusedInput.sample
