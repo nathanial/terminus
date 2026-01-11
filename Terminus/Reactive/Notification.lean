@@ -135,6 +135,7 @@ structure NotificationResult where
 def notifications' (config : NotificationConfig := {}) : WidgetM NotificationResult := do
   -- Get tick events for auto-dismiss timing
   let tickEvent ← useTickW
+  let env ← SpiderM.getEnv
 
   -- State
   let entriesRef ← SpiderM.liftIO (IO.mkRef (#[] : Array NotificationEntry))
@@ -157,42 +158,46 @@ def notifications' (config : NotificationConfig := {}) : WidgetM NotificationRes
         currentTime - entry.createdAt < config.durationMs
 
       if remaining.size != entries.size then
-        entriesRef.set remaining
-        fireRender ()
+        env.withFrame do
+          entriesRef.set remaining
+          fireRender ()
 
   -- Show function
   let showFn : NotificationLevel → String → IO Unit := fun level message => do
-    let currentTime ← currentTimeRef.get
-    let id ← nextIdRef.modifyGet fun n => (n, n + 1)
+    env.withFrame do
+      let currentTime ← currentTimeRef.get
+      let id ← nextIdRef.modifyGet fun n => (n, n + 1)
 
-    let entry : NotificationEntry := {
-      id
-      level
-      message
-      createdAt := currentTime
-    }
+      let entry : NotificationEntry := {
+        id
+        level
+        message
+        createdAt := currentTime
+      }
 
-    let entries ← entriesRef.get
-    -- Add new entry, keeping only maxVisible
-    let newEntries := if entries.size >= config.maxVisible then
-      entries.extract 1 entries.size |>.push entry
-    else
-      entries.push entry
+      let entries ← entriesRef.get
+      -- Add new entry, keeping only maxVisible
+      let newEntries := if entries.size >= config.maxVisible then
+        entries.extract 1 entries.size |>.push entry
+      else
+        entries.push entry
 
-    entriesRef.set newEntries
-    fireRender ()
+      entriesRef.set newEntries
+      fireRender ()
 
   -- Dismiss function (removes oldest)
   let dismissFn : IO Unit := do
-    let entries ← entriesRef.get
-    if !entries.isEmpty then
-      entriesRef.set (entries.extract 1 entries.size)
-      fireRender ()
+    env.withFrame do
+      let entries ← entriesRef.get
+      if !entries.isEmpty then
+        entriesRef.set (entries.extract 1 entries.size)
+        fireRender ()
 
   -- Dismiss all function
   let dismissAllFn : IO Unit := do
-    entriesRef.set #[]
-    fireRender ()
+    env.withFrame do
+      entriesRef.set #[]
+      fireRender ()
 
   -- Emit render function
   emit do

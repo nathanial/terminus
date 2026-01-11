@@ -58,6 +58,7 @@ structure PopupResult where
 -/
 def popup' (name : String) (config : PopupConfig := {}) (content : WidgetM Unit)
     : WidgetM PopupResult := do
+  let env ← SpiderM.getEnv
   -- Visibility state
   let visibleRef ← SpiderM.liftIO (IO.mkRef false)
 
@@ -67,17 +68,20 @@ def popup' (name : String) (config : PopupConfig := {}) (content : WidgetM Unit)
 
   -- Control functions
   let showFn : IO Unit := do
-    visibleRef.set true
-    fireVisible true
+    env.withFrame do
+      visibleRef.set true
+      fireVisible true
 
   let hideFn : IO Unit := do
-    visibleRef.set false
-    fireVisible false
+    env.withFrame do
+      visibleRef.set false
+      fireVisible false
 
   let toggleFn : IO Unit := do
-    let current ← visibleRef.get
-    visibleRef.set (!current)
-    fireVisible (!current)
+    env.withFrame do
+      let current ← visibleRef.get
+      visibleRef.set (!current)
+      fireVisible (!current)
 
   -- Render content and wrap in block
   let (_, childRenders) ← runWidgetChildren content

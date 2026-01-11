@@ -137,8 +137,8 @@ structure LoggerResult where
     ```
 -/
 def logger' (config : LoggerConfig := {}) : WidgetM LoggerResult := do
-  -- Get environment for withFrame
-  let events ← getEventsW
+  -- Get environment for frame-safe updates
+  let env ← SpiderM.getEnv
 
   -- Create trigger events
   let (entriesEvent, fireEntries) ← newTriggerEvent (t := Spider) (a := Array LogEntry)
@@ -159,19 +159,20 @@ def logger' (config : LoggerConfig := {}) : WidgetM LoggerResult := do
     let entry := LogEntry.new level message timestamp
 
     -- Update entries with truncation
-    let entries ← entriesRef.get
-    let newEntries := if entries.size >= config.maxLines then
-      entries.extract 1 entries.size |>.push entry
-    else
-      entries.push entry
-
-    entriesRef.set newEntries
-    fireEntries newEntries
+    env.withFrame do
+      let entries ← entriesRef.get
+      let newEntries := if entries.size >= config.maxLines then
+        entries.extract 1 entries.size |>.push entry
+      else
+        entries.push entry
+      entriesRef.set newEntries
+      fireEntries newEntries
 
   -- Clear function
   let clearFn : IO Unit := do
-    entriesRef.set #[]
-    fireEntries #[]
+    env.withFrame do
+      entriesRef.set #[]
+      fireEntries #[]
 
   -- Emit render function
   emit do
