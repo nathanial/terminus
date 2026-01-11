@@ -493,6 +493,24 @@ def dataContent (theme : Theme) (_events : TerminusEvents) : WidgetM Unit := do
           ]
           charGrid' cells { borderType := .rounded }
 
+          spacer' 0 1
+
+          titledBlock' "DataGrid" .rounded theme do
+            text' "Enter to edit; arrows to move" theme.captionStyle
+            let gridData := #[
+              #["1", "Ada", "42"],
+              #["2", "Linus", "7"],
+              #["3", "Grace", "13"],
+              #["4", "Edsger", "5"]
+            ]
+            let _ ← dataGrid' gridData {
+              columnHeaders := some #["ID", "Name", "Score"]
+              cellWidth := 8
+              maxVisibleRows := some 4
+              maxVisibleCols := some 3
+              focusName := "data-grid"
+            }
+
 /-! ## Charts Tab Content -/
 
 def chartsContent (theme : Theme) : WidgetM Unit := do

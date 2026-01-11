@@ -40,6 +40,7 @@
   - **Overlay**: `overlay'`, `modal'`, `confirmDialog'`, `messageDialog'`
   - **ScrollView**: `scrollView'`, `vscrollView'`, `hscrollView'`
   - **Grid**: `grid'`, `dynGrid'`, `cursorGrid'`, `GridCell`
+  - **DataGrid**: `dataGrid'`, editable spreadsheet-style grid
   - **Animation**: `useAnimation`, `usePulse`, `useCycle`, `AnimPhase`, `Easing`
   - **TextArea**: `textArea'`, `labeledTextArea'`, `textDisplay'`
   - **Form**: `form'`, `optionSelector'`, `checkbox'`, `submitButton'`
@@ -73,6 +74,7 @@ import Terminus.Reactive.Logger
 import Terminus.Reactive.Notification
 import Terminus.Reactive.Menu
 import Terminus.Reactive.Table
+import Terminus.Reactive.DataGrid
 import Terminus.Reactive.Calendar
 import Terminus.Reactive.Scrollbar
 import Terminus.Reactive.Paragraph
