@@ -130,7 +130,7 @@ def basicsContent (theme : Theme) : WidgetM Unit := do
               let seconds := ms / 1000
               let minutes := seconds / 60
               let secs := seconds % 60
-              pure (RNode.text s!"{minutes}:{String.mk (if secs < 10 then ['0'] else [])}{secs}" theme.primaryStyle)
+              pure (RNode.text s!"{minutes}:{String.ofList (if secs < 10 then ['0'] else [])}{secs}" theme.primaryStyle)
 
           row' (gap := 1) {} do
             text' "Keys:" theme.captionStyle
@@ -646,62 +646,58 @@ def app : ReactiveTermM ReactiveAppState := do
 
   -- Build the UI
   let (_, render) ← runWidget do
-    column' (gap := 1) (style := {}) do
-      -- Header
-      text' "═══ Terminus Widget Showcase ═══" theme.heading1Style
+    let _ ← dockBottom' (footerHeight := 1)
+      (content := do
+        column' (gap := 1) (style := {}) do
+          -- Header
+          text' "═══ Terminus Widget Showcase ═══" theme.heading1Style
 
-      -- Main tabs for navigation
-      let tabResult ← tabs' DemoTab.allTabs 0 {
-        focusName := "main-tabs"
-        activeStyle := { fg := .ansi .cyan, modifier := { bold := true } }
-        globalKeys := true  -- Respond to arrow keys globally
-      }
+          -- Main tabs for navigation
+          let tabResult ← tabs' DemoTab.allTabs 0 {
+            focusName := "main-tabs"
+            activeStyle := { fg := .ansi .cyan, modifier := { bold := true } }
+            globalKeys := false
+          }
 
-      -- Help text
-      row' (gap := 2) {} do
-        text' "Ctrl+C: quit" theme.captionStyle
-        text' "←/→: tabs" theme.captionStyle
-        text' "Tab/Shift+Tab: cycle focus" theme.captionStyle
+          -- Help text
+          row' (gap := 2) {} do
+            text' "Ctrl+C: quit" theme.captionStyle
+            text' "←/→: tabs" theme.captionStyle
+            text' "Tab/Shift+Tab: cycle focus" theme.captionStyle
 
-      spacer' 0 1
+          spacer' 0 1
 
-      -- Handle Tab key for automatic focus cycling
-      let keyEvents ← useKeyEventW
-      let _tabUnsub ← SpiderM.liftIO <| keyEvents.subscribe fun kd => do
-        match kd.event.code with
-        | .tab =>
-          if kd.event.modifiers.shift then
-            events.registry.focusPrev
-          else
-            events.registry.focusNext
-        | _ => pure ()
+          -- Handle Tab key for automatic focus cycling
+          let keyEvents ← useKeyEventW
+          let _tabUnsub ← SpiderM.liftIO <| keyEvents.subscribe fun kd => do
+            match kd.event.code with
+            | .tab =>
+              if kd.event.modifiers.shift then
+                events.registry.focusPrev
+              else
+                events.registry.focusNext
+            | _ => pure ()
 
-      -- Content area based on selected tab
-      let tab0 ← Dynamic.map' tabResult.activeTab (· == 0)
-      let tab1 ← Dynamic.map' tabResult.activeTab (· == 1)
-      let tab2 ← Dynamic.map' tabResult.activeTab (· == 2)
-      let tab3 ← Dynamic.map' tabResult.activeTab (· == 3)
-      let tab4 ← Dynamic.map' tabResult.activeTab (· == 4)
-      let tab5 ← Dynamic.map' tabResult.activeTab (· == 5)
-      let tab6 ← Dynamic.map' tabResult.activeTab (· == 6)
-      let tab7 ← Dynamic.map' tabResult.activeTab (· == 7)
-
-      when' tab0 do basicsContent theme
-      when' tab1 do inputContent theme events
-      when' tab2 do navigationContent theme events
-      when' tab3 do dataContent theme events
-      when' tab4 do chartsContent theme
-      when' tab5 do feedbackContent theme
-      when' tab6 do mediaContent theme
-      when' tab7 do asyncContent theme
-
-      -- Footer
-      spacer' 0 1
-      let focusedInput ← useFocusedInputW
-      emitDynamic do
-        let focused ← focusedInput.sample
-        let focusName := focused.getD "(none)"
-        pure (RNode.text s!"Focused: {focusName}" theme.captionStyle)
+          -- Content area based on selected tab (rebuilds on change)
+          let _ ← dynWidget tabResult.activeTab fun idx => do
+            match idx with
+            | 0 => basicsContent theme
+            | 1 => inputContent theme events
+            | 2 => navigationContent theme events
+            | 3 => dataContent theme events
+            | 4 => chartsContent theme
+            | 5 => feedbackContent theme
+            | 6 => mediaContent theme
+            | 7 => asyncContent theme
+            | _ => basicsContent theme
+      )
+      (footer := do
+        let focusedInput ← useFocusedInputW
+        emitDynamic do
+          let focused ← focusedInput.sample
+          let focusName := focused.getD "(none)"
+          pure (RNode.text s!"Focused: {focusName}" theme.captionStyle)
+      )
 
   -- Focus first input widget after setup
   SpiderM.liftIO <| events.registry.focusNext

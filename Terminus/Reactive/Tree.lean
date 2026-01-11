@@ -452,7 +452,7 @@ def tree' [Inhabited α] [ToString α] (root : TreeNode α) (config : TreeConfig
           let isSelected := i == state.selectedIndex
 
           -- Build indent and connector
-          let indentStr := String.mk (List.replicate (line.depth * config.indent) ' ')
+          let indentStr := String.ofList (List.replicate (line.depth * config.indent) ' ')
 
           -- Choose icon
           let icon := if line.isLeaf then config.leafIcon
@@ -616,7 +616,7 @@ def forest' [Inhabited α] [ToString α] (roots : Array (TreeNode α)) (config :
           let line := flat[i]
           let isSelected := i == state.selectedIndex
 
-          let indentStr := String.mk (List.replicate (line.depth * config.indent) ' ')
+          let indentStr := String.ofList (List.replicate (line.depth * config.indent) ' ')
           let icon := if line.isLeaf then config.leafIcon
             else if line.isExpanded then config.expandedIcon
             else config.collapsedIcon

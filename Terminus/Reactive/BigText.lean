@@ -203,10 +203,10 @@ private def slantGlyph (rows : Array String) : Array String := Id.run do
   for i in [0 : rows.size] do
     let slantOffset := i / 2
     let row := rows.getD i ""
-    let slanted := String.mk (List.replicate slantOffset ' ') ++ row
+    let slanted := String.ofList (List.replicate slantOffset ' ') ++ row
     let slantedLen := slanted.length
     let padded := if slantedLen < totalWidth then
-      slanted ++ String.mk (List.replicate (totalWidth - slantedLen) ' ')
+      slanted ++ String.ofList (List.replicate (totalWidth - slantedLen) ' ')
     else
       slanted
     result := result.push padded
@@ -310,7 +310,7 @@ def renderBigTextLine (text : String) (config : BigTextConfig) : Array RNode := 
     let mut isFirst := true
     for c in chars do
       if !isFirst then
-        rowContent := rowContent ++ String.mk (List.replicate config.spacing ' ')
+        rowContent := rowContent ++ String.ofList (List.replicate config.spacing ' ')
       let glyph := font.glyph c
       let rowStr := glyph.getD rowIdx ""
       rowContent := rowContent ++ rowStr

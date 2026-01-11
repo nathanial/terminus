@@ -79,7 +79,7 @@ def sparkline' (data : Array Float) (config : SparklineConfig := {}) : WidgetM U
         let idx := valueToBarIndex v minVal maxVal
         sparklineChars.getD idx '▁'
 
-      pure (RNode.text (String.mk chars.toList) config.style)
+      pure (RNode.text (String.ofList chars.toList) config.style)
 
 /-- Create a sparkline from integer data. -/
 def sparklineInt' (data : Array Int) (config : SparklineConfig := {}) : WidgetM Unit :=
@@ -115,7 +115,7 @@ def dynSparkline' (data : Reactive.Dynamic Spider (Array Float)) (config : Spark
         let idx := valueToBarIndex v minVal maxVal
         sparklineChars.getD idx '▁'
 
-      pure (RNode.text (String.mk chars.toList) config.style)
+      pure (RNode.text (String.ofList chars.toList) config.style)
 
 /-! ## Labeled Sparkline -/
 
@@ -163,7 +163,7 @@ def labeledSparkline' (label : String) (data : Array Float) (config : LabeledSpa
       if !label.isEmpty then
         nodes := nodes.push (RNode.text (label ++ " ") config.labelStyle)
 
-      nodes := nodes.push (RNode.text (String.mk chars.toList) config.style)
+      nodes := nodes.push (RNode.text (String.ofList chars.toList) config.style)
 
       if config.showValue then
         if let some lastVal := data.back? then
@@ -195,7 +195,7 @@ def dynLabeledSparkline' (label : String) (data : Reactive.Dynamic Spider (Array
       if !label.isEmpty then
         nodes := nodes.push (RNode.text (label ++ " ") config.labelStyle)
 
-      nodes := nodes.push (RNode.text (String.mk chars.toList) config.style)
+      nodes := nodes.push (RNode.text (String.ofList chars.toList) config.style)
 
       if config.showValue then
         if let some lastVal := arr.back? then

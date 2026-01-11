@@ -224,13 +224,13 @@ private def renderTableRow (row : TableRow') (colWidths : Array Nat) (rowStyle :
     let displayed := if content.length > width then
       content.take (width - 1) ++ "…"
     else
-      content ++ String.mk (List.replicate (width - content.length) ' ')
+      content ++ String.ofList (List.replicate (width - content.length) ' ')
 
     parts := parts.push (RNode.text displayed cellStyle)
 
     -- Add spacing between columns (except after last)
     if i + 1 < colWidths.size && spacing > 0 then
-      parts := parts.push (RNode.text (String.mk (List.replicate spacing ' ')) {})
+      parts := parts.push (RNode.text (String.ofList (List.replicate spacing ' ')) {})
 
   return RNode.row 0 {} parts
 

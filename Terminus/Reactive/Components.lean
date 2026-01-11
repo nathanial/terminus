@@ -125,8 +125,8 @@ def renderProgressBar (progress : Float) (config : ProgressBarConfig := {}) : St
   let clampedProgress := max 0.0 (min 1.0 progress)
   let filledCount := (clampedProgress * config.width.toFloat).toUInt32.toNat
   let emptyCount := config.width - filledCount
-  let filled := String.mk (List.replicate filledCount config.filledChar)
-  let empty := String.mk (List.replicate emptyCount config.emptyChar)
+  let filled := String.ofList (List.replicate filledCount config.filledChar)
+  let empty := String.ofList (List.replicate emptyCount config.emptyChar)
   if config.showPercentage then
     let percent := (clampedProgress * 100).toUInt32
     s!"{filled}{empty} {percent}%"
@@ -146,8 +146,8 @@ def dynProgressBar' (progress : Reactive.Dynamic Spider Float) (config : Progres
     let clampedProgress := max 0.0 (min 1.0 p)
     let filledCount := (clampedProgress * config.width.toFloat).toUInt32.toNat
     let emptyCount := config.width - filledCount
-    let filled := String.mk (List.replicate filledCount config.filledChar)
-    let empty := String.mk (List.replicate emptyCount config.emptyChar)
+    let filled := String.ofList (List.replicate filledCount config.filledChar)
+    let empty := String.ofList (List.replicate emptyCount config.emptyChar)
     -- Create a row with filled, empty, and optional percentage
     let filledNode := RNode.text filled config.filledStyle
     let emptyNode := RNode.text empty config.emptyStyle
@@ -181,10 +181,15 @@ def dynWidget (dynValue : Dynamic Spider a) (builder : a → WidgetM b)
 
   -- Initial build (Dynamic.sample is IO, so lift it)
   let initialValue ← SpiderM.liftIO dynValue.sample
-  let (initialResult, initialRenders) ← runWidgetChildren (builder initialValue)
+  let (((initialResult, initialRenders), _), initialScope) ← StateT.lift do
+    let widgetM := runWidgetChildren (builder initialValue)
+    let reactiveM := widgetM.run { children := #[] }
+    let spiderM := reactiveM.run events
+    SpiderM.withScope spiderM
 
   -- Refs for current state
   let rendersRef : IO.Ref (Array ComponentRender) ← SpiderM.liftIO (IO.mkRef initialRenders)
+  let scopeRef : IO.Ref Reactive.SubscriptionScope ← SpiderM.liftIO (IO.mkRef initialScope)
 
   -- Result tracking via trigger event
   let (resultTrigger, fireResult) ← newTriggerEvent
@@ -193,12 +198,16 @@ def dynWidget (dynValue : Dynamic Spider a) (builder : a → WidgetM b)
   -- Subscribe to rebuilds when dynValue changes
   let subscribeAction : SpiderM Unit := ⟨fun env => do
     let unsub ← Reactive.Event.subscribe dynValue.updated fun newValue => do
+      let oldScope ← scopeRef.get
+      oldScope.dispose
+      let childScope ← env.currentScope.child
       -- Run the builder with the new value in captured context
       let widgetM := runWidgetChildren (builder newValue)
       let reactiveM := widgetM.run { children := #[] }
       let spiderM := reactiveM.run events
-      let ((result, renders), _) ← spiderM.run env
+      let ((result, renders), _) ← spiderM.run { env with currentScope := childScope }
       rendersRef.set renders
+      scopeRef.set childScope
       fireResult result
     env.currentScope.register unsub⟩
   subscribeAction

@@ -48,6 +48,8 @@ partial def naturalHeight (node : RNode) : Nat :=
     2 + naturalHeight child
   | .clipped child => naturalHeight child
   | .scrolled _ _ child => naturalHeight child
+  | .dockBottom footerHeight content _footer =>
+    footerHeight + naturalHeight content
 
 /-- Compute the natural/minimum width of an RNode (for layout purposes). -/
 partial def naturalWidth (node : RNode) : Nat :=
@@ -70,6 +72,8 @@ partial def naturalWidth (node : RNode) : Nat :=
     2 + naturalWidth child
   | .clipped child => naturalWidth child
   | .scrolled _ _ child => naturalWidth child
+  | .dockBottom _footerHeight content footer =>
+    max (naturalWidth content) (naturalWidth footer)
 
 /-- Compute layout for RNode tree recursively using internal Layout system. -/
 partial def computeLayoutRec (node : RNode) (area : Rect) : StateM IdGen LayoutMap := do
@@ -132,6 +136,17 @@ partial def computeLayoutRec (node : RNode) (area : Rect) : StateM IdGen LayoutM
       let childLayouts ← computeLayoutRec child innerArea
       result := result ++ childLayouts
       pure result
+
+  | .dockBottom footerHeight content footer =>
+    let footerH := min footerHeight area.height
+    let contentH := if area.height > footerH then area.height - footerH else 0
+    let contentRect := { area with height := contentH }
+    let footerRect := { area with y := area.y + contentH, height := footerH }
+    let mut result : LayoutMap := #[(nodeId, area)]
+    let contentLayouts ← computeLayoutRec content contentRect
+    let footerLayouts ← computeLayoutRec footer footerRect
+    result := result ++ contentLayouts ++ footerLayouts
+    pure result
 
   | .spacer w h =>
     let spacerRect := { area with
@@ -359,6 +374,10 @@ partial def renderNodeRecursive (node : RNode) (layouts : LayoutMap)
     | .column _ _ children =>
       for child in children do
         renderNodeRecursive child layouts clip
+
+    | .dockBottom _ content footer =>
+      renderNodeRecursive content layouts clip
+      renderNodeRecursive footer layouts clip
 
     | .clipped child =>
       let newClip := clip.intersect rect

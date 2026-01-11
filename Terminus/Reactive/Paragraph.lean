@@ -169,7 +169,7 @@ def paragraph' (text : String) (config : ParagraphConfig := {}) : WidgetM Unit :
 
     let nodes := processedLines.map fun line =>
       let offset := alignOffset line.length maxWidth config.alignment
-      let padding := String.mk (List.replicate offset ' ')
+      let padding := String.ofList (List.replicate offset ' ')
       RNode.text (padding ++ line) config.style
 
     pure (RNode.column 0 {} nodes)
@@ -191,7 +191,7 @@ def styledParagraph' (lines : Array TextLine) (config : ParagraphConfig := {}) :
 
     let nodes := lines.map fun line =>
       let offset := alignOffset line.width maxWidth config.alignment
-      let padding := if offset > 0 then #[RNode.text (String.mk (List.replicate offset ' ')) {}] else #[]
+      let padding := if offset > 0 then #[RNode.text (String.ofList (List.replicate offset ' ')) {}] else #[]
       let spans := line.spans.map fun span =>
         RNode.text span.content (Style.merge config.style span.style)
       RNode.row 0 {} (padding ++ spans)
@@ -220,7 +220,7 @@ def dynParagraph' (text : Reactive.Dynamic Spider String) (config : ParagraphCon
 
     let nodes := processedLines.map fun line =>
       let offset := alignOffset line.length maxWidth config.alignment
-      let padding := String.mk (List.replicate offset ' ')
+      let padding := String.ofList (List.replicate offset ' ')
       RNode.text (padding ++ line) config.style
 
     pure (RNode.column 0 {} nodes)

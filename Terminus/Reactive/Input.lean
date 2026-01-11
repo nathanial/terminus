@@ -107,7 +107,7 @@ def moveEnd (s : TextInputState) : TextInputState :=
   { s with cursor := s.text.length }
 
 /-- Clear all text. -/
-def clear (s : TextInputState) : TextInputState :=
+def clear (_ : TextInputState) : TextInputState :=
   { text := "", cursor := 0 }
 
 end TextInputState

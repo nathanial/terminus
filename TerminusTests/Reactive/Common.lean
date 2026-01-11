@@ -58,6 +58,7 @@ partial def rnodeHasChar (node : RNode) (c : Char) : Bool :=
   | .column _ _ children => children.any (fun child => rnodeHasChar child c)
   | .clipped child => rnodeHasChar child c
   | .scrolled _ _ child => rnodeHasChar child c
+  | .dockBottom _ content footer => rnodeHasChar content c || rnodeHasChar footer c
   | .image _ _ _ _ _ altText => altText.toList.any (fun ch => ch == c)
   | .spacer _ _ | .empty => false
 
@@ -69,6 +70,7 @@ partial def rnodeHasText (node : RNode) (needle : String) : Bool :=
   | .column _ _ children => children.any (fun child => rnodeHasText child needle)
   | .clipped child => rnodeHasText child needle
   | .scrolled _ _ child => rnodeHasText child needle
+  | .dockBottom _ content footer => rnodeHasText content needle || rnodeHasText footer needle
   | .image _ _ _ _ _ altText => altText == needle
   | .spacer _ _ | .empty => false
 
@@ -85,6 +87,7 @@ partial def rnodeContainsText (node : RNode) (needle : String) : Bool :=
   | .column _ _ children => children.any (fun child => rnodeContainsText child needle)
   | .clipped child => rnodeContainsText child needle
   | .scrolled _ _ child => rnodeContainsText child needle
+  | .dockBottom _ content footer => rnodeContainsText content needle || rnodeContainsText footer needle
   | .image _ _ _ _ _ altText => Staple.String.containsSubstr altText needle
   | .spacer _ _ | .empty => false
 

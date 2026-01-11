@@ -38,7 +38,7 @@ structure ClearConfig where
 -/
 def clear' (config : ClearConfig := {}) : WidgetM Unit := do
   emit do
-    let fillStr := String.mk (List.replicate config.width config.fillChar)
+    let fillStr := String.ofList (List.replicate config.width config.fillChar)
     let lines := (List.range config.height).map fun _ =>
       RNode.text fillStr config.style
     pure (RNode.column 0 {} lines.toArray)
@@ -52,7 +52,7 @@ def clear' (config : ClearConfig := {}) : WidgetM Unit := do
 -/
 def hSpace' (width : Nat) (style : Style := {}) : WidgetM Unit := do
   emit do
-    pure (RNode.text (String.mk (List.replicate width ' ')) style)
+    pure (RNode.text (String.ofList (List.replicate width ' ')) style)
 
 /-- Create a vertical spacer.
 
@@ -76,7 +76,7 @@ def vSpace' (height : Nat) (style : Style := {}) : WidgetM Unit := do
 -/
 def filledRect' (width height : Nat) (char : Char := ' ') (style : Style := {}) : WidgetM Unit := do
   emit do
-    let line := String.mk (List.replicate width char)
+    let line := String.ofList (List.replicate width char)
     let lines := (List.range height).map fun _ =>
       RNode.text line style
     pure (RNode.column 0 {} lines.toArray)
@@ -109,7 +109,7 @@ def background' (style : Style) : WidgetM Unit := do
 -/
 def hSeparator' (width : Nat) (char : Char := '─') (style : Style := {}) : WidgetM Unit := do
   emit do
-    pure (RNode.text (String.mk (List.replicate width char)) style)
+    pure (RNode.text (String.ofList (List.replicate width char)) style)
 
 /-- Create a vertical separator line.
 

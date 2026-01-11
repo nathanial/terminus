@@ -142,6 +142,8 @@ inductive RNode : Type where
   | clipped (child : RNode)
   /-- Shifts child content by offset (for scrolling). -/
   | scrolled (offsetX offsetY : Nat) (child : RNode)
+  /-- Dock a footer at the bottom with fixed height. -/
+  | dockBottom (footerHeight : Nat) (content : RNode) (footer : RNode)
   /-- Image node using terminal image protocol. -/
   | image (source : ImageSource) (protocol : ImageProtocol) (width : Nat) (height : Nat)
       (preserveAspect : Bool) (altText : String)
@@ -313,6 +315,27 @@ def ComponentRegistry.register (reg : ComponentRegistry) (namePrefix : String)
   if isInteractive then
     reg.interactiveNames.modify (·.push name)
   pure name
+
+private def removeFirst (names : Array String) (name : String) : Array String := Id.run do
+  let mut out : Array String := #[]
+  let mut removed := false
+  for entry in names do
+    if !removed && entry == name then
+      removed := true
+    else
+      out := out.push entry
+  out
+
+/-- Unregister a component name from the registry. -/
+def ComponentRegistry.unregister (reg : ComponentRegistry) (name : String)
+    (isInput : Bool := false) (isInteractive : Bool := true) : IO Unit := do
+  if isInput then
+    reg.inputNames.modify (fun names => removeFirst names name)
+  if isInteractive then
+    reg.interactiveNames.modify (fun names => removeFirst names name)
+  let current ← reg.focusedInput.sample
+  if current == some name then
+    reg.fireFocus none
 
 /-- Cycle focus to the next registered input widget.
     If no widget is focused, focuses the first one.

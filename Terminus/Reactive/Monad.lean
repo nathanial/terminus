@@ -58,7 +58,10 @@ def getEvents : ReactiveTermM TerminusEvents := read
 def registerComponent (namePrefix : String) (isInput : Bool := false)
     (isInteractive : Bool := true) (nameOverride : String := "") : ReactiveTermM String := do
   let events ← getEvents
-  SpiderM.liftIO <| events.registry.register namePrefix isInput isInteractive nameOverride
+  let name ← SpiderM.liftIO <| events.registry.register namePrefix isInput isInteractive nameOverride
+  let scope ← SpiderM.getScope
+  SpiderM.liftIO <| scope.register (events.registry.unregister name isInput isInteractive)
+  pure name
 
 /-! ## Type Aliases -/
 

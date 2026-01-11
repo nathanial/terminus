@@ -107,10 +107,10 @@ where
       for bar in data do
         let valStr := s!"{bar.value.toUInt32}"
         let padded := valStr.take config.barWidth
-        let padding := String.mk (List.replicate (config.barWidth - padded.length) ' ')
+        let padding := String.ofList (List.replicate (config.barWidth - padded.length) ' ')
         valueNodes := valueNodes.push (RNode.text (padding ++ padded) config.valueStyle)
         if config.gap > 0 then
-          valueNodes := valueNodes.push (RNode.text (String.mk (List.replicate config.gap ' ')) {})
+          valueNodes := valueNodes.push (RNode.text (String.ofList (List.replicate config.gap ' ')) {})
       rows := rows.push (RNode.row 0 {} valueNodes)
 
     -- Render bar rows
@@ -121,10 +121,10 @@ where
         let normalizedValue := if maxVal > 0 then bar.value / maxVal else 0.0
         let barStyle := bar.style.getD config.barStyle
         let char := if normalizedValue >= threshold then '█' else ' '
-        let barStr := String.mk (List.replicate config.barWidth char)
+        let barStr := String.ofList (List.replicate config.barWidth char)
         barNodes := barNodes.push (RNode.text barStr (if char == '█' then barStyle else {}))
         if config.gap > 0 then
-          barNodes := barNodes.push (RNode.text (String.mk (List.replicate config.gap ' ')) {})
+          barNodes := barNodes.push (RNode.text (String.ofList (List.replicate config.gap ' ')) {})
       rows := rows.push (RNode.row 0 {} barNodes)
 
     -- Render label row if enabled
@@ -132,10 +132,10 @@ where
       let mut labelNodes : Array RNode := #[]
       for bar in data do
         let lbl := bar.label.take config.barWidth
-        let padding := String.mk (List.replicate (config.barWidth - lbl.length) ' ')
+        let padding := String.ofList (List.replicate (config.barWidth - lbl.length) ' ')
         labelNodes := labelNodes.push (RNode.text (lbl ++ padding) config.labelStyle)
         if config.gap > 0 then
-          labelNodes := labelNodes.push (RNode.text (String.mk (List.replicate config.gap ' ')) {})
+          labelNodes := labelNodes.push (RNode.text (String.ofList (List.replicate config.gap ' ')) {})
       rows := rows.push (RNode.row 0 {} labelNodes)
 
     pure (RNode.column 0 {} rows)
@@ -160,11 +160,11 @@ where
       -- Label
       if config.showLabels then
         let lbl := bar.label.take labelWidth
-        let padding := String.mk (List.replicate (labelWidth - lbl.length) ' ')
+        let padding := String.ofList (List.replicate (labelWidth - lbl.length) ' ')
         rowNodes := rowNodes.push (RNode.text (padding ++ lbl ++ " ") config.labelStyle)
 
       -- Bar
-      let barStr := String.mk (List.replicate barLen '█')
+      let barStr := String.ofList (List.replicate barLen '█')
       rowNodes := rowNodes.push (RNode.text barStr barStyle)
 
       -- Value
@@ -205,10 +205,10 @@ def dynBarChart' (data : Reactive.Dynamic Spider (Array BarData)) (config : BarC
 
         if config.showLabels then
           let lbl := bar.label.take labelWidth
-          let padding := String.mk (List.replicate (labelWidth - lbl.length) ' ')
+          let padding := String.ofList (List.replicate (labelWidth - lbl.length) ' ')
           rowNodes := rowNodes.push (RNode.text (padding ++ lbl ++ " ") config.labelStyle)
 
-        let barStr := String.mk (List.replicate barLen '█')
+        let barStr := String.ofList (List.replicate barLen '█')
         rowNodes := rowNodes.push (RNode.text barStr barStyle)
 
         if config.showValues then
@@ -341,7 +341,7 @@ def lineChart' (series : Array DataSeries) (config : LineChartConfig := {}) : Wi
         if config.showYAxis then
           let yVal := yMax - (y.toFloat / (chartHeight - 1).toFloat) * yRange
           let label := s!"{yVal.toUInt32}"
-          let padded := String.mk (List.replicate (config.yAxisWidth - label.length - 1) ' ') ++ label ++ "│"
+          let padded := String.ofList (List.replicate (config.yAxisWidth - label.length - 1) ' ') ++ label ++ "│"
           rowNodes := rowNodes.push (RNode.text padded config.axisStyle)
 
         -- Chart row
@@ -355,8 +355,8 @@ def lineChart' (series : Array DataSeries) (config : LineChartConfig := {}) : Wi
       if config.showXAxis then
         let mut axisNodes : Array RNode := #[]
         if config.showYAxis then
-          axisNodes := axisNodes.push (RNode.text (String.mk (List.replicate (config.yAxisWidth - 1) ' ') ++ "└") config.axisStyle)
-        axisNodes := axisNodes.push (RNode.text (String.mk (List.replicate chartWidth '─')) config.axisStyle)
+          axisNodes := axisNodes.push (RNode.text (String.ofList (List.replicate (config.yAxisWidth - 1) ' ') ++ "└") config.axisStyle)
+        axisNodes := axisNodes.push (RNode.text (String.ofList (List.replicate chartWidth '─')) config.axisStyle)
         rows := rows.push (RNode.row 0 {} axisNodes)
 
       -- Legend
@@ -415,7 +415,7 @@ def dynLineChart' (series : Reactive.Dynamic Spider (Array DataSeries))
         if config.showYAxis then
           let yVal := yMax - (y.toFloat / (chartHeight - 1).toFloat) * yRange
           let label := s!"{yVal.toUInt32}"
-          let padded := String.mk (List.replicate (config.yAxisWidth - label.length - 1) ' ') ++ label ++ "│"
+          let padded := String.ofList (List.replicate (config.yAxisWidth - label.length - 1) ' ') ++ label ++ "│"
           rowNodes := rowNodes.push (RNode.text padded config.axisStyle)
 
         if let some row := grid[y]? then
@@ -427,8 +427,8 @@ def dynLineChart' (series : Reactive.Dynamic Spider (Array DataSeries))
       if config.showXAxis then
         let mut axisNodes : Array RNode := #[]
         if config.showYAxis then
-          axisNodes := axisNodes.push (RNode.text (String.mk (List.replicate (config.yAxisWidth - 1) ' ') ++ "└") config.axisStyle)
-        axisNodes := axisNodes.push (RNode.text (String.mk (List.replicate chartWidth '─')) config.axisStyle)
+          axisNodes := axisNodes.push (RNode.text (String.ofList (List.replicate (config.yAxisWidth - 1) ' ') ++ "└") config.axisStyle)
+        axisNodes := axisNodes.push (RNode.text (String.ofList (List.replicate chartWidth '─')) config.axisStyle)
         rows := rows.push (RNode.row 0 {} axisNodes)
 
       pure (RNode.column 0 {} rows)
@@ -522,11 +522,11 @@ def pieChart' (data : Array PieSlice) (config : PieChartConfig := {}) : WidgetM 
 
           -- Label
           let label := slice.label.take 10
-          let labelPad := String.mk (List.replicate (10 - label.length) ' ')
+          let labelPad := String.ofList (List.replicate (10 - label.length) ' ')
           rowNodes := rowNodes.push (RNode.text (label ++ labelPad ++ " ") config.labelStyle)
 
           -- Bar
-          let barStr := String.mk (List.replicate barLen '█')
+          let barStr := String.ofList (List.replicate barLen '█')
           rowNodes := rowNodes.push (RNode.text barStr slice.style)
 
           -- Percentage
@@ -566,10 +566,10 @@ def dynPieChart' (data : Reactive.Dynamic Spider (Array PieSlice))
           rowNodes := rowNodes.push (RNode.text (String.singleton config.marker ++ " ") slice.style)
 
           let label := slice.label.take 10
-          let labelPad := String.mk (List.replicate (10 - label.length) ' ')
+          let labelPad := String.ofList (List.replicate (10 - label.length) ' ')
           rowNodes := rowNodes.push (RNode.text (label ++ labelPad ++ " ") config.labelStyle)
 
-          let barStr := String.mk (List.replicate barLen '█')
+          let barStr := String.ofList (List.replicate barLen '█')
           rowNodes := rowNodes.push (RNode.text barStr slice.style)
 
           if config.showPercent then

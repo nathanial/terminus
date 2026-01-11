@@ -72,8 +72,8 @@ def gauge' (value : Float) (config : GaugeConfig := {}) : WidgetM Unit := do
     let unfilledWidth := config.width - filledWidth
 
     -- Build the bar
-    let filledStr := String.mk (List.replicate filledWidth config.filledChar)
-    let unfilledStr := String.mk (List.replicate unfilledWidth config.unfilledChar)
+    let filledStr := String.ofList (List.replicate filledWidth config.filledChar)
+    let unfilledStr := String.ofList (List.replicate unfilledWidth config.unfilledChar)
 
     let mut nodes : Array RNode := #[]
 
@@ -112,8 +112,8 @@ def dynGauge' (value : Reactive.Dynamic Spider Float) (config : GaugeConfig := {
     let filledWidth := (ratio * config.width.toFloat).toUInt32.toNat
     let unfilledWidth := config.width - filledWidth
 
-    let filledStr := String.mk (List.replicate filledWidth config.filledChar)
-    let unfilledStr := String.mk (List.replicate unfilledWidth config.unfilledChar)
+    let filledStr := String.ofList (List.replicate filledWidth config.filledChar)
+    let unfilledStr := String.ofList (List.replicate unfilledWidth config.unfilledChar)
 
     let mut nodes : Array RNode := #[]
 
@@ -175,8 +175,8 @@ def lineGauge' (value : Float) (config : LineGaugeConfig := {}) : WidgetM Unit :
     let filledWidth := (ratio * config.width.toFloat).toUInt32.toNat
     let unfilledWidth := config.width - filledWidth
 
-    let filledStr := String.mk (List.replicate filledWidth config.filledChar)
-    let unfilledStr := String.mk (List.replicate unfilledWidth config.unfilledChar)
+    let filledStr := String.ofList (List.replicate filledWidth config.filledChar)
+    let unfilledStr := String.ofList (List.replicate unfilledWidth config.unfilledChar)
 
     let mut nodes : Array RNode := #[]
 
@@ -211,8 +211,8 @@ def dynLineGauge' (value : Reactive.Dynamic Spider Float) (config : LineGaugeCon
     let filledWidth := (ratio * config.width.toFloat).toUInt32.toNat
     let unfilledWidth := config.width - filledWidth
 
-    let filledStr := String.mk (List.replicate filledWidth config.filledChar)
-    let unfilledStr := String.mk (List.replicate unfilledWidth config.unfilledChar)
+    let filledStr := String.ofList (List.replicate filledWidth config.filledChar)
+    let unfilledStr := String.ofList (List.replicate unfilledWidth config.unfilledChar)
 
     let mut nodes : Array RNode := #[]
 

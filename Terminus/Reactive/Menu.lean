@@ -196,7 +196,7 @@ private def getCurrentItems (items : Array MenuItem') (openPath : Array Nat) : A
 /-- Render a menu item. -/
 private def renderMenuItem (item : MenuItem') (isSelected : Bool) (config : MenuConfig) (width : Nat) : RNode := Id.run do
   if item.isSeparator then
-    let sep := String.mk (List.replicate width (config.separatorChar.toList.headD '─'))
+    let sep := String.ofList (List.replicate width (config.separatorChar.toList.headD '─'))
     return RNode.text sep config.separatorStyle
 
   let baseStyle := if item.enabled then config.normalStyle else config.disabledStyle
@@ -205,7 +205,7 @@ private def renderMenuItem (item : MenuItem') (isSelected : Bool) (config : Menu
   let mut parts : Array RNode := #[]
 
   -- Left padding
-  parts := parts.push (RNode.text (String.mk (List.replicate config.padding ' ')) rowStyle)
+  parts := parts.push (RNode.text (String.ofList (List.replicate config.padding ' ')) rowStyle)
 
   -- Label
   parts := parts.push (RNode.text item.label rowStyle)
@@ -219,7 +219,7 @@ private def renderMenuItem (item : MenuItem') (isSelected : Bool) (config : Menu
   -- Gap between label and right side
   let gap := if width > usedLen then width - usedLen else 0
   if gap > 0 then
-    parts := parts.push (RNode.text (String.mk (List.replicate gap ' ')) rowStyle)
+    parts := parts.push (RNode.text (String.ofList (List.replicate gap ' ')) rowStyle)
 
   -- Shortcut
   match item.shortcut with
@@ -233,7 +233,7 @@ private def renderMenuItem (item : MenuItem') (isSelected : Bool) (config : Menu
     parts := parts.push (RNode.text s!" {config.submenuIndicator}" rowStyle)
 
   -- Right padding
-  parts := parts.push (RNode.text (String.mk (List.replicate config.padding ' ')) rowStyle)
+  parts := parts.push (RNode.text (String.ofList (List.replicate config.padding ' ')) rowStyle)
 
   return RNode.row 0 {} parts
 

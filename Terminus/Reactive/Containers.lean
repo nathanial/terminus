@@ -32,6 +32,30 @@ def row' (gap : Nat := 0) (style : RStyle := {})
     pure (RNode.row gap style nodes)
   pure result
 
+/-! ## Docked Containers -/
+
+/-- Dock a footer at the bottom with fixed height. -/
+def dockBottom' (footerHeight : Nat := 1)
+    (content : WidgetM α) (footer : WidgetM β) : WidgetM (α × β) := do
+  let (contentResult, contentRenders) ← runWidgetChildren content
+  let (footerResult, footerRenders) ← runWidgetChildren footer
+
+  let mkNode (children : Array ComponentRender) : ComponentRender := do
+    if children.isEmpty then
+      pure RNode.empty
+    else if h : children.size = 1 then
+      children[0]
+    else
+      let nodes ← children.mapM id
+      pure (RNode.column 0 {} nodes)
+
+  emit do
+    let contentNode ← mkNode contentRenders
+    let footerNode ← mkNode footerRenders
+    pure (RNode.dockBottom footerHeight contentNode footerNode)
+
+  pure (contentResult, footerResult)
+
 /-! ## Block Containers
 
 Blocks add borders and optional titles around content.
