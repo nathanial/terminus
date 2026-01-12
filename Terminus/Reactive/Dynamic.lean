@@ -13,35 +13,10 @@ def sequence [BEq a] (dynamics : List (Dynamic Spider a)) : SpiderM (Dynamic Spi
   let init ← Dynamic.pureM []
   dynamics.foldrM (fun d acc => Dynamic.zipWithM (· :: ·) d acc) init
 
-/-- Switch a Dynamic of Dynamics into a Dynamic, tracking subscriptions in scope. -/
-def switch (dd : Dynamic Spider (Dynamic Spider a)) : SpiderM (Dynamic Spider a) := ⟨fun env => do
-  let _ ← env.incrementDepth "Dynamic.switch"
-  let nodeId ← env.timelineCtx.freshNodeId
-  let initialInner ← dd.sample
-  let initialValue ← initialInner.sample
-  let (result, updateResult) ← Reactive.Dynamic.newWithId initialValue nodeId
-  let currentUnsubRef ← IO.mkRef (pure () : IO Unit)
-
-  let subscribeToInner := fun (inner : Dynamic Spider a) => do
-    let oldUnsub ← currentUnsubRef.get
-    oldUnsub
-    let unsub ← Reactive.Event.subscribe inner.updated fun newValue => updateResult newValue
-    currentUnsubRef.set unsub
-    let currentValue ← inner.sample
-    updateResult currentValue
-
-  let unsubInner ← Reactive.Event.subscribe initialInner.updated fun newValue => updateResult newValue
-  currentUnsubRef.set unsubInner
-
-  let unsubOuter ← Reactive.Event.subscribe dd.updated subscribeToInner
-
-  env.currentScope.register unsubOuter
-  env.currentScope.register do
-    let unsub ← currentUnsubRef.get
-    unsub
-
-  env.decrementDepth
-  pure result⟩
+/-- Switch a Dynamic of Dynamics into a Dynamic, tracking subscriptions in scope.
+    Delegates to the reactive library's scope-managed implementation. -/
+def switch (dd : Dynamic Spider (Dynamic Spider a)) : SpiderM (Dynamic Spider a) :=
+  Dynamic.switchM dd
 
 end Reactive.Host.Dynamic
 
