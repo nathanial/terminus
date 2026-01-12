@@ -432,22 +432,20 @@ def submitButton' (label : String := "Submit") (enabled : Reactive.Dynamic Spide
     : WidgetM (Reactive.Event Spider Unit) := do
   let widgetName ← registerComponentW "submitButton" (isInput := true)
 
-  -- Get focused key events
+  -- Get focused key events, gated by enabled state
   let keyEvents ← useFocusedKeyEventsW widgetName
+  let enabledKeyEvents ← Event.gateM enabled.current keyEvents
 
-  let (clickEvent, fireClick) ← newTriggerEvent (t := Spider) (a := Unit)
+  -- Filter to submit keys (Enter/Space) and convert to Unit event
+  let submitKeyEvents ← Event.filterM (fun kd =>
+    match kd.event.code with
+    | .enter | .space => true
+    | _ => false
+  ) enabledKeyEvents
+  let clickEvent ← Event.voidM submitKeyEvents
 
   -- Focus for rendering
   let focusedInput ← useFocusedInputW
-
-  let _unsub ← SpiderM.liftIO <| keyEvents.subscribe fun kd => do
-    let isEnabled ← enabled.sample
-
-    if isEnabled then
-      let ke := kd.event
-      match ke.code with
-      | .enter | .space => fireClick ()
-      | _ => pure ()
 
   let focusDyn ← focusedInput.map' (fun currentFocus =>
     currentFocus == some widgetName
