@@ -130,20 +130,7 @@ def setFocus (name : Option String) : ReactiveTermM Unit := do
 /-- Check if a specific widget is focused. -/
 def useIsFocused (name : String) : ReactiveTermM (Reactive.Dynamic Spider Bool) := do
   let focusedInput ← useFocusedInput
-  -- Map the dynamic to check if this name is focused
-  let isFocused ← SpiderM.liftIO do
-    let current ← focusedInput.sample
-    IO.mkRef (current == some name)
-  -- Subscribe to changes
-  let _unsub ← SpiderM.liftIO <| focusedInput.updated.subscribe fun newFocus => do
-    isFocused.set (newFocus == some name)
-  -- Create a dynamic from the ref
-  let (focusEvent, fireFocus) ← Reactive.newTriggerEvent (t := Spider) (a := Bool)
-  -- Wire updates
-  let _unsub2 ← SpiderM.liftIO <| focusedInput.updated.subscribe fun newFocus =>
-    fireFocus (newFocus == some name)
-  let initial ← SpiderM.liftIO isFocused.get
-  Reactive.holdDyn initial focusEvent
+  Dynamic.mapM (· == some name) focusedInput
 
 /-! ## State Management Helpers -/
 

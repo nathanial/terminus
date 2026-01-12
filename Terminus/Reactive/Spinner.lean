@@ -84,25 +84,10 @@ structure SpinnerResult where
 -/
 def spinner' (label : Option String := none) (frameIndex : Reactive.Dynamic Spider Nat)
     (config : SpinnerConfig := {}) : WidgetM SpinnerResult := do
-  -- Create frame dynamic by mapping the index through the style's frames
-  let frameDyn ← SpiderM.liftIO do
-    let idx ← frameIndex.sample
-    IO.mkRef (config.style.frameAt idx)
+  -- Map frame index to frame string using FRP combinator
+  let frameDyn ← Dynamic.mapM (fun idx => config.style.frameAt idx) frameIndex
 
-  -- Subscribe to frame index changes
-  let _unsub ← SpiderM.liftIO <| frameIndex.updated.subscribe fun newIdx => do
-    frameDyn.set (config.style.frameAt newIdx)
-
-  -- Create the frame dynamic
-  let (frameEvent, fireFrame) ← newTriggerEvent (t := Spider) (a := String)
-  let initialFrame ← SpiderM.liftIO frameIndex.sample
-  let frameResultDyn ← holdDyn (config.style.frameAt initialFrame) frameEvent
-
-  -- Wire up updates
-  let _unsub2 ← SpiderM.liftIO <| frameIndex.updated.subscribe fun newIdx =>
-    fireFrame (config.style.frameAt newIdx)
-
-  let node ← frameResultDyn.map' fun frameStr =>
+  let node ← frameDyn.map' fun frameStr =>
     match label with
     | some lbl =>
       RNode.row 0 {} #[
@@ -114,7 +99,7 @@ def spinner' (label : Option String := none) (frameIndex : Reactive.Dynamic Spid
       RNode.text frameStr config.textStyle
   emit node
 
-  pure { frame := frameResultDyn }
+  pure { frame := frameDyn }
 
 /-- Create an animated spinner that auto-advances with tick events.
 
