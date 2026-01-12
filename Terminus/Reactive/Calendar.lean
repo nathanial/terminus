@@ -240,56 +240,51 @@ def calendar' (name : String) (year : Nat) (month : Nat) (initialDay : Option Na
     | none => 1
 
   let initialState := CalendarState.mk year normalizedMonth initialSelected
-  let stateRef ← SpiderM.liftIO (IO.mkRef initialState)
-  let (stateEvent, fireState) ← newTriggerEvent (t := Spider) (a := CalendarState)
-  let stateDyn ← holdDyn initialState stateEvent
+
 
   -- Events
-  let (selectEvent, fireSelect) ← newTriggerEvent (t := Spider) (a := CalendarDate)
 
-  -- Derived dynamics
-  let selectedDate ← stateDyn.map' CalendarState.toDate
-  let currentMonth ← stateDyn.map' fun s => (s.year, s.month)
-
-  -- Subscribe to key events
   let events ← getEventsW
   let inputName := if name.isEmpty then widgetName else name
 
-  let _unsub ← SpiderM.liftIO <| events.keyEvent.subscribe fun kd => do
-    let currentFocus ← focusedInput.sample
-    let isFocused := currentFocus == some inputName
+  -- Derived dynamics
+  let isFocusedDyn ← focusedInput.map' (· == some inputName)
+  let shouldProcessKeys ← if config.globalKeys then
+      Dynamic.pureM true
+    else
+      pure isFocusedDyn
 
-    if !config.globalKeys && !isFocused then return
+  let keyEvents ← Event.gateM shouldProcessKeys.current events.keyEvent
 
-    let state ← stateRef.get
+  -- Create events for each action
+  let prevDayE ← Event.filterM (fun kd => kd.event.code == .left || kd.event.code == .char 'h') keyEvents
+  let nextDayE ← Event.filterM (fun kd => kd.event.code == .right || kd.event.code == .char 'l') keyEvents
+  let prevWeekE ← Event.filterM (fun kd => kd.event.code == .up || kd.event.code == .char 'k') keyEvents
+  let nextWeekE ← Event.filterM (fun kd => kd.event.code == .down || kd.event.code == .char 'j') keyEvents
+  let prevMonthE ← Event.filterM (fun kd => kd.event.code == .pageUp) keyEvents
+  let nextMonthE ← Event.filterM (fun kd => kd.event.code == .pageDown) keyEvents
+  let enterE ← Event.filterM (fun kd => kd.event.code == .enter) keyEvents
 
-    let updateState (newState : CalendarState) : IO Unit := do
-      stateRef.set newState
-      fireState newState
+  -- Map events to state transformations
+  let opPrevDay ← Event.mapM (fun _ => (fun s => CalendarState.prevDay s)) prevDayE
+  let opNextDay ← Event.mapM (fun _ => (fun s => CalendarState.nextDay s)) nextDayE
+  let opPrevWeek ← Event.mapM (fun _ => (fun s => CalendarState.prevWeek s)) prevWeekE
+  let opNextWeek ← Event.mapM (fun _ => (fun s => CalendarState.nextWeek s)) nextWeekE
+  let opPrevMonth ← Event.mapM (fun _ => (fun s => CalendarState.prevMonthState s)) prevMonthE
+  let opNextMonth ← Event.mapM (fun _ => (fun s => CalendarState.nextMonthState s)) nextMonthE
 
-    match kd.event.code with
-    | .left | .char 'h' =>
-      updateState state.prevDay
+  -- Merge operations and fold state
+  let allOps ← Event.leftmostM [opPrevDay, opNextDay, opPrevWeek, opNextWeek, opPrevMonth, opNextMonth]
+  let stateDyn ← foldDyn (fun (op : CalendarState → CalendarState) (s : CalendarState) => op s) initialState allOps
 
-    | .right | .char 'l' =>
-      updateState state.nextDay
+  let selectedDate ← stateDyn.map' CalendarState.toDate
+  let currentMonth ← stateDyn.map' fun s => (s.year, s.month)
 
-    | .up | .char 'k' =>
-      updateState state.prevWeek
-
-    | .down | .char 'j' =>
-      updateState state.nextWeek
-
-    | .pageUp =>
-      updateState state.prevMonthState
-
-    | .pageDown =>
-      updateState state.nextMonthState
-
-    | .enter =>
-      fireSelect state.toDate
-
-    | _ => pure ()
+  -- Derive select event
+  let selectState : Reactive.Event Spider CalendarState ←
+    Event.attachWithM (fun (s : CalendarState) (_ : KeyData) => s) stateDyn.current enterE
+  let selectEvent : Reactive.Event Spider CalendarDate ←
+    Event.mapM (fun (s : CalendarState) => s.toDate) selectState
 
   let node ← stateDyn.map' fun state =>
     Id.run do
