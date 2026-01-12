@@ -242,6 +242,7 @@ def runReactiveApp (setup : ReactiveTermM ReactiveAppState) (config : AppConfig 
 
     let signalChan ← Std.Channel.new
     let signalSync := Std.Channel.sync signalChan
+    let stopRef ← IO.mkRef false
 
     -- Render trigger: wake loop when the root dynamic updates
     let renderUnsub ← appState.render.updated.subscribe fun _ =>
@@ -249,19 +250,28 @@ def runReactiveApp (setup : ReactiveTermM ReactiveAppState) (config : AppConfig 
     spiderEnv.currentScope.register renderUnsub
 
     -- Input worker (blocking)
-    let _inputTask ← IO.asTask (prio := .dedicated) do
+    let inputTask ← IO.asTask (prio := .dedicated) do
       while true do
-        let ev ← Events.read
-        Std.Channel.Sync.send signalSync (.input ev)
+        if (← stopRef.get) then
+          break
+        let ev ← Events.poll
+        match ev with
+        | .none =>
+          IO.sleep 10
+        | _ =>
+          Std.Channel.Sync.send signalSync (.input ev)
 
     -- Tick worker (only if requested by hooks)
     let tickEnabled ← events.tickRequested.get
-    if tickEnabled then
-      let _tickTask ← IO.asTask (prio := .default) do
+    let tickTask? ← if tickEnabled then
+      some <$> IO.asTask (prio := .default) (do
         while true do
+          if (← stopRef.get) then
+            break
           IO.sleep config.frameMs.toUInt32
-          Std.Channel.Sync.send signalSync .tick
-      pure ()
+          Std.Channel.Sync.send signalSync .tick)
+    else
+      pure none
 
     log "Entering main loop"
 
@@ -272,6 +282,13 @@ def runReactiveApp (setup : ReactiveTermM ReactiveAppState) (config : AppConfig 
     runReactiveLoop config events inputs appState.render termRef deps
 
     log "Main loop exited"
+
+    -- Stop background workers to allow process exit
+    stopRef.set true
+    IO.cancel inputTask
+    match tickTask? with
+    | some task => IO.cancel task
+    | none => pure ()
 
     -- Dispose scope to clean up subscriptions
     spiderEnv.currentScope.dispose
