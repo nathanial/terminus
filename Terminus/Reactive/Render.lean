@@ -11,13 +11,21 @@ namespace Terminus.Reactive
 We need unique IDs for each RNode when computing layout.
 -/
 
-/-- State for generating unique node IDs during tree traversal. -/
-structure IdGen where
+structure DeferredLayout where
+  node : RNode
+  area : Rect
+  fullArea : Rect
+  deriving Inhabited
+
+/-- State for layout computation, tracking IDs and deferred overlays. -/
+structure LayoutState where
   nextId : Nat := 0
+  deferred : Array DeferredLayout := #[]
 
 /-- Get next ID and increment counter. -/
-def IdGen.fresh (g : IdGen) : Nat × IdGen :=
-  (g.nextId, { nextId := g.nextId + 1 })
+def LayoutState.fresh (s : LayoutState) : Nat × LayoutState :=
+  (s.nextId, { s with nextId := s.nextId + 1 })
+
 
 /-! ## Layout Computation
 
@@ -83,7 +91,7 @@ partial def naturalWidth (node : RNode) : Nat :=
 
 /-- Compute layout for RNode tree recursively using internal Layout system.
     `area` is the current layout area, `fullArea` is the full screen for overlay centering. -/
-partial def computeLayoutRec (node : RNode) (area : Rect) (fullArea : Rect) : StateM IdGen LayoutMap := do
+partial def computeLayoutRec (node : RNode) (area : Rect) (fullArea : Rect) : StateM LayoutState LayoutMap := do
   let (nodeId, gen) ← get >>= fun g => pure g.fresh
   set gen
 
@@ -167,8 +175,8 @@ partial def computeLayoutRec (node : RNode) (area : Rect) (fullArea : Rect) : St
       height := overlayHeight
     }
 
-    let contentLayouts ← computeLayoutRec content overlayRect fullArea
-    result := result ++ contentLayouts
+    -- Defer content layout
+    modify fun s => { s with deferred := s.deferred.push { node := content, area := overlayRect, fullArea := fullArea } }
     pure result
 
   | .dockBottom footerHeight content footer =>
@@ -377,10 +385,19 @@ def renderBlockBorderClipped (title : Option String) (borderType : BorderType) (
   result
 
 /-- Render state tracking node ID counter, buffer, and terminal commands. -/
+structure DeferredRender where
+  node : RNode
+  rect : Rect
+  backdrop : Option Style
+  clip : ClipContext
+  deriving Inhabited
+
+/-- Render state tracking node ID counter, buffer, and terminal commands. -/
 structure RenderState where
   nextId : Nat := 0
   buf : Buffer
   commands : Array TerminalCommand := #[]
+  deferred : Array DeferredRender := #[]
 
 /-- Render an RNode recursively with proper clip context propagation. -/
 partial def renderNodeRecursive (node : RNode) (layouts : LayoutMap)
@@ -413,15 +430,14 @@ partial def renderNodeRecursive (node : RNode) (layouts : LayoutMap)
       -- 1. Render base content first
       renderNodeRecursive base layouts clip
 
-      -- 2. Render backdrop if specified (fills entire area)
-      match backdropStyle with
-      | some style =>
-        let bgCell := Cell.styled ' ' style
-        modify fun s => { s with buf := s.buf.fillRect rect bgCell }
-      | none => pure ()
-
-      -- 3. Render overlay content on top
-      renderNodeRecursive content layouts clip
+      -- 2. Defer overlay content and backdrop
+      let task : DeferredRender := {
+        node := content
+        rect := rect
+        backdrop := backdropStyle
+        clip := clip
+      }
+      modify fun s => { s with deferred := s.deferred.push task }
 
     | .row _ _ children =>
       for child in children do
@@ -466,17 +482,60 @@ structure RenderResult where
   commands : Array TerminalCommand := #[]
   deriving Inhabited
 
+/-- Process deferred render queue. -/
+private partial def processRenderQueue (layouts : LayoutMap) : StateM RenderState Unit := do
+  let st ← get
+  if st.deferred.isEmpty then pure ()
+  else
+    -- Pop first task
+    let task := st.deferred[0]!
+    set { st with deferred := st.deferred.extract 1 st.deferred.size }
+
+    -- Render backdrop
+    match task.backdrop with
+    | some style =>
+       let bgCell := Cell.styled ' ' style
+       modify fun s => { s with buf := s.buf.fillRect task.rect bgCell }
+    | none => pure ()
+
+    -- Render content
+    let overlayClip : ClipContext := {}
+    renderNodeRecursive task.node layouts overlayClip
+
+    -- Continue
+    processRenderQueue layouts
+
 /-- Render entire RNode tree to Buffer with clipping support. -/
 def renderTree (node : RNode) (layouts : LayoutMap) (buf : Buffer) : RenderResult :=
-  let (_, st) := renderNodeRecursive node layouts {} |>.run { nextId := 0, buf := buf }
+  let actions : StateM RenderState Unit := do
+    -- Initial render
+    renderNodeRecursive node layouts {}
+    -- Process deferred queue
+    processRenderQueue layouts
+
+  let (_, st) := actions.run { nextId := 0, buf := buf }
   { buffer := st.buf, commands := st.commands }
 
 /-! ## Main Render Function -/
 
+/-- Process deferred layouts. -/
+private partial def processLayoutQueue (acc : LayoutMap) : StateM LayoutState LayoutMap := do
+  let st ← get
+  if st.deferred.isEmpty then pure acc
+  else
+    let task := st.deferred[0]!
+    set { st with deferred := st.deferred.extract 1 st.deferred.size }
+
+    let taskLayouts ← computeLayoutRec task.node task.area task.fullArea
+    processLayoutQueue (acc ++ taskLayouts)
+
 /-- Compute layout for an RNode tree. -/
 def computeLayout (root : RNode) (width height : Nat) : LayoutMap :=
   let area : Rect := { x := 0, y := 0, width, height }
-  let (layouts, _) := computeLayoutRec root area area |>.run { nextId := 0 }
+  let (layouts, _) := (do
+    let layouts ← computeLayoutRec root area area
+    processLayoutQueue layouts
+  ).run { nextId := 0 }
   layouts
 
 /-- Render an RNode tree to a Buffer and collect commands.

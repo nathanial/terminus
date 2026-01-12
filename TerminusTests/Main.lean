@@ -35,6 +35,7 @@ import TerminusTests.Reactive.FeedbackTests
 import TerminusTests.Reactive.NavigationTests
 import TerminusTests.Reactive.UtilityTests
 import TerminusTests.Reactive.ChartTests
+import TerminusTests.Reactive.ReproOverlayRendering
 
 open Crucible
 
