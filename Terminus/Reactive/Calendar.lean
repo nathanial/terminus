@@ -256,35 +256,28 @@ def calendar' (name : String) (year : Nat) (month : Nat) (initialDay : Option Na
 
   let keyEvents ← Event.gateM shouldProcessKeys.current events.keyEvent
 
-  -- Create events for each action
-  let prevDayE ← Event.filterM (fun kd => kd.event.code == .left || kd.event.code == .char 'h') keyEvents
-  let nextDayE ← Event.filterM (fun kd => kd.event.code == .right || kd.event.code == .char 'l') keyEvents
-  let prevWeekE ← Event.filterM (fun kd => kd.event.code == .up || kd.event.code == .char 'k') keyEvents
-  let nextWeekE ← Event.filterM (fun kd => kd.event.code == .down || kd.event.code == .char 'j') keyEvents
-  let prevMonthE ← Event.filterM (fun kd => kd.event.code == .pageUp) keyEvents
-  let nextMonthE ← Event.filterM (fun kd => kd.event.code == .pageDown) keyEvents
+  -- Map key events to state transformations
+  let stateOps ← Event.mapMaybeM (fun kd =>
+    match kd.event.code with
+    | .left | .char 'h' => some CalendarState.prevDay
+    | .right | .char 'l' => some CalendarState.nextDay
+    | .up | .char 'k' => some CalendarState.prevWeek
+    | .down | .char 'j' => some CalendarState.nextWeek
+    | .pageUp => some CalendarState.prevMonthState
+    | .pageDown => some CalendarState.nextMonthState
+    | _ => none) keyEvents
+
+  -- Fold state operations
+  let stateDyn ← foldDyn id initialState stateOps
+
+  -- Enter key event for selection
   let enterE ← Event.filterM (fun kd => kd.event.code == .enter) keyEvents
-
-  -- Map events to state transformations
-  let opPrevDay ← Event.mapM (fun _ => (fun s => CalendarState.prevDay s)) prevDayE
-  let opNextDay ← Event.mapM (fun _ => (fun s => CalendarState.nextDay s)) nextDayE
-  let opPrevWeek ← Event.mapM (fun _ => (fun s => CalendarState.prevWeek s)) prevWeekE
-  let opNextWeek ← Event.mapM (fun _ => (fun s => CalendarState.nextWeek s)) nextWeekE
-  let opPrevMonth ← Event.mapM (fun _ => (fun s => CalendarState.prevMonthState s)) prevMonthE
-  let opNextMonth ← Event.mapM (fun _ => (fun s => CalendarState.nextMonthState s)) nextMonthE
-
-  -- Merge operations and fold state
-  let allOps ← Event.leftmostM [opPrevDay, opNextDay, opPrevWeek, opNextWeek, opPrevMonth, opNextMonth]
-  let stateDyn ← foldDyn (fun (op : CalendarState → CalendarState) (s : CalendarState) => op s) initialState allOps
 
   let selectedDate ← stateDyn.map' CalendarState.toDate
   let currentMonth ← stateDyn.map' fun s => (s.year, s.month)
 
-  -- Derive select event
-  let selectState : Reactive.Event Spider CalendarState ←
-    Event.attachWithM (fun (s : CalendarState) (_ : KeyData) => s) stateDyn.current enterE
-  let selectEvent : Reactive.Event Spider CalendarDate ←
-    Event.mapM (fun (s : CalendarState) => s.toDate) selectState
+  -- Derive select event (samples current state when Enter is pressed)
+  let selectEvent ← Event.attachWithM (fun s _ => s.toDate) stateDyn.current enterE
 
   let node ← stateDyn.map' fun state =>
     Id.run do
