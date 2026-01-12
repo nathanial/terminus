@@ -368,8 +368,6 @@ def radioGroup' (name : String) (options : Array String) (initial : Option Nat :
 -/
 def dynRadioGroup' (name : String) (options : Reactive.Dynamic Spider (Array String))
     (initial : Option Nat := none) (config : RadioConfig := {}) : WidgetM RadioResult := do
-  let events ← getEventsW
-
   -- Register as focusable input
   let focusOverride := if config.focusName.isEmpty then name else config.focusName
   let widgetName ← registerComponentW "dynRadioGroup" (isInput := true) (nameOverride := focusOverride)
@@ -409,6 +407,15 @@ def dynRadioGroup' (name : String) (options : Reactive.Dynamic Spider (Array Str
 
   -- Get focus state
   let focusedInput ← useFocusedInputW
+
+  -- Compute input name for focus handling
+  let inputName := if config.focusName.isEmpty then
+    (if name.isEmpty then widgetName else name)
+  else
+    config.focusName
+
+  -- Get key events filtered by focus
+  let keyEvents ← useFocusedKeyEventsW inputName config.globalKeys
 
   -- Subscribe to options changes
   let _unsub1 ← SpiderM.liftIO <| options.updated.subscribe fun newOpts => do
@@ -452,17 +459,11 @@ def dynRadioGroup' (name : String) (options : Reactive.Dynamic Spider (Array Str
         lastLabelRef.set none
         fireLabel none
 
-  -- Subscribe to key events
-  let _unsub2 ← SpiderM.liftIO <| events.keyEvent.subscribe fun kd => do
+  -- Subscribe to key events (already filtered by focus)
+  let _unsub2 ← SpiderM.liftIO <| keyEvents.subscribe fun kd => do
     let currentOpts ← options.sample
-    let currentFocus ← focusedInput.sample
-    let inputName := if config.focusName.isEmpty then
-      (if name.isEmpty then widgetName else name)
-    else
-      config.focusName
-    let isFocused := currentFocus == some inputName || config.globalKeys
 
-    if isFocused && currentOpts.size > 0 then
+    if currentOpts.size > 0 then
       let state ← stateRef.get
       let ke := kd.event
       let maxVis := config.maxVisible.getD currentOpts.size
@@ -505,11 +506,7 @@ def dynRadioGroup' (name : String) (options : Reactive.Dynamic Spider (Array Str
           lastLabelRef.set none
           fireLabel none
 
-  -- Emit render function
-  let inputName := if config.focusName.isEmpty then
-    (if name.isEmpty then widgetName else name)
-  else
-    config.focusName
+  -- Emit render function (inputName already computed above)
   let focusDyn ← focusedInput.map' (fun currentFocus =>
     currentFocus == some inputName
   )

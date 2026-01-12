@@ -207,4 +207,11 @@ def useFocusedKeyEventsW (widgetName : String) (globalKeys : Bool := false)
     let isFocusedDyn ← Dynamic.map' focusedInput (· == some widgetName)
     Event.gateM isFocusedDyn.current events.keyEvent
 
+/-- Get key events filtered to only fire when a visibility dynamic is true.
+    Useful for dialogs and overlays that should only respond when visible. -/
+def useVisibilityGatedKeyEventsW (visible : Reactive.Dynamic Spider Bool)
+    : WidgetM (Reactive.Event Spider KeyData) := do
+  let events ← getEventsW
+  Event.gateM visible.current events.keyEvent
+
 end Terminus.Reactive

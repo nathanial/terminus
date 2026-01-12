@@ -205,21 +205,22 @@ structure ConfirmResult where
 -/
 def confirmDialog' (message : String) (visible : Reactive.Dynamic Spider Bool) (theme : Theme)
     : WidgetM ConfirmResult := do
-  let events ← getEventsW
+  -- Get visibility-gated key events
+  let keyEvents ← useVisibilityGatedKeyEventsW visible
 
-  -- Create trigger events
-  let (confirmedEvent, fireConfirmed) ← newTriggerEvent (t := Spider) (a := Unit)
-  let (cancelledEvent, fireCancelled) ← newTriggerEvent (t := Spider) (a := Unit)
+  -- Derive confirmed event from key presses
+  let confirmedEvent ← Event.filterM (fun kd =>
+    match kd.event.code with
+    | .char 'y' | .char 'Y' | .enter => true
+    | _ => false) keyEvents
+  let confirmedEvent ← Event.voidM confirmedEvent
 
-  -- Subscribe to key events when visible
-  let _unsub ← SpiderM.liftIO <| events.keyEvent.subscribe fun kd => do
-    let isVisible ← visible.sample
-    if isVisible then
-      let ke := kd.event
-      match ke.code with
-      | .char 'y' | .char 'Y' | .enter => fireConfirmed ()
-      | .char 'n' | .char 'N' | .escape => fireCancelled ()
-      | _ => pure ()
+  -- Derive cancelled event from key presses
+  let cancelledEvent ← Event.filterM (fun kd =>
+    match kd.event.code with
+    | .char 'n' | .char 'N' | .escape => true
+    | _ => false) keyEvents
+  let cancelledEvent ← Event.voidM cancelledEvent
 
   -- Emit the dialog content with backdrop dimming
   let backdropStyle : Style := { bg := .ansi .black, modifier := { dim := true } }
@@ -243,19 +244,15 @@ def confirmDialog' (message : String) (visible : Reactive.Dynamic Spider Bool) (
 -/
 def messageDialog' (message : String) (visible : Reactive.Dynamic Spider Bool) (theme : Theme)
     : WidgetM (Reactive.Event Spider Unit) := do
-  let events ← getEventsW
+  -- Get visibility-gated key events
+  let keyEvents ← useVisibilityGatedKeyEventsW visible
 
-  -- Create dismiss event
-  let (dismissEvent, fireDismiss) ← newTriggerEvent (t := Spider) (a := Unit)
-
-  -- Subscribe to key events when visible
-  let _unsub ← SpiderM.liftIO <| events.keyEvent.subscribe fun kd => do
-    let isVisible ← visible.sample
-    if isVisible then
-      let ke := kd.event
-      match ke.code with
-      | .enter | .escape | .space => fireDismiss ()
-      | _ => pure ()
+  -- Derive dismiss event from key presses
+  let dismissEvent ← Event.filterM (fun kd =>
+    match kd.event.code with
+    | .enter | .escape | .space => true
+    | _ => false) keyEvents
+  let dismissEvent ← Event.voidM dismissEvent
 
   -- Emit the dialog content with backdrop dimming
   let backdropStyle : Style := { bg := .ansi .black, modifier := { dim := true } }
@@ -273,17 +270,15 @@ def messageDialog' (message : String) (visible : Reactive.Dynamic Spider Bool) (
 /-- Create an error dialog with error styling. -/
 def errorDialog' (message : String) (visible : Reactive.Dynamic Spider Bool) (theme : Theme)
     : WidgetM (Reactive.Event Spider Unit) := do
-  let events ← getEventsW
+  -- Get visibility-gated key events
+  let keyEvents ← useVisibilityGatedKeyEventsW visible
 
-  let (dismissEvent, fireDismiss) ← newTriggerEvent (t := Spider) (a := Unit)
-
-  let _unsub ← SpiderM.liftIO <| events.keyEvent.subscribe fun kd => do
-    let isVisible ← visible.sample
-    if isVisible then
-      let ke := kd.event
-      match ke.code with
-      | .enter | .escape | .space => fireDismiss ()
-      | _ => pure ()
+  -- Derive dismiss event from key presses
+  let dismissEvent ← Event.filterM (fun kd =>
+    match kd.event.code with
+    | .enter | .escape | .space => true
+    | _ => false) keyEvents
+  let dismissEvent ← Event.voidM dismissEvent
 
   let backdropStyle : Style := { bg := .ansi .black, modifier := { dim := true } }
   overlayWhen' visible { backdropStyle := some backdropStyle } do
@@ -299,17 +294,15 @@ def errorDialog' (message : String) (visible : Reactive.Dynamic Spider Bool) (th
 /-- Create a warning dialog with warning styling. -/
 def warningDialog' (message : String) (visible : Reactive.Dynamic Spider Bool) (theme : Theme)
     : WidgetM (Reactive.Event Spider Unit) := do
-  let events ← getEventsW
+  -- Get visibility-gated key events
+  let keyEvents ← useVisibilityGatedKeyEventsW visible
 
-  let (dismissEvent, fireDismiss) ← newTriggerEvent (t := Spider) (a := Unit)
-
-  let _unsub ← SpiderM.liftIO <| events.keyEvent.subscribe fun kd => do
-    let isVisible ← visible.sample
-    if isVisible then
-      let ke := kd.event
-      match ke.code with
-      | .enter | .escape | .space => fireDismiss ()
-      | _ => pure ()
+  -- Derive dismiss event from key presses
+  let dismissEvent ← Event.filterM (fun kd =>
+    match kd.event.code with
+    | .enter | .escape | .space => true
+    | _ => false) keyEvents
+  let dismissEvent ← Event.voidM dismissEvent
 
   let backdropStyle : Style := { bg := .ansi .black, modifier := { dim := true } }
   overlayWhen' visible { backdropStyle := some backdropStyle } do
@@ -351,56 +344,43 @@ def inputDialog' (prompt : String) (visible : Reactive.Dynamic Spider Bool) (the
     (placeholder : String := "") : WidgetM InputDialogResult := do
   let events ← getEventsW
 
-  -- Create events
-  let (submittedEvent, fireSubmitted) ← newTriggerEvent (t := Spider) (a := String)
-  let (cancelledEvent, fireCancelled) ← newTriggerEvent (t := Spider) (a := Unit)
-
-  -- Track input value
-  let inputRef ← SpiderM.liftIO (IO.mkRef "")
-  let (inputEvent, fireInput) ← newTriggerEvent (t := Spider) (a := String)
-  let inputDyn ← holdDyn "" inputEvent
-
   -- Focus management for the input
   let dialogInputName := "input-dialog-field"
 
-  -- Auto-focus when visible
+  -- Auto-focus when visibility changes
   let _focusUnsub ← SpiderM.liftIO <| visible.updated.subscribe fun isVisible => do
     if isVisible then
       events.registry.fireFocus (some dialogInputName)
     else
       events.registry.fireFocus none
 
-  -- Handle key events
-  let _unsub ← SpiderM.liftIO <| events.keyEvent.subscribe fun kd => do
-    let isVisible ← visible.sample
-    if isVisible then
-      let ke := kd.event
-      let currentFocus ← events.registry.focusedInput.sample
-      let isFocused := currentFocus == some dialogInputName
+  -- Get visibility-gated key events
+  let keyEvents ← useVisibilityGatedKeyEventsW visible
 
-      if isFocused then
-        match ke.code with
-        | .char c =>
-          if c.val >= 32 then
-            let current ← inputRef.get
-            let updated := current ++ c.toString
-            inputRef.set updated
-            fireInput updated
-        | .backspace =>
-          let current ← inputRef.get
-          let updated := current.dropRight 1
-          inputRef.set updated
-          fireInput updated
-        | .enter =>
-          let value ← inputRef.get
-          fireSubmitted value
-        | .escape =>
-          fireCancelled ()
-        | _ => pure ()
-      else
-        match ke.code with
-        | .escape => fireCancelled ()
-        | _ => pure ()
+  -- Get focus state for text input gating
+  let focusedInput ← useFocusedInputW
+  let isFocusedDyn ← focusedInput.map' (· == some dialogInputName)
+
+  -- Focus-gated key events for text input
+  let focusedKeyEvents ← Event.gateM isFocusedDyn.current keyEvents
+
+  -- Map key events to input string transformations
+  let inputOps ← Event.mapMaybeM (fun kd =>
+    match kd.event.code with
+    | .char c => if c.val >= 32 then some (fun s => s ++ c.toString) else none
+    | .backspace => some (fun s => s.dropRight 1)
+    | _ => none) focusedKeyEvents
+
+  -- Fold to get input value
+  let inputDyn ← foldDyn id "" inputOps
+
+  -- Derive submitted event (Enter when focused, with current value)
+  let enterEvents ← Event.filterM (fun kd => kd.event.code == .enter) focusedKeyEvents
+  let submittedEvent ← Event.attachWithM (fun value _ => value) inputDyn.current enterEvents
+
+  -- Derive cancelled event (Escape, regardless of focus within dialog)
+  let cancelledEvent ← Event.filterM (fun kd => kd.event.code == .escape) keyEvents
+  let cancelledEvent ← Event.voidM cancelledEvent
 
   -- Emit the dialog content with backdrop dimming
   let backdropStyle : Style := { bg := .ansi .black, modifier := { dim := true } }
@@ -409,9 +389,7 @@ def inputDialog' (prompt : String) (visible : Reactive.Dynamic Spider Bool) (the
       text' prompt theme.bodyStyle
       spacer' 1 1
       -- Simple text display for the input (full textInput' would create circular dep)
-      let focusDyn ← events.registry.focusedInput.map' (fun currentFocus =>
-        currentFocus == some dialogInputName
-      )
+      let focusDyn ← focusedInput.map' (· == some dialogInputName)
       let node ← focusDyn.zipWith' (fun isFocused value =>
         let display := if value.isEmpty then
           if isFocused then "|" else placeholder
