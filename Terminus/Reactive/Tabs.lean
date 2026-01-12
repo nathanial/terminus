@@ -159,7 +159,10 @@ def numberedTabs' (labels : Array String) (initial : Nat := 0)
   tabs' labels initial { config with showNumbers := true }
 
 /-- Create tabs with a dynamic label array.
-    The tabs update when labels change, preserving selection where possible. -/
+    The tabs update when labels change, preserving selection where possible.
+
+    This implementation uses FRP-idiomatic state management via holdDyn and
+    attachWithM, avoiding imperative subscribe patterns with IO.mkRef. -/
 def dynTabs' (labels : Reactive.Dynamic Spider (Array String)) (initial : Nat := 0)
     (config : TabsConfig := {}) : WidgetM TabsResult := do
   -- Register as focusable component
@@ -172,61 +175,69 @@ def dynTabs' (labels : Reactive.Dynamic Spider (Array String)) (initial : Nat :=
   -- Get focused key events
   let keyEvents ← useFocusedKeyEventsW tabsName config.globalKeys
 
-  -- Create trigger events
+  -- Create trigger event for external notification and state updates
   let (tabChangeEvent, fireTabChange) ← newTriggerEvent (t := Spider) (a := Nat)
-  let (indexEvent, fireIndex) ← newTriggerEvent (t := Spider) (a := Nat)
+  let (tabUpdateEvent, fireTabUpdate) ← newTriggerEvent (t := Spider) (a := Nat)
 
-  -- Track internal state
+  -- Get initial labels to determine initial state
   let initialLabels ← SpiderM.liftIO labels.sample
   let initialTab := if initial < initialLabels.size then initial else 0
-  let tabRef ← SpiderM.liftIO (IO.mkRef initialTab)
 
-  -- Create dynamics
-  let activeTabDyn ← holdDyn initialTab indexEvent
+  -- Build activeTabDyn from the tab update events
+  let activeTabDyn ← holdDyn initialTab tabUpdateEvent
 
-  -- Subscribe to key events
-  let _unsub ← SpiderM.liftIO <| keyEvents.subscribe fun kd => do
-    let currentLabels ← labels.sample
+  -- Attach labels to key events
+  let keyEventsWithLabels ← Event.attachWithM (fun (currentLabels : Array String) (kd : KeyData) =>
+    (currentLabels, kd)) labels.current keyEvents
 
+  -- Attach current tab to key events
+  let keyEventsWithState ← Event.attachWithM
+    (fun (currentTab : Nat) (labelsAndKey : Array String × KeyData) => (currentTab, labelsAndKey))
+    activeTabDyn.current keyEventsWithLabels
+
+  -- Subscribe to key events to compute and fire new tab
+  let _keyUnsub ← SpiderM.liftIO <| keyEventsWithState.subscribe fun (currentTab, (currentLabels, kd)) => do
     if currentLabels.isEmpty then pure ()
     else
-      let currentTab ← tabRef.get
+      let labelCount := currentLabels.size
       let ke := kd.event
-
-      let newTab ← match ke.code with
+      let newTab := match ke.code with
         | .left =>
           if currentTab == 0 then
-            if config.wrapAround then pure (currentLabels.size - 1) else pure 0
+            if config.wrapAround then labelCount - 1 else 0
           else
-            pure (currentTab - 1)
+            currentTab - 1
         | .right =>
-          if currentTab >= currentLabels.size - 1 then
-            if config.wrapAround then pure 0 else pure (currentLabels.size - 1)
+          if currentTab >= labelCount - 1 then
+            if config.wrapAround then 0 else labelCount - 1
           else
-            pure (currentTab + 1)
-        | .home => pure 0
-        | .end => pure (currentLabels.size - 1)
+            currentTab + 1
+        | .home => 0
+        | .end => labelCount - 1
         | .char c =>
           if config.showNumbers && c >= '1' && c <= '9' then
             let idx := c.toNat - '1'.toNat
-            if idx < currentLabels.size then pure idx else pure currentTab
+            if idx < labelCount then idx else currentTab
           else
-            pure currentTab
-        | _ => pure currentTab
+            currentTab
+        | _ => currentTab
 
       if newTab != currentTab then
-        tabRef.set newTab
-        fireIndex newTab
+        fireTabUpdate newTab
         fireTabChange newTab
 
-  -- Subscribe to label changes to adjust selection
-  let _unsub2 ← SpiderM.liftIO <| labels.updated.subscribe fun newLabels => do
-    let currentTab ← tabRef.get
+  -- Attach current tab to label changes
+  let labelChangesWithState ← Event.attachWithM
+    (fun (currentTab : Nat) (newLabels : Array String) => (currentTab, newLabels))
+    activeTabDyn.current labels.updated
+
+  -- Subscribe to label changes to clamp tab index
+  let _labelUnsub ← SpiderM.liftIO <| labelChangesWithState.subscribe fun (currentTab, newLabels) => do
     if currentTab >= newLabels.size then
       let newTab := if newLabels.isEmpty then 0 else newLabels.size - 1
-      tabRef.set newTab
-      fireIndex newTab
+      fireTabUpdate newTab
 
+  -- Render the tabs
   let node ← activeTabDyn.zipWith' (fun currentTab currentLabels =>
     Id.run do
       if currentLabels.isEmpty then

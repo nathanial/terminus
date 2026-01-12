@@ -19,7 +19,7 @@ structure TableCell' where
   content : String
   /-- Custom style for this cell. -/
   style : Style := {}
-  deriving Repr, Inhabited
+  deriving Repr, Inhabited, BEq
 
 namespace TableCell'
 
@@ -35,7 +35,7 @@ end TableCell'
 structure TableRow' where
   /-- Cells in this row. -/
   cells : Array TableCell'
-  deriving Repr, Inhabited
+  deriving Repr, Inhabited, BEq
 
 namespace TableRow'
 
@@ -109,7 +109,7 @@ structure TableState where
   selectedIndex : Option Nat := none
   /-- Scroll offset for large tables. -/
   scrollOffset : Nat := 0
-  deriving Repr, Inhabited
+  deriving Repr, Inhabited, BEq
 
 namespace TableState
 
@@ -357,6 +357,9 @@ def table' (name : String) (columns : Array TableColumn') (rows : Array TableRow
 /-- Create a table widget with dynamic rows.
 
     Similar to `table'` but the row data is a Dynamic that can change.
+
+    This implementation uses FRP-idiomatic state management via holdDyn and
+    attachWithM, avoiding imperative subscribe patterns with IO.mkRef.
 -/
 def dynTable' (name : String) (columns : Array TableColumn')
     (rows : Reactive.Dynamic Spider (Array TableRow')) (config : TableConfig := {})
@@ -370,50 +373,38 @@ def dynTable' (name : String) (columns : Array TableColumn')
   -- Get focused key events
   let keyEvents ← useFocusedKeyEventsW inputName config.globalKeys
 
-  -- State
-  let initialState := TableState.mk none 0
-  let stateRef ← SpiderM.liftIO (IO.mkRef initialState)
-  let (stateEvent, fireState) ← newTriggerEvent (t := Spider) (a := TableState)
-  let stateDyn ← holdDyn initialState stateEvent
-
-  -- Events
+  -- Events for row selection
   let (selectEvent, fireSelect) ← newTriggerEvent (t := Spider) (a := Nat × TableRow')
-  let (indexEvent, fireIndex) ← newTriggerEvent (t := Spider) (a := Option Nat)
-  let (rowEvent, fireRow) ← newTriggerEvent (t := Spider) (a := Option TableRow')
 
-  -- Initial dynamics
-  let indexDyn ← holdDyn none indexEvent
-  let rowDyn ← holdDyn none rowEvent
+  -- Initial state
+  let initialState := TableState.mk none 0
 
-  -- Subscribe to row changes to clamp selection
-  let _unsub1 ← SpiderM.liftIO <| rows.updated.subscribe fun newRows => do
-    let state ← stateRef.get
-    let clamped := state.clampSelection newRows.size
-    stateRef.set clamped
-    fireState clamped
-    fireIndex clamped.selectedIndex
-    fireRow (clamped.selectedIndex.bind fun i => newRows[i]?)
+  -- Create a trigger event for state updates
+  let (stateUpdateEvent, fireStateUpdate) ← newTriggerEvent (t := Spider) (a := TableState)
 
-  -- Subscribe to key events
-  let _unsub2 ← SpiderM.liftIO <| keyEvents.subscribe fun kd => do
-    let currentRows ← rows.sample
-    let state ← stateRef.get
+  -- Build stateDyn from the state update events
+  let stateDyn ← holdDyn initialState stateUpdateEvent
 
+  -- Attach rows to key events
+  let keyEventsWithRows ← Event.attachWithM (fun (currentRows : Array TableRow') (kd : KeyData) =>
+    (currentRows, kd)) rows.current keyEvents
+
+  -- Attach current state to key events
+  let keyEventsWithState ← Event.attachWithM
+    (fun (state : TableState) (rowsAndKey : Array TableRow' × KeyData) => (state, rowsAndKey))
+    stateDyn.current keyEventsWithRows
+
+  -- Subscribe to key events to compute and fire new state
+  let _keyUnsub ← SpiderM.liftIO <| keyEventsWithState.subscribe fun (state, (currentRows, kd)) => do
     match kd.event.code with
     | .down | .char 'j' =>
       let newState := state.navigateNext currentRows.size config.maxHeight
-      stateRef.set newState
-      fireState newState
-      fireIndex newState.selectedIndex
-      fireRow (newState.selectedIndex.bind fun i => currentRows[i]?)
-
+      if newState != state then
+        fireStateUpdate newState
     | .up | .char 'k' =>
       let newState := state.navigatePrev currentRows.size
-      stateRef.set newState
-      fireState newState
-      fireIndex newState.selectedIndex
-      fireRow (newState.selectedIndex.bind fun i => currentRows[i]?)
-
+      if newState != state then
+        fireStateUpdate newState
     | .enter =>
       match state.selectedIndex with
       | some idx =>
@@ -421,9 +412,28 @@ def dynTable' (name : String) (columns : Array TableColumn')
         | some row => fireSelect (idx, row)
         | none => pure ()
       | none => pure ()
-
     | _ => pure ()
 
+  -- Attach current state to row changes
+  let rowChangesWithState ← Event.attachWithM
+    (fun (state : TableState) (newRows : Array TableRow') => (state, newRows))
+    stateDyn.current rows.updated
+
+  -- Subscribe to row changes to clamp selection
+  let _rowUnsub ← SpiderM.liftIO <| rowChangesWithState.subscribe fun (state, newRows) => do
+    let clamped := state.clampSelection newRows.size
+    if clamped != state then
+      fireStateUpdate clamped
+
+  -- Derive selectedIndex from state
+  let indexDyn ← stateDyn.map' (·.selectedIndex)
+
+  -- Derive selectedRow by combining state with rows
+  let rowDyn ← stateDyn.zipWith' (fun (state : TableState) (currentRows : Array TableRow') =>
+    state.selectedIndex.bind fun i => currentRows[i]?
+  ) rows
+
+  -- Render the table
   let node ← stateDyn.zipWith' (fun state currentRows =>
     Id.run do
       if columns.isEmpty then
