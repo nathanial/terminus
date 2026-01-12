@@ -337,12 +337,15 @@ where
 -/
 def tree' [Inhabited α] [ToString α] (root : TreeNode α) (config : TreeConfig := {})
     : WidgetM (TreeResult α) := do
-  let events ← getEventsW
-
   -- Register as focusable component
   let widgetName ← registerComponentW "tree" (isInput := true)
     (nameOverride := config.focusName)
-  let focusedInput ← useFocusedInputW
+
+  -- Determine the tree's focus name before calling useFocusedKeyEventsW
+  let treeName := if config.focusName.isEmpty then widgetName else config.focusName
+
+  -- Get focused key events
+  let keyEvents ← useFocusedKeyEventsW treeName config.globalKeys
 
   -- Create trigger events
   let (selectEvent, fireSelect) ← newTriggerEvent (t := Spider) (a := α)
@@ -369,9 +372,6 @@ def tree' [Inhabited α] [ToString α] (root : TreeNode α) (config : TreeConfig
   let selectedPathDyn ← holdDyn initialPath pathEvent
   let selectedNodeDyn ← holdDyn initialNode nodeEvent
 
-  -- Determine the tree's focus name
-  let treeName := if config.focusName.isEmpty then widgetName else config.focusName
-
   let updateState : TreeState → IO Unit := fun newState => do
     stateRef.set newState
     fireState newState
@@ -381,14 +381,11 @@ def tree' [Inhabited α] [ToString α] (root : TreeNode α) (config : TreeConfig
     fireRoots newRoots
 
   -- Subscribe to key events
-  let _unsub ← SpiderM.liftIO <| events.keyEvent.subscribe fun kd => do
-    let currentFocus ← focusedInput.sample
-    let isFocused := config.globalKeys || currentFocus == some treeName
-
+  let _unsub ← SpiderM.liftIO <| keyEvents.subscribe fun kd => do
     let roots ← rootsRef.get
     let flat := flattenForest roots
 
-    if flat.isEmpty || !isFocused then pure ()
+    if flat.isEmpty then pure ()
     else
       let state ← stateRef.get
       let ke := kd.event
@@ -499,11 +496,14 @@ def tree' [Inhabited α] [ToString α] (root : TreeNode α) (config : TreeConfig
 /-- Create a tree from multiple root nodes. -/
 def forest' [Inhabited α] [ToString α] (roots : Array (TreeNode α)) (config : TreeConfig := {})
     : WidgetM (TreeResult α) := do
-  let events ← getEventsW
-
   let widgetName ← registerComponentW "forest" (isInput := true)
     (nameOverride := config.focusName)
-  let focusedInput ← useFocusedInputW
+
+  -- Determine the tree's focus name before calling useFocusedKeyEventsW
+  let treeName := if config.focusName.isEmpty then widgetName else config.focusName
+
+  -- Get focused key events
+  let keyEvents ← useFocusedKeyEventsW treeName config.globalKeys
 
   let (selectEvent, fireSelect) ← newTriggerEvent (t := Spider) (a := α)
   let (toggleEvent, fireToggle) ← newTriggerEvent (t := Spider) (a := Array Nat)
@@ -526,8 +526,6 @@ def forest' [Inhabited α] [ToString α] (roots : Array (TreeNode α)) (config :
   let selectedPathDyn ← holdDyn initialPath pathEvent
   let selectedNodeDyn ← holdDyn initialNode nodeEvent
 
-  let treeName := if config.focusName.isEmpty then widgetName else config.focusName
-
   let updateState : TreeState → IO Unit := fun newState => do
     stateRef.set newState
     fireState newState
@@ -536,14 +534,11 @@ def forest' [Inhabited α] [ToString α] (roots : Array (TreeNode α)) (config :
     rootsRef.set newRoots
     fireRoots newRoots
 
-  let _unsub ← SpiderM.liftIO <| events.keyEvent.subscribe fun kd => do
-    let currentFocus ← focusedInput.sample
-    let isFocused := config.globalKeys || currentFocus == some treeName
-
+  let _unsub ← SpiderM.liftIO <| keyEvents.subscribe fun kd => do
     let currentRoots ← rootsRef.get
     let flat := flattenForest currentRoots
 
-    if flat.isEmpty || !isFocused then pure ()
+    if flat.isEmpty then pure ()
     else
       let state ← stateRef.get
       let ke := kd.event

@@ -145,12 +145,15 @@ def dynGrid' (width height : Nat)
 def cursorGrid' (width height : Nat)
     (renderCell : Nat → Nat → Bool → GridCell)  -- x, y, isCursor -> cell
     (config : GridConfig := {}) : WidgetM GridResult := do
-  let events ← getEventsW
-
   -- Register as focusable component
   let widgetName ← registerComponentW "cursorGrid" (isInput := true)
     (nameOverride := config.focusName)
-  let focusedInput ← useFocusedInputW
+
+  -- Determine focus name before calling useFocusedKeyEventsW
+  let gridName := if config.focusName.isEmpty then widgetName else config.focusName
+
+  -- Get focused key events
+  let keyEvents ← useFocusedKeyEventsW gridName
 
   -- Create trigger events
   let (moveEvent, fireMove) ← Reactive.newTriggerEvent (t := Spider) (a := Nat × Nat)
@@ -164,15 +167,9 @@ def cursorGrid' (width height : Nat)
   -- Create dynamics
   let cursorPosDyn ← Reactive.holdDyn initialPos posEvent
 
-  -- Determine focus name
-  let gridName := if config.focusName.isEmpty then widgetName else config.focusName
-
   -- Subscribe to key events
-  let _unsub ← SpiderM.liftIO <| events.keyEvent.subscribe fun kd => do
-    let currentFocus ← focusedInput.sample
-    let isFocused := currentFocus == some gridName
-
-    if !isFocused || width == 0 || height == 0 then pure ()
+  let _unsub ← SpiderM.liftIO <| keyEvents.subscribe fun kd => do
+    if width == 0 || height == 0 then pure ()
     else
       let (cx, cy) ← posRef.get
       let ke := kd.event

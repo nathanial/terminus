@@ -172,13 +172,13 @@ private def adjustScroll (state : DataGridState)
 /-- Create an editable data grid widget. -/
 def dataGrid' (data : Array (Array String)) (config : DataGridConfig := {})
     : WidgetM DataGridResult := do
-  let events ← getEventsW
-
   -- Register for focus handling
   let widgetName ← registerComponentW "dataGrid" (isInput := true)
     (nameOverride := config.focusName)
-  let focusedInput ← useFocusedInputW
   let gridName := if config.focusName.isEmpty then widgetName else config.focusName
+
+  -- Get focused key events
+  let keyEvents ← useFocusedKeyEventsW gridName config.globalKeys
 
   -- Compute initial state
   let initialRows := data.size
@@ -221,12 +221,7 @@ def dataGrid' (data : Array (Array String)) (config : DataGridConfig := {})
       fireEdit (row, col, value)
 
   -- Handle key events
-  let _unsub ← SpiderM.liftIO <| events.keyEvent.subscribe fun kd => do
-    let currentFocus ← focusedInput.sample
-    let isFocused := config.globalKeys || currentFocus == some gridName
-    if !isFocused then
-      pure ()
-    else
+  let _unsub ← SpiderM.liftIO <| keyEvents.subscribe fun kd => do
       let state ← stateRef.get
       let currentData ← dataRef.get
       let rows := currentData.size

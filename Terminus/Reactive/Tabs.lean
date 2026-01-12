@@ -61,12 +61,15 @@ structure TabsResult where
 -/
 def tabs' (labels : Array String) (initial : Nat := 0)
     (config : TabsConfig := {}) : WidgetM TabsResult := do
-  let events ← getEventsW
-
   -- Register as focusable component
   let widgetName ← registerComponentW "tabs" (isInput := true)
     (nameOverride := config.focusName)
-  let focusedInput ← useFocusedInputW
+
+  -- Determine the tab bar's focus name before calling useFocusedKeyEventsW
+  let tabsName := if config.focusName.isEmpty then widgetName else config.focusName
+
+  -- Get focused key events
+  let keyEvents ← useFocusedKeyEventsW tabsName config.globalKeys
 
   -- Create trigger events
   let (tabChangeEvent, fireTabChange) ← newTriggerEvent (t := Spider) (a := Nat)
@@ -79,16 +82,9 @@ def tabs' (labels : Array String) (initial : Nat := 0)
   -- Create dynamics
   let activeTabDyn ← holdDyn initialTab indexEvent
 
-  -- Determine the tab bar's focus name
-  let tabsName := if config.focusName.isEmpty then widgetName else config.focusName
-
   -- Subscribe to key events
-  let _unsub ← SpiderM.liftIO <| events.keyEvent.subscribe fun kd => do
-    -- Check focus (unless globalKeys is enabled)
-    let currentFocus ← focusedInput.sample
-    let isFocused := config.globalKeys || currentFocus == some tabsName
-
-    if labels.isEmpty || !isFocused then pure ()
+  let _unsub ← SpiderM.liftIO <| keyEvents.subscribe fun kd => do
+    if labels.isEmpty then pure ()
     else
       let currentTab ← tabRef.get
       let ke := kd.event
@@ -166,12 +162,15 @@ def numberedTabs' (labels : Array String) (initial : Nat := 0)
     The tabs update when labels change, preserving selection where possible. -/
 def dynTabs' (labels : Reactive.Dynamic Spider (Array String)) (initial : Nat := 0)
     (config : TabsConfig := {}) : WidgetM TabsResult := do
-  let events ← getEventsW
-
   -- Register as focusable component
   let widgetName ← registerComponentW "dynTabs" (isInput := true)
     (nameOverride := config.focusName)
-  let focusedInput ← useFocusedInputW
+
+  -- Determine the tab bar's focus name before calling useFocusedKeyEventsW
+  let tabsName := if config.focusName.isEmpty then widgetName else config.focusName
+
+  -- Get focused key events
+  let keyEvents ← useFocusedKeyEventsW tabsName config.globalKeys
 
   -- Create trigger events
   let (tabChangeEvent, fireTabChange) ← newTriggerEvent (t := Spider) (a := Nat)
@@ -185,16 +184,11 @@ def dynTabs' (labels : Reactive.Dynamic Spider (Array String)) (initial : Nat :=
   -- Create dynamics
   let activeTabDyn ← holdDyn initialTab indexEvent
 
-  -- Determine the tab bar's focus name
-  let tabsName := if config.focusName.isEmpty then widgetName else config.focusName
-
   -- Subscribe to key events
-  let _unsub ← SpiderM.liftIO <| events.keyEvent.subscribe fun kd => do
+  let _unsub ← SpiderM.liftIO <| keyEvents.subscribe fun kd => do
     let currentLabels ← labels.sample
-    let currentFocus ← focusedInput.sample
-    let isFocused := config.globalKeys || currentFocus == some tabsName
 
-    if currentLabels.isEmpty || !isFocused then pure ()
+    if currentLabels.isEmpty then pure ()
     else
       let currentTab ← tabRef.get
       let ke := kd.event

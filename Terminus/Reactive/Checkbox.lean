@@ -57,10 +57,11 @@ structure CheckboxResult' where
 -/
 def checkbox'' (name : String) (label : String) (initial : Bool := false)
     (config : CheckboxConfig' := {}) : WidgetM CheckboxResult' := do
-  let events ← getEventsW
-
   -- Register as focusable input
   let widgetName ← registerComponentW "checkbox" (isInput := true) (nameOverride := name)
+
+  -- Compute input name for focus handling
+  let inputName := if name.isEmpty then widgetName else name
 
   -- Create trigger events
   let (toggleEvent, fireToggle) ← newTriggerEvent (t := Spider) (a := Bool)
@@ -71,26 +72,22 @@ def checkbox'' (name : String) (label : String) (initial : Bool := false)
   -- Internal state ref for render sampling
   let checkedRef ← SpiderM.liftIO (IO.mkRef initial)
 
-  -- Get focus state
+  -- Get focus state (for rendering)
   let focusedInput ← useFocusedInputW
 
-  -- Subscribe to key events when focused
-  let _unsub ← SpiderM.liftIO <| events.keyEvent.subscribe fun kd => do
-    let currentFocus ← focusedInput.sample
-    let inputName := if name.isEmpty then widgetName else name
-    let isFocused := currentFocus == some inputName
+  -- Get key events filtered by focus
+  let keyEvents ← useFocusedKeyEventsW inputName
 
-    if isFocused then
-      let ke := kd.event
-      match ke.code with
-      | .space | .enter =>
-        let current ← checkedRef.get
-        let newVal := !current
-        checkedRef.set newVal
-        fireToggle newVal
-      | _ => pure ()
-
-  let inputName := if name.isEmpty then widgetName else name
+  -- Subscribe to key events (already filtered by focus)
+  let _unsub ← SpiderM.liftIO <| keyEvents.subscribe fun kd => do
+    let ke := kd.event
+    match ke.code with
+    | .space | .enter =>
+      let current ← checkedRef.get
+      let newVal := !current
+      checkedRef.set newVal
+      fireToggle newVal
+    | _ => pure ()
   let node ← focusedInput.zipWith' (fun currentFocus isChecked =>
     let isFocused := currentFocus == some inputName
     let symbol := if isChecked then config.checkedSymbol else config.uncheckedSymbol
@@ -234,11 +231,15 @@ end RadioState
 -/
 def radioGroup' (name : String) (options : Array String) (initial : Option Nat := none)
     (config : RadioConfig := {}) : WidgetM RadioResult := do
-  let events ← getEventsW
-
   -- Register as focusable input
   let focusOverride := if config.focusName.isEmpty then name else config.focusName
   let widgetName ← registerComponentW "radioGroup" (isInput := true) (nameOverride := focusOverride)
+
+  -- Compute input name for focus handling
+  let inputName := if config.focusName.isEmpty then
+    (if name.isEmpty then widgetName else name)
+  else
+    config.focusName
 
   -- Create trigger events
   let (selectEvent, fireSelect) ← newTriggerEvent (t := Spider) (a := Nat)
@@ -262,22 +263,18 @@ def radioGroup' (name : String) (options : Array String) (initial : Option Nat :
     | some idx => if h : idx < options.size then some options[idx] else none
   let selectedLabelDyn ← holdDyn initialLabel labelEvent
 
-  -- Get focus state
+  -- Get focus state (for rendering)
   let focusedInput ← useFocusedInputW
 
   -- Determine max visible
   let maxVis := config.maxVisible.getD options.size
 
-  -- Subscribe to key events
-  let _unsub ← SpiderM.liftIO <| events.keyEvent.subscribe fun kd => do
-    let currentFocus ← focusedInput.sample
-    let inputName := if config.focusName.isEmpty then
-      (if name.isEmpty then widgetName else name)
-    else
-      config.focusName
-    let isFocused := currentFocus == some inputName || config.globalKeys
+  -- Get key events filtered by focus
+  let keyEvents ← useFocusedKeyEventsW inputName config.globalKeys
 
-    if isFocused && options.size > 0 then
+  -- Subscribe to key events (already filtered by focus)
+  let _unsub ← SpiderM.liftIO <| keyEvents.subscribe fun kd => do
+    if options.size > 0 then
       let state ← stateRef.get
       let ke := kd.event
 

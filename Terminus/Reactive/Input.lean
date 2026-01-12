@@ -131,8 +131,6 @@ end TextInputState
 -/
 def textInput' (name : String) (initial : String := "")
     (config : TextInputConfig := {}) : WidgetM TextInputResult := do
-  let events ← getEventsW
-
   -- Register as focusable input
   let widgetName ← registerComponentW "textInput" (isInput := true) (nameOverride := name)
 
@@ -151,22 +149,22 @@ def textInput' (name : String) (initial : String := "")
   let (valueEvent, fireValue) ← newTriggerEvent (t := Spider) (a := String)
   let valueDyn ← holdDyn initial valueEvent
 
-  -- Get focus state
+  -- Compute input name for focus handling
+  let inputName := if name.isEmpty then widgetName else name
+
+  -- Get focus state (for rendering)
   let focusedInput ← useFocusedInputW
 
-  -- Subscribe to key events when focused
-  let _unsub ← SpiderM.liftIO <| events.keyEvent.subscribe fun kd => do
-    -- Check if this input is focused (use explicit name or auto-generated)
-    let currentFocus ← focusedInput.sample
-    let inputName := if name.isEmpty then widgetName else name
-    let isFocused := currentFocus == some inputName
+  -- Get key events filtered by focus
+  let keyEvents ← useFocusedKeyEventsW inputName
 
-    if isFocused then
-      let state ← stateRef.get
-      let ke := kd.event
+  -- Subscribe to key events (already filtered by focus)
+  let _unsub ← SpiderM.liftIO <| keyEvents.subscribe fun kd => do
+    let state ← stateRef.get
+    let ke := kd.event
 
-      -- Handle key
-      let newState ← match ke.code with
+    -- Handle key
+    let newState ← match ke.code with
         | .char c =>
           -- Only handle printable characters
           if c.val >= 32 then
@@ -198,7 +196,6 @@ def textInput' (name : String) (initial : String := "")
         fireState newState
 
   -- Emit render function
-  let inputName := if name.isEmpty then widgetName else name
   let node ← focusedInput.zipWith' (fun currentFocus state =>
     Id.run do
       let isFocused := currentFocus == some inputName

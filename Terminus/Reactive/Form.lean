@@ -103,10 +103,14 @@ structure OptionSelectorResult where
 -/
 def optionSelector' (name : String) (options : Array String) (initial : Nat := 0)
     (config : OptionSelectorConfig := {}) : WidgetM OptionSelectorResult := do
-  let events ← getEventsW
-
   -- Register as focusable
   let widgetName ← registerComponentW "optionSelector" (isInput := true) (nameOverride := name)
+
+  -- Compute inputName before calling useFocusedKeyEventsW
+  let inputName := if name.isEmpty then widgetName else name
+
+  -- Get focused key events
+  let keyEvents ← useFocusedKeyEventsW inputName
 
   -- Create events
   let (changeEvent, fireChange) ← newTriggerEvent (t := Spider) (a := Nat)
@@ -122,16 +126,12 @@ def optionSelector' (name : String) (options : Array String) (initial : Nat := 0
   let indexDyn ← holdDyn initialIdx indexEvent
   let valueDyn ← holdDyn initialVal valueEvent
 
-  -- Focus
+  -- Focus for rendering
   let focusedInput ← useFocusedInputW
 
   -- Key handling
-  let _unsub ← SpiderM.liftIO <| events.keyEvent.subscribe fun kd => do
-    let currentFocus ← focusedInput.sample
-    let inputName := if name.isEmpty then widgetName else name
-    let isFocused := currentFocus == some inputName
-
-    if isFocused && options.size > 0 then
+  let _unsub ← SpiderM.liftIO <| keyEvents.subscribe fun kd => do
+    if options.size > 0 then
       let current ← selectedRef.get
       let ke := kd.event
 
@@ -162,7 +162,6 @@ def optionSelector' (name : String) (options : Array String) (initial : Nat := 0
         fireChange newIdx
 
   -- Render
-  let inputName := if name.isEmpty then widgetName else name
   let focusDyn ← focusedInput.map' (fun currentFocus =>
     currentFocus == some inputName
   )
@@ -238,10 +237,14 @@ structure CheckboxResult where
 -/
 def checkbox' (name : String) (label : String) (initial : Bool := false)
     (config : CheckboxConfig := {}) : WidgetM CheckboxResult := do
-  let events ← getEventsW
-
   -- Register as focusable
   let widgetName ← registerComponentW "checkbox" (isInput := true) (nameOverride := name)
+
+  -- Compute inputName before calling useFocusedKeyEventsW
+  let inputName := if name.isEmpty then widgetName else name
+
+  -- Get focused key events
+  let keyEvents ← useFocusedKeyEventsW inputName
 
   -- Create events
   let (changeEvent, fireChange) ← newTriggerEvent (t := Spider) (a := Bool)
@@ -251,16 +254,11 @@ def checkbox' (name : String) (label : String) (initial : Bool := false)
   let checkedRef ← SpiderM.liftIO (IO.mkRef initial)
   let checkedDyn ← holdDyn initial checkedEvent
 
-  -- Focus
+  -- Focus for rendering
   let focusedInput ← useFocusedInputW
 
   -- Key handling
-  let _unsub ← SpiderM.liftIO <| events.keyEvent.subscribe fun kd => do
-    let currentFocus ← focusedInput.sample
-    let inputName := if name.isEmpty then widgetName else name
-    let isFocused := currentFocus == some inputName
-
-    if isFocused then
+  let _unsub ← SpiderM.liftIO <| keyEvents.subscribe fun kd => do
       let ke := kd.event
       match ke.code with
       | .space | .enter =>
@@ -272,7 +270,6 @@ def checkbox' (name : String) (label : String) (initial : Bool := false)
       | _ => pure ()
 
   -- Render
-  let inputName := if name.isEmpty then widgetName else name
   let focusDyn ← focusedInput.map' (fun currentFocus =>
     currentFocus == some inputName
   )
@@ -433,19 +430,20 @@ def fieldGroup' (title : String) (theme : Theme := .dark)
 def submitButton' (label : String := "Submit") (enabled : Reactive.Dynamic Spider Bool)
     (style : Style := {}) (disabledStyle : Style := { fg := .ansi .brightBlack })
     : WidgetM (Reactive.Event Spider Unit) := do
-  let events ← getEventsW
   let widgetName ← registerComponentW "submitButton" (isInput := true)
+
+  -- Get focused key events
+  let keyEvents ← useFocusedKeyEventsW widgetName
 
   let (clickEvent, fireClick) ← newTriggerEvent (t := Spider) (a := Unit)
 
+  -- Focus for rendering
   let focusedInput ← useFocusedInputW
 
-  let _unsub ← SpiderM.liftIO <| events.keyEvent.subscribe fun kd => do
-    let currentFocus ← focusedInput.sample
-    let isFocused := currentFocus == some widgetName
+  let _unsub ← SpiderM.liftIO <| keyEvents.subscribe fun kd => do
     let isEnabled ← enabled.sample
 
-    if isFocused && isEnabled then
+    if isEnabled then
       let ke := kd.event
       match ke.code with
       | .enter | .space => fireClick ()
@@ -472,22 +470,21 @@ def submitButton' (label : String := "Submit") (enabled : Reactive.Dynamic Spide
 /-- Create a cancel button. -/
 def cancelButton' (label : String := "Cancel") (style : Style := { fg := .ansi .brightBlack })
     : WidgetM (Reactive.Event Spider Unit) := do
-  let events ← getEventsW
   let widgetName ← registerComponentW "cancelButton" (isInput := true)
+
+  -- Get focused key events
+  let keyEvents ← useFocusedKeyEventsW widgetName
 
   let (clickEvent, fireClick) ← newTriggerEvent (t := Spider) (a := Unit)
 
+  -- Focus for rendering
   let focusedInput ← useFocusedInputW
 
-  let _unsub ← SpiderM.liftIO <| events.keyEvent.subscribe fun kd => do
-    let currentFocus ← focusedInput.sample
-    let isFocused := currentFocus == some widgetName
-
-    if isFocused then
-      let ke := kd.event
-      match ke.code with
-      | .enter | .space | .escape => fireClick ()
-      | _ => pure ()
+  let _unsub ← SpiderM.liftIO <| keyEvents.subscribe fun kd => do
+    let ke := kd.event
+    match ke.code with
+    | .enter | .space | .escape => fireClick ()
+    | _ => pure ()
 
   let focusDyn ← focusedInput.map' (fun currentFocus =>
     currentFocus == some widgetName

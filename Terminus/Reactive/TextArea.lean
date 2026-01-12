@@ -284,10 +284,14 @@ end TextAreaState
 -/
 def textArea' (name : String) (initial : String := "")
     (config : TextAreaConfig := {}) : WidgetM TextAreaResult := do
-  let events ← getEventsW
-
   -- Register as focusable input
   let widgetName ← registerComponentW "textArea" (isInput := true) (nameOverride := name)
+
+  -- Compute inputName before calling useFocusedKeyEventsW
+  let inputName := if name.isEmpty then widgetName else name
+
+  -- Get focused key events
+  let keyEvents ← useFocusedKeyEventsW inputName
 
   -- Create trigger events
   let (submitEvent, fireSubmit) ← newTriggerEvent (t := Spider) (a := String)
@@ -306,19 +310,14 @@ def textArea' (name : String) (initial : String := "")
   let contentDyn ← holdDyn initial contentEvent
   let cursorDyn ← holdDyn (0, 0) cursorEvent
 
-  -- Get focus state
+  -- Get focus state for rendering
   let focusedInput ← useFocusedInputW
 
   -- Calculate visible lines
   let visibleLines := config.maxVisibleLines.getD 20
 
   -- Subscribe to key events when focused
-  let _unsub ← SpiderM.liftIO <| events.keyEvent.subscribe fun kd => do
-    let currentFocus ← focusedInput.sample
-    let inputName := if name.isEmpty then widgetName else name
-    let isFocused := currentFocus == some inputName
-
-    if isFocused then
+  let _unsub ← SpiderM.liftIO <| keyEvents.subscribe fun kd => do
       let state ← stateRef.get
       let ke := kd.event
 
@@ -377,7 +376,6 @@ def textArea' (name : String) (initial : String := "")
         fireState newState
         fireCursor (newState.line, newState.column)
 
-  let inputName := if name.isEmpty then widgetName else name
   let node ← focusedInput.zipWith' (fun currentFocus state =>
     let isFocused := currentFocus == some inputName
 

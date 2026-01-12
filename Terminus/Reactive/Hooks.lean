@@ -195,4 +195,16 @@ def useFrameW : WidgetM (Reactive.Dynamic Spider Nat) :=
 def useElapsedMsW : WidgetM (Reactive.Dynamic Spider Nat) :=
   StateT.lift useElapsedMs
 
+/-- Get key events filtered to only fire when this widget is focused.
+    If globalKeys is true, returns all key events regardless of focus. -/
+def useFocusedKeyEventsW (widgetName : String) (globalKeys : Bool := false)
+    : WidgetM (Reactive.Event Spider KeyData) := do
+  let events ← getEventsW
+  if globalKeys then
+    pure events.keyEvent
+  else
+    let focusedInput ← useFocusedInputW
+    let isFocusedDyn ← Dynamic.map' focusedInput (· == some widgetName)
+    Event.gateM isFocusedDyn.current events.keyEvent
+
 end Terminus.Reactive

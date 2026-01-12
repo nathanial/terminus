@@ -259,8 +259,11 @@ def table' (name : String) (columns : Array TableColumn') (rows : Array TableRow
   -- Register as focusable component
   let widgetName ← registerComponentW name (isInput := true) (nameOverride := name)
 
-  -- Get focused state
-  let focusedInput ← useFocusedInputW
+  -- Compute inputName before calling useFocusedKeyEventsW
+  let inputName := if name.isEmpty then widgetName else name
+
+  -- Get focused key events
+  let keyEvents ← useFocusedKeyEventsW inputName config.globalKeys
 
   -- State
   let initialState := TableState.mk (if rows.isEmpty then none else some 0) 0
@@ -279,15 +282,7 @@ def table' (name : String) (columns : Array TableColumn') (rows : Array TableRow
   let rowDyn ← holdDyn (rows[0]?) rowEvent
 
   -- Subscribe to key events
-  let events ← getEventsW
-  let inputName := if name.isEmpty then widgetName else name
-
-  let _unsub ← SpiderM.liftIO <| events.keyEvent.subscribe fun kd => do
-    let currentFocus ← focusedInput.sample
-    let isFocused := currentFocus == some inputName
-
-    if !config.globalKeys && !isFocused then return
-
+  let _unsub ← SpiderM.liftIO <| keyEvents.subscribe fun kd => do
     let state ← stateRef.get
 
     match kd.event.code with
@@ -369,8 +364,11 @@ def dynTable' (name : String) (columns : Array TableColumn')
   -- Register as focusable component
   let widgetName ← registerComponentW name (isInput := true) (nameOverride := name)
 
-  -- Get focused state
-  let focusedInput ← useFocusedInputW
+  -- Compute inputName before calling useFocusedKeyEventsW
+  let inputName := if name.isEmpty then widgetName else name
+
+  -- Get focused key events
+  let keyEvents ← useFocusedKeyEventsW inputName config.globalKeys
 
   -- State
   let initialState := TableState.mk none 0
@@ -397,15 +395,7 @@ def dynTable' (name : String) (columns : Array TableColumn')
     fireRow (clamped.selectedIndex.bind fun i => newRows[i]?)
 
   -- Subscribe to key events
-  let events ← getEventsW
-  let inputName := if name.isEmpty then widgetName else name
-
-  let _unsub2 ← SpiderM.liftIO <| events.keyEvent.subscribe fun kd => do
-    let currentFocus ← focusedInput.sample
-    let isFocused := currentFocus == some inputName
-
-    if !config.globalKeys && !isFocused then return
-
+  let _unsub2 ← SpiderM.liftIO <| keyEvents.subscribe fun kd => do
     let currentRows ← rows.sample
     let state ← stateRef.get
 

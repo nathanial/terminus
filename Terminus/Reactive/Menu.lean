@@ -264,8 +264,8 @@ def menu' (name : String) (items : Array MenuItem') (config : MenuConfig := {})
   -- Register as focusable component
   let widgetName ← registerComponentW name (isInput := true) (nameOverride := name)
 
-  -- Get focused state
-  let focusedInput ← useFocusedInputW
+  -- Compute input name for focus handling
+  let inputName := if name.isEmpty then widgetName else name
 
   -- State
   let initialState := MenuState.mk 0 #[]
@@ -283,20 +283,15 @@ def menu' (name : String) (items : Array MenuItem') (config : MenuConfig := {})
   let pathDyn ← holdDyn #[0] pathEvent
   let labelDyn ← holdDyn (items[0]?.map (·.label)) labelEvent
 
-  -- Subscribe to key events
-  let events ← getEventsW
-  let inputName := if name.isEmpty then widgetName else name
+  -- Get key events filtered by focus
+  let keyEvents ← useFocusedKeyEventsW inputName config.globalKeys
 
   let updateState : MenuState → IO Unit := fun newState => do
     stateRef.set newState
     fireState newState
 
-  let _unsub ← SpiderM.liftIO <| events.keyEvent.subscribe fun kd => do
-    let currentFocus ← focusedInput.sample
-    let isFocused := currentFocus == some inputName
-
-    if !config.globalKeys && !isFocused then return
-
+  -- Subscribe to key events (already filtered by focus)
+  let _unsub ← SpiderM.liftIO <| keyEvents.subscribe fun kd => do
     let state ← stateRef.get
     let currentItems := getCurrentItems items state.openPath
 

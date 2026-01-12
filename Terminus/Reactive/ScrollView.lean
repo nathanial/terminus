@@ -212,8 +212,10 @@ def scrollView' (config : ScrollViewConfig := {})
   -- Register for focus
   let widgetName ← registerComponentW "scrollView" (isInput := true)
     (nameOverride := config.focusName)
-  let focusedInput ← useFocusedInputW
   let scrollName := if config.focusName.isEmpty then widgetName else config.focusName
+
+  -- Get focused key events
+  let keyEvents ← useFocusedKeyEventsW scrollName config.globalKeys
 
   -- Create scroll state
   let initialState : ScrollState := {}
@@ -250,12 +252,7 @@ def scrollView' (config : ScrollViewConfig := {})
   }
 
   -- Subscribe to key events for scrolling
-  let _unsub ← SpiderM.liftIO <| events.keyEvent.subscribe fun kd => do
-    let currentFocus ← focusedInput.sample
-    let isFocused := config.globalKeys || currentFocus == some scrollName
-
-    if !isFocused then pure ()
-    else
+  let _unsub ← SpiderM.liftIO <| keyEvents.subscribe fun kd => do
       let state ← stateRef.get
       let ke := kd.event
 
