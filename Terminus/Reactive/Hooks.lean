@@ -34,6 +34,7 @@ def useResize : ReactiveTermM (Reactive.Event Spider ResizeData) := do
 /-- Subscribe to tick events (fired each frame). -/
 def useTick : ReactiveTermM (Reactive.Event Spider TickData) := do
   let events ← getEvents
+  SpiderM.liftIO <| events.tickRequested.set true
   pure events.tickEvent
 
 /-- Get the current frame number as a dynamic. -/

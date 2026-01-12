@@ -157,22 +157,19 @@ private def alignOffset (textWidth areaWidth : Nat) (align : TextAlignment) : Na
 -/
 def paragraph' (text : String) (config : ParagraphConfig := {}) : WidgetM Unit := do
   let lines := text.splitOn "\n"
+  let maxWidth := config.maxWidth.getD 80  -- Default max width
 
-  emit do
-    let maxWidth := config.maxWidth.getD 80  -- Default max width
+  let processedLines : Array String := match config.wrapMode with
+    | .noWrap => lines.toArray
+    | .wrap => lines.foldl (fun acc line => acc ++ wordWrap line maxWidth) #[]
+    | .charWrap => lines.foldl (fun acc line => acc ++ charWrap line maxWidth) #[]
 
-    -- Process lines based on wrap mode
-    let processedLines : Array String := match config.wrapMode with
-      | .noWrap => lines.toArray
-      | .wrap => lines.foldl (fun acc line => acc ++ wordWrap line maxWidth) #[]
-      | .charWrap => lines.foldl (fun acc line => acc ++ charWrap line maxWidth) #[]
+  let nodes := processedLines.map fun line =>
+    let offset := alignOffset line.length maxWidth config.alignment
+    let padding := String.ofList (List.replicate offset ' ')
+    RNode.text (padding ++ line) config.style
 
-    let nodes := processedLines.map fun line =>
-      let offset := alignOffset line.length maxWidth config.alignment
-      let padding := String.ofList (List.replicate offset ' ')
-      RNode.text (padding ++ line) config.style
-
-    pure (RNode.column 0 {} nodes)
+  emitStatic (RNode.column 0 {} nodes)
 
 /-- Create a paragraph widget from styled lines.
 
@@ -186,17 +183,16 @@ def paragraph' (text : String) (config : ParagraphConfig := {}) : WidgetM Unit :
     ```
 -/
 def styledParagraph' (lines : Array TextLine) (config : ParagraphConfig := {}) : WidgetM Unit := do
-  emit do
-    let maxWidth := config.maxWidth.getD 80
+  let maxWidth := config.maxWidth.getD 80
 
-    let nodes := lines.map fun line =>
-      let offset := alignOffset line.width maxWidth config.alignment
-      let padding := if offset > 0 then #[RNode.text (String.ofList (List.replicate offset ' ')) {}] else #[]
-      let spans := line.spans.map fun span =>
-        RNode.text span.content (Style.merge config.style span.style)
-      RNode.row 0 {} (padding ++ spans)
+  let nodes := lines.map fun line =>
+    let offset := alignOffset line.width maxWidth config.alignment
+    let padding := if offset > 0 then #[RNode.text (String.ofList (List.replicate offset ' ')) {}] else #[]
+    let spans := line.spans.map fun span =>
+      RNode.text span.content (Style.merge config.style span.style)
+    RNode.row 0 {} (padding ++ spans)
 
-    pure (RNode.column 0 {} nodes)
+  emitStatic (RNode.column 0 {} nodes)
 
 /-- Create a dynamic paragraph widget.
 
@@ -208,8 +204,7 @@ def styledParagraph' (lines : Array TextLine) (config : ParagraphConfig := {}) :
 -/
 def dynParagraph' (text : Reactive.Dynamic Spider String) (config : ParagraphConfig := {})
     : WidgetM Unit := do
-  emitDynamic do
-    let content ← text.sample
+  let node ← text.map' fun content =>
     let lines := content.splitOn "\n"
     let maxWidth := config.maxWidth.getD 80
 
@@ -223,7 +218,8 @@ def dynParagraph' (text : Reactive.Dynamic Spider String) (config : ParagraphCon
       let padding := String.ofList (List.replicate offset ' ')
       RNode.text (padding ++ line) config.style
 
-    pure (RNode.column 0 {} nodes)
+    RNode.column 0 {} nodes
+  emit node
 
 /-! ## Convenience Functions -/
 

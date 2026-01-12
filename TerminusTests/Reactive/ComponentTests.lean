@@ -27,7 +27,7 @@ test "textInput' renders with placeholder when empty" := do
       textInput' "test" "" { placeholder := "Enter text...", width := 15 }
     ).run events
 
-    let node ← SpiderM.liftIO render
+    let node ← SpiderM.liftIO render.sample
     -- Should contain placeholder text when empty and not focused
     SpiderM.liftIO (ensure (rnodeHasText node "Enter text...") "expected placeholder")
 
@@ -109,7 +109,7 @@ test "selectableList' renders items with selection" := do
       selectableList' items 0 {}
     ).run events
 
-    let node ← SpiderM.liftIO render
+    let node ← SpiderM.liftIO render.sample
     -- Should have all items
     SpiderM.liftIO (ensure (rnodeHasText node "> Apple") "expected selected Apple")
     SpiderM.liftIO (ensure (rnodeHasText node "  Banana") "expected Banana")
@@ -184,7 +184,7 @@ test "selectableList' renders scroll indicators" := do
       selectableList' items 3 { maxVisible := some 2, showScrollIndicators := true }
     ).run events
 
-    let node ← SpiderM.liftIO render
+    let node ← SpiderM.liftIO render.sample
     -- Should have scroll indicators since list is truncated
     SpiderM.liftIO (ensure (rnodeHasText node "  ...") "expected scroll indicator")
 
@@ -196,7 +196,7 @@ test "numberedList' renders with numbers" := do
       numberedList' items 0 {}
     ).run events
 
-    let node ← SpiderM.liftIO render
+    let node ← SpiderM.liftIO render.sample
     SpiderM.liftIO (ensure (rnodeHasText node "> 1. Red") "expected numbered item 1")
     SpiderM.liftIO (ensure (rnodeHasText node "  2. Green") "expected numbered item 2")
     SpiderM.liftIO (ensure (rnodeHasText node "  3. Blue") "expected numbered item 3")

@@ -23,18 +23,20 @@ def asyncLoadSection (theme : Theme) : WidgetM Unit := do
 
     spacer' 1 1
 
-    emitDynamic do
-      let loading ← asyncResult.loading.sample
+    let loadingNode ← asyncResult.loading.map' (fun loading =>
       if loading then
-        pure (RNode.text "Loading..." { fg := .ansi .yellow, modifier := { bold := true } })
+        RNode.text "Loading..." { fg := .ansi .yellow, modifier := { bold := true } }
       else
-        pure RNode.empty
+        RNode.empty
+    )
+    emit loadingNode
 
-    emitDynamic do
-      let result ← asyncResult.result.sample
+    let resultNode ← asyncResult.result.map' (fun result =>
       match result with
-      | none => pure (RNode.text "No data yet" theme.captionStyle)
-      | some data => pure (RNode.text s!"Result: {data}" { fg := .ansi .green })
+      | none => RNode.text "No data yet" theme.captionStyle
+      | some data => RNode.text s!"Result: {data}" { fg := .ansi .green }
+    )
+    emit resultNode
 
 def streamingSection (theme : Theme) : WidgetM Unit := do
   titledBlock' "Streaming Demo" .rounded theme none do
@@ -76,21 +78,23 @@ def streamingSection (theme : Theme) : WidgetM Unit := do
 
     spacer' 1 1
 
-    emitDynamic do
-      let streaming ← streamingDyn.sample
+    let streamingNode ← streamingDyn.map' (fun streaming =>
       if streaming then
-        pure (RNode.text "Streaming..." { fg := .ansi .cyan, modifier := { bold := true } })
+        RNode.text "Streaming..." { fg := .ansi .cyan, modifier := { bold := true } }
       else
-        pure (RNode.text "Idle" theme.captionStyle)
+        RNode.text "Idle" theme.captionStyle
+    )
+    emit streamingNode
 
-    emitDynamic do
-      let chunks ← chunksDyn.sample
+    let chunksNode ← chunksDyn.map' (fun chunks =>
       if chunks.isEmpty then
-        pure (RNode.text "(no chunks)" theme.captionStyle)
+        RNode.text "(no chunks)" theme.captionStyle
       else
         let chunkNodes := chunks.map fun chunk =>
           RNode.text s!"  {chunk}" { fg := .ansi .green }
-        pure (RNode.column 0 {} chunkNodes)
+        RNode.column 0 {} chunkNodes
+    )
+    emit chunksNode
 
 def asyncContent (theme : Theme) : WidgetM Unit := do
   column' (gap := 1) {} do

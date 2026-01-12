@@ -162,12 +162,11 @@ def optionSelector' (name : String) (options : Array String) (initial : Nat := 0
         fireChange newIdx
 
   -- Render
-  emit do
-    let selected ← selectedRef.get
-    let currentFocus ← focusedInput.sample
-    let inputName := if name.isEmpty then widgetName else name
-    let isFocused := currentFocus == some inputName
-
+  let inputName := if name.isEmpty then widgetName else name
+  let focusDyn ← focusedInput.map' (fun currentFocus =>
+    currentFocus == some inputName
+  )
+  let node ← focusDyn.zipWith' (fun isFocused selected =>
     -- Build option nodes functionally
     let optionNodes := options.foldl (init := (#[], 0)) fun (acc, i) opt =>
       let isSelected := i == selected
@@ -189,9 +188,11 @@ def optionSelector' (name : String) (options : Array String) (initial : Nat := 0
     let optionNodes := optionNodes.1
 
     if config.horizontal then
-      pure (RNode.row 0 {} optionNodes)
+      RNode.row 0 {} optionNodes
     else
-      pure (RNode.column 0 {} optionNodes)
+      RNode.column 0 {} optionNodes
+  ) indexDyn
+  emit node
 
   pure {
     selectedIndex := indexDyn
@@ -203,7 +204,7 @@ def optionSelector' (name : String) (options : Array String) (initial : Nat := 0
 def labeledOptionSelector' (label : String) (name : String) (options : Array String)
     (initial : Nat := 0) (config : OptionSelectorConfig := {})
     (theme : Theme := .dark) : WidgetM OptionSelectorResult := do
-  emit (pure (RNode.text label theme.bodyStyle))
+  emitStatic (RNode.text label theme.bodyStyle)
   optionSelector' name options initial config
 
 /-! ## Checkbox -/
@@ -271,16 +272,16 @@ def checkbox' (name : String) (label : String) (initial : Bool := false)
       | _ => pure ()
 
   -- Render
-  emit do
-    let checked ← checkedRef.get
-    let currentFocus ← focusedInput.sample
-    let inputName := if name.isEmpty then widgetName else name
-    let isFocused := currentFocus == some inputName
-
+  let inputName := if name.isEmpty then widgetName else name
+  let focusDyn ← focusedInput.map' (fun currentFocus =>
+    currentFocus == some inputName
+  )
+  let node ← focusDyn.zipWith' (fun isFocused checked =>
     let icon := if checked then config.checkedIcon else config.uncheckedIcon
     let style := if isFocused then config.focusedStyle else config.labelStyle
-
-    pure (RNode.text (icon ++ " " ++ label) style)
+    RNode.text (icon ++ " " ++ label) style
+  ) checkedDyn
+  emit node
 
   pure {
     checked := checkedDyn
@@ -386,11 +387,12 @@ def form' (fields : Array FormFieldConfig) (config : FormConfig := {})
         fireValid isValid
 
       -- Show error for this field
-      emitDynamic do
-        let errors ← errorsRef.get
+      let node ← errorsDyn.map' (fun errors =>
         match errors.find? fun (n, _) => n == field.name with
-        | some (_, err) => pure (RNode.text err config.errorStyle)
-        | none => pure RNode.empty
+        | some (_, err) => RNode.text err config.errorStyle
+        | none => RNode.empty
+      )
+      emit node
 
   -- Handle form-level keys (Escape to cancel)
   let _unsub ← SpiderM.liftIO <| events.keyEvent.subscribe fun kd => do
@@ -449,11 +451,10 @@ def submitButton' (label : String := "Submit") (enabled : Reactive.Dynamic Spide
       | .enter | .space => fireClick ()
       | _ => pure ()
 
-  emit do
-    let isEnabled ← enabled.sample
-    let currentFocus ← focusedInput.sample
-    let isFocused := currentFocus == some widgetName
-
+  let focusDyn ← focusedInput.map' (fun currentFocus =>
+    currentFocus == some widgetName
+  )
+  let node ← enabled.zipWith' (fun isEnabled isFocused =>
     let displayStyle := if !isEnabled then
       disabledStyle
     else if isFocused then
@@ -462,7 +463,9 @@ def submitButton' (label : String := "Submit") (enabled : Reactive.Dynamic Spide
       style
 
     let text := if isFocused then s!"[ {label} ]" else s!"  {label}  "
-    pure (RNode.text text displayStyle)
+    RNode.text text displayStyle
+  ) focusDyn
+  emit node
 
   pure clickEvent
 
@@ -486,17 +489,19 @@ def cancelButton' (label : String := "Cancel") (style : Style := { fg := .ansi .
       | .enter | .space | .escape => fireClick ()
       | _ => pure ()
 
-  emit do
-    let currentFocus ← focusedInput.sample
-    let isFocused := currentFocus == some widgetName
-
+  let focusDyn ← focusedInput.map' (fun currentFocus =>
+    currentFocus == some widgetName
+  )
+  let node ← focusDyn.map' (fun isFocused =>
     let displayStyle := if isFocused then
       { style with modifier := { bold := true } }
     else
       style
 
     let text := if isFocused then s!"[ {label} ]" else s!"  {label}  "
-    pure (RNode.text text displayStyle)
+    RNode.text text displayStyle
+  )
+  emit node
 
   pure clickEvent
 

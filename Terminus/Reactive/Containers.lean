@@ -17,9 +17,10 @@ in container widgets. They enable declarative nesting like Reflex-DOM.
 def column' (gap : Nat := 0) (style : RStyle := {})
     (children : WidgetM α) : WidgetM α := do
   let (result, childRenders) ← runWidgetChildren children
-  emit do
-    let nodes ← childRenders.mapM id
-    pure (RNode.column gap style nodes)
+  let childrenList ← Reactive.Dynamic.sequence childRenders.toList
+  let node ← childrenList.map' fun nodes =>
+    RNode.column gap style nodes.toArray
+  emit node
   pure result
 
 /-- Create a row container that collects children's renders.
@@ -27,9 +28,10 @@ def column' (gap : Nat := 0) (style : RStyle := {})
 def row' (gap : Nat := 0) (style : RStyle := {})
     (children : WidgetM α) : WidgetM α := do
   let (result, childRenders) ← runWidgetChildren children
-  emit do
-    let nodes ← childRenders.mapM id
-    pure (RNode.row gap style nodes)
+  let childrenList ← Reactive.Dynamic.sequence childRenders.toList
+  let node ← childrenList.map' fun nodes =>
+    RNode.row gap style nodes.toArray
+  emit node
   pure result
 
 /-! ## Docked Containers -/
@@ -40,19 +42,20 @@ def dockBottom' (footerHeight : Nat := 1)
   let (contentResult, contentRenders) ← runWidgetChildren content
   let (footerResult, footerRenders) ← runWidgetChildren footer
 
-  let mkNode (children : Array ComponentRender) : ComponentRender := do
-    if children.isEmpty then
-      pure RNode.empty
-    else if h : children.size = 1 then
-      children[0]
-    else
-      let nodes ← children.mapM id
-      pure (RNode.column 0 {} nodes)
+  let mkNode (children : Array ComponentRender) : WidgetM ComponentRender := do
+    let list ← Reactive.Dynamic.sequence children.toList
+    list.map' fun kids =>
+      if kids.isEmpty then
+        RNode.empty
+      else if h : kids.length = 1 then
+        kids.head!
+      else
+        RNode.column 0 {} kids.toArray
 
-  emit do
-    let contentNode ← mkNode contentRenders
-    let footerNode ← mkNode footerRenders
-    pure (RNode.dockBottom footerHeight contentNode footerNode)
+  let contentNode ← mkNode contentRenders
+  let footerNode ← mkNode footerRenders
+  let node ← contentNode.zipWith' (fun c f => RNode.dockBottom footerHeight c f) footerNode
+  emit node
 
   pure (contentResult, footerResult)
 
@@ -65,20 +68,22 @@ Blocks add borders and optional titles around content.
 def block' (borderType : BorderType := .rounded) (theme : Theme)
     (fillStyle : Option Style := none) (children : WidgetM α) : WidgetM α := do
   let (result, childRenders) ← runWidgetChildren children
-  emit do
-    let nodes ← childRenders.mapM id
-    let inner := RNode.column 0 {} nodes
-    pure (RNode.block none borderType (theme.borderStyle) fillStyle inner)
+  let childrenList ← Reactive.Dynamic.sequence childRenders.toList
+  let node ← childrenList.map' fun nodes =>
+    let inner := RNode.column 0 {} nodes.toArray
+    RNode.block none borderType (theme.borderStyle) fillStyle inner
+  emit node
   pure result
 
 /-- Create a block container with a title and border. -/
 def titledBlock' (title : String) (borderType : BorderType := .rounded) (theme : Theme)
     (fillStyle : Option Style := none) (children : WidgetM α) : WidgetM α := do
   let (result, childRenders) ← runWidgetChildren children
-  emit do
-    let nodes ← childRenders.mapM id
-    let inner := RNode.column 0 {} nodes
-    pure (RNode.block (some title) borderType (theme.borderStyle) fillStyle inner)
+  let childrenList ← Reactive.Dynamic.sequence childRenders.toList
+  let node ← childrenList.map' fun nodes =>
+    let inner := RNode.column 0 {} nodes.toArray
+    RNode.block (some title) borderType (theme.borderStyle) fillStyle inner
+  emit node
   pure result
 
 /-- Create a single-line bordered block. -/
@@ -106,10 +111,11 @@ Panels are styled blocks with padding and themed borders.
 def titledPanel' (title : String) (borderType : BorderType := .rounded) (theme : Theme)
     (fillStyle : Option Style := none) (children : WidgetM α) : WidgetM α := do
   let (result, childRenders) ← runWidgetChildren children
-  emit do
-    let nodes ← childRenders.mapM id
-    let inner := RNode.column 1 {} nodes  -- 1 cell gap between children
-    pure (RNode.block (some title) borderType (theme.borderStyle) fillStyle inner)
+  let childrenList ← Reactive.Dynamic.sequence childRenders.toList
+  let node ← childrenList.map' fun nodes =>
+    let inner := RNode.column 1 {} nodes.toArray  -- 1 cell gap between children
+    RNode.block (some title) borderType (theme.borderStyle) fillStyle inner
+  emit node
   pure result
 
 /-- Create an outlined panel (simple border). -/

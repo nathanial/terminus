@@ -5,6 +5,7 @@
 import Terminus.Reactive.Monad
 import Terminus.Reactive.Render
 import Terminus.Reactive.Hooks
+import Std.Sync.Channel
 import Reactive
 import Chronicle
 
@@ -23,7 +24,7 @@ The result of setting up a reactive application.
 
 /-- Application state returned from app setup. -/
 structure ReactiveAppState where
-  /-- Render function that samples all component state and returns the complete UI. -/
+  /-- Root retained UI tree as a Dynamic. -/
   render : ComponentRender
 
 /-! ## Application Runner -/
@@ -42,13 +43,18 @@ structure AppConfig where
 
 /-- Dependencies for running the reactive app loop.
     These are parameterized to enable deterministic testing. -/
+inductive LoopSignal where
+  | input (ev : Terminus.Event)
+  | render
+  | tick
+  | shutdown
+  deriving Repr, BEq, Inhabited
+
 structure LoopDeps (m : Type → Type) where
-  /-- Source of external terminal events (defaults to Events.poll). -/
-  eventSource : m Terminus.Event
+  /-- Wait for the next loop signal (blocking). -/
+  nextSignal : m LoopSignal
   /-- Current monotonic time in milliseconds. -/
   nowMs : m Nat
-  /-- Sleep for the given milliseconds. -/
-  sleepMs : Nat → m Unit
   /-- Optional debug logger. -/
   log : String → m Unit
   /-- Optional frame limit for tests. -/
@@ -59,10 +65,9 @@ structure LoopDeps (m : Type → Type) where
 namespace LoopDeps
 
 /-- Default IO dependencies using real terminal polling and sleep. -/
-def io (log : String → IO Unit := fun _ => pure ()) : LoopDeps IO := {
-  eventSource := Events.poll
+def io (nextSignal : IO LoopSignal) (log : String → IO Unit := fun _ => pure ()) : LoopDeps IO := {
+  nextSignal := nextSignal
   nowMs := IO.monoMsNow
-  sleepMs := fun ms => IO.sleep ms.toUInt32
   log := log
   onFrame := fun _ _ => pure ()
 }
@@ -90,6 +95,39 @@ partial def runReactiveLoop [Monad m] [TerminalEffect m] [MonadLift IO m]
     if kd.event.isCtrlC || kd.event.isCtrlQ then
       quitRef.set true
 
+  let renderFrame : m Unit := do
+    let rootNode ← liftM (m := IO) render.sample
+    let (width, height) ← getTerminalSize
+    let renderResult := Terminus.Reactive.render rootNode width height
+    let buffer := renderResult.buffer
+    let commands := renderResult.commands.toList
+
+    let frame ← liftM (m := IO) frameRef.get
+    if frame == 0 then
+      deps.log s!"First render: size={width}x{height}, node={repr rootNode}"
+
+    let term ← liftM (m := IO) termRef.get
+    let term := term.setBuffer buffer
+
+    let changes := Buffer.diff term.previousBuffer term.currentBuffer
+    if frame % 60 == 0 then
+      deps.log s!"Buffer diff found {changes.length} changes"
+      let mut row0 := ""
+      for x in [0:20] do
+        row0 := row0 ++ (term.currentBuffer.get x 0).char.toString
+      deps.log s!"Row 0: '{row0}'"
+      let mut row5 := ""
+      for x in [0:20] do
+        row5 := row5 ++ (term.currentBuffer.get x 5).char.toString
+      deps.log s!"Row 5: '{row5}'"
+
+    let term ← term.flush commands
+    liftM (m := IO) <| termRef.set term
+    deps.onFrame frame buffer
+
+  -- Initial render
+  renderFrame
+
   -- Main loop (runs in m, fires events into the live reactive network)
   let rec loop : m Unit := do
     let quit ← liftM (m := IO) quitRef.get
@@ -100,76 +138,38 @@ partial def runReactiveLoop [Monad m] [TerminalEffect m] [MonadLift IO m]
     if quit || reachedMax then
       pure ()
     else
-      -- Poll for terminal events (non-blocking)
-      let ev ← deps.eventSource
+      let signal ← deps.nextSignal
+      match signal with
+      | .shutdown => pure ()
+      | .input ev =>
+        match ev with
+        | .key ke =>
+          if ke.isCtrlC || ke.isCtrlQ then
+            deps.log s!"Quit signal received: {repr ke.code}"
+          deps.log s!"Key event: {repr ke.code}"
+          let focusedName ← liftM (m := IO) events.registry.focusedInput.sample
+          liftM (m := IO) <| inputs.fireKey { event := ke, focusedWidget := focusedName }
+          deps.log "Key event fired"
+        | .mouse me =>
+          deps.log s!"Mouse event: button={repr me.button} x={me.x} y={me.y}"
+          liftM (m := IO) <| inputs.fireMouse { event := me }
+        | .resize w h =>
+          deps.log s!"Resize event: {w}x{h}"
+          liftM (m := IO) <| inputs.fireResize { width := w, height := h }
+          let newTerm ← Terminal.new
+          liftM (m := IO) <| termRef.set newTerm
+          renderFrame
+        | .none => pure ()
+      | .tick =>
+        let now ← deps.nowMs
+        let elapsed := now - startTime
+        liftM (m := IO) <| inputs.fireTick { frame := frame, elapsedMs := elapsed }
+        liftM (m := IO) <| frameRef.set (frame + 1)
+        if frame % 60 == 0 then
+          deps.log s!"Frame {frame}, elapsed {elapsed}ms"
+      | .render =>
+        renderFrame
 
-      -- Fire events into reactive network
-      match ev with
-      | .key ke =>
-        if ke.isCtrlC || ke.isCtrlQ then
-          deps.log s!"Quit signal received: {repr ke.code}"
-        deps.log s!"Key event: {repr ke.code}"
-        let focusedName ← liftM (m := IO) events.registry.focusedInput.sample
-        liftM (m := IO) <| inputs.fireKey { event := ke, focusedWidget := focusedName }
-        deps.log "Key event fired"
-      | .mouse me =>
-        deps.log s!"Mouse event: button={repr me.button} x={me.x} y={me.y}"
-        liftM (m := IO) <| inputs.fireMouse { event := me }
-      | .resize w h =>
-        deps.log s!"Resize event: {w}x{h}"
-        liftM (m := IO) <| inputs.fireResize { width := w, height := h }
-        -- Update terminal size
-        let newTerm ← Terminal.new
-        liftM (m := IO) <| termRef.set newTerm
-      | .none => pure ()
-
-      -- Fire tick event
-      let now ← deps.nowMs
-      let elapsed := now - startTime
-      liftM (m := IO) <| inputs.fireTick { frame := frame, elapsedMs := elapsed }
-      liftM (m := IO) <| frameRef.set (frame + 1)
-
-      -- Log every 60 frames (roughly once per second)
-      if frame % 60 == 0 then
-        deps.log s!"Frame {frame}, elapsed {elapsed}ms"
-
-      -- Sample and render
-      let rootNode ← liftM (m := IO) render
-      let (width, height) ← getTerminalSize
-      let renderResult := Terminus.Reactive.render rootNode width height
-      let buffer := renderResult.buffer
-      let commands := renderResult.commands.toList
-
-      -- Log first frame's render output
-      if frame == 0 then
-        deps.log s!"First render: size={width}x{height}, node={repr rootNode}"
-
-      -- Render to terminal (use flush for differential updates like traditional Terminus)
-      let term ← liftM (m := IO) termRef.get
-      let term := term.setBuffer buffer
-
-      -- Debug: check how many cells changed and compare specific cells
-      let changes := Buffer.diff term.previousBuffer term.currentBuffer
-      if frame % 60 == 0 then
-        deps.log s!"Buffer diff found {changes.length} changes"
-        -- Log first 20 chars of row 0 (title row)
-        let mut row0 := ""
-        for x in [0:20] do
-          row0 := row0 ++ (term.currentBuffer.get x 0).char.toString
-        deps.log s!"Row 0: '{row0}'"
-        -- Log first 20 chars of row 5 (should be progress bar area)
-        let mut row5 := ""
-        for x in [0:20] do
-          row5 := row5 ++ (term.currentBuffer.get x 5).char.toString
-        deps.log s!"Row 5: '{row5}'"
-
-      let term ← term.flush commands
-      liftM (m := IO) <| termRef.set term
-
-      deps.onFrame frame buffer
-
-      -- Frame delay
-      deps.sleepMs config.frameMs
       loop
 
   loop
@@ -238,9 +238,35 @@ def runReactiveApp (setup : ReactiveTermM ReactiveAppState) (config : AppConfig 
     let termRef ← IO.mkRef (← Terminal.new)
     log "Terminal created"
 
+    let signalChan ← Std.Channel.new
+    let signalSync := Std.Channel.sync signalChan
+
+    -- Render trigger: wake loop when the root dynamic updates
+    let renderUnsub ← appState.render.updated.subscribe fun _ =>
+      Std.Channel.Sync.send signalSync .render
+    spiderEnv.currentScope.register renderUnsub
+
+    -- Input worker (blocking)
+    let _inputTask ← IO.asTask (prio := .dedicated) do
+      while true do
+        let ev ← Events.read
+        Std.Channel.Sync.send signalSync (.input ev)
+
+    -- Tick worker (only if requested by hooks)
+    let tickEnabled ← events.tickRequested.get
+    if tickEnabled then
+      let _tickTask ← IO.asTask (prio := .default) do
+        while true do
+          IO.sleep config.frameMs.toUInt32
+          Std.Channel.Sync.send signalSync .tick
+      pure ()
+
     log "Entering main loop"
 
-    let deps := LoopDeps.io log
+    let nextSignal : IO LoopSignal :=
+      Std.Channel.Sync.recv signalSync
+
+    let deps := LoopDeps.io nextSignal log
     runReactiveLoop config events inputs appState.render termRef deps
 
     log "Main loop exited"
@@ -275,7 +301,7 @@ def renderOnce (widget : WidgetM Unit) (width height : Nat) : IO Buffer := do
   Reactive.Host.runSpider do
     let (events, _) ← createInputs
     let (_, render) ← (runWidget widget).run events
-    let node ← SpiderM.liftIO render
+    let node ← SpiderM.liftIO render.sample
     pure (Terminus.Reactive.render node width height).buffer
 
 end Terminus.Reactive

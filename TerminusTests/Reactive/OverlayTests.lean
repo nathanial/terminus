@@ -31,7 +31,7 @@ test "overlayWhen' renders nothing when not visible" := do
         text' "Overlay content" {}
     ).run events
 
-    let node ← SpiderM.liftIO render
+    let node ← SpiderM.liftIO render.sample
     -- Should be empty when not visible
     match node with
     | .empty => pure ()
@@ -51,7 +51,7 @@ test "overlayWhen' renders content when visible" := do
     -- Make visible
     SpiderM.liftIO (trigger true)
 
-    let node ← SpiderM.liftIO render
+    let node ← SpiderM.liftIO render.sample
     SpiderM.liftIO (ensure (rnodeHasText node "Overlay content") "expected overlay content")
 
 test "modal' renders with title and border" := do
@@ -65,7 +65,7 @@ test "modal' renders with title and border" := do
       pure ()
     ).run events
 
-    let node ← SpiderM.liftIO render
+    let node ← SpiderM.liftIO render.sample
     -- Modal wraps in a block with title
     match node with
     | .block title _ _ _ child =>
@@ -84,7 +84,7 @@ test "modal' renders border characters in buffer with white border" := do
       pure ()
     ).run events
 
-    let node ← SpiderM.liftIO render
+    let node ← SpiderM.liftIO render.sample
     -- Render to buffer and check for border chars
     let buf := Terminus.Reactive.renderOnly node 40 10
     -- Block should be at 0,0 with rounded corners
@@ -110,7 +110,7 @@ test "overlayWhen' with modal renders centered border in buffer" := do
         pure ()
     ).run events
 
-    let node ← SpiderM.liftIO render
+    let node ← SpiderM.liftIO render.sample
     -- Render to a 40x10 buffer
     let buf := Terminus.Reactive.renderOnly node 40 10
 
@@ -148,7 +148,7 @@ test "overlay inside nested containers renders border correctly" := do
             pure ()
     ).run events
 
-    let node ← SpiderM.liftIO render
+    let node ← SpiderM.liftIO render.sample
     let buf := Terminus.Reactive.renderOnly node 60 20
 
     -- Find the modal's border corner (should be '╭' for rounded)
@@ -187,7 +187,7 @@ test "modal renders with white border in demo-like structure" := do
             text' "Press Esc to close." theme.captionStyle
     ).run events
 
-    let node ← SpiderM.liftIO render
+    let node ← SpiderM.liftIO render.sample
     let buf := Terminus.Reactive.renderOnly node 80 24
 
     -- Find all border corners
@@ -224,7 +224,7 @@ test "modal visibility updates via event trigger (like demo)" := do
   env.postBuildTrigger ()
 
   -- First render - modal should NOT be visible (starts false)
-  let node1 ← render
+  let node1 ← render.sample
   let buf1 := Terminus.Reactive.renderOnly node1 40 10
   let mut corners1 := 0
   for y in [:10] do
@@ -236,7 +236,7 @@ test "modal visibility updates via event trigger (like demo)" := do
   fireVisible true
 
   -- Second render - modal SHOULD be visible now
-  let node2 ← render
+  let node2 ← render.sample
   let buf2 := Terminus.Reactive.renderOnly node2 40 10
   let mut corners2 := 0
   for y in [:10] do
@@ -356,7 +356,7 @@ test "modal visibility via performEvent_ chain (exact demo pattern)" := do
   env.postBuildTrigger ()
 
   -- First render - modal should NOT be visible (starts false)
-  let node1 ← render
+  let node1 ← render.sample
   let buf1 := Terminus.Reactive.renderOnly node1 40 10
   let mut corners1 := 0
   for y in [:10] do
@@ -368,7 +368,7 @@ test "modal visibility via performEvent_ chain (exact demo pattern)" := do
   inputs.fireKey { event := KeyEvent.char 'O', focusedWidget := none }
 
   -- Second render - modal SHOULD be visible now
-  let node2 ← render
+  let node2 ← render.sample
   let buf2 := Terminus.Reactive.renderOnly node2 40 10
   let mut corners2 := 0
   for y in [:10] do
@@ -422,7 +422,7 @@ test "modal visibility in nested structure (like actual demo)" := do
   env.postBuildTrigger ()
 
   -- First render - modal should NOT be visible (starts false)
-  let node1 ← render
+  let node1 ← render.sample
   let buf1 := Terminus.Reactive.renderOnly node1 80 24
   let mut modalCorners1 := 0
   for y in [:24] do
@@ -438,7 +438,7 @@ test "modal visibility in nested structure (like actual demo)" := do
   inputs.fireKey { event := KeyEvent.char 'O', focusedWidget := none }
 
   -- Second render - modal SHOULD be visible now
-  let node2 ← render
+  let node2 ← render.sample
   let buf2 := Terminus.Reactive.renderOnly node2 80 24
   let mut modalCorners2 := 0
   for y in [:24] do
@@ -506,7 +506,7 @@ test "modal with multiple overlays (exactly like demo with all dialogs)" := do
   env.postBuildTrigger ()
 
   -- First render - no modal corners
-  let node1 ← render
+  let node1 ← render.sample
   let buf1 := Terminus.Reactive.renderOnly node1 80 24
   let mut modalCorners1 := 0
   for y in [:24] do
@@ -519,7 +519,7 @@ test "modal with multiple overlays (exactly like demo with all dialogs)" := do
   inputs.fireKey { event := KeyEvent.char 'O', focusedWidget := none }
 
   -- Second render - modal should be visible
-  let node2 ← render
+  let node2 ← render.sample
   let buf2 := Terminus.Reactive.renderOnly node2 80 24
   let mut modalCorners2 := 0
   for y in [:24] do
@@ -571,7 +571,7 @@ test "modal visibility via dynWidget (like actual demo tab system)" := do
   env.postBuildTrigger ()
 
   -- First render - no modal corners
-  let node1 ← render
+  let node1 ← render.sample
   let buf1 := Terminus.Reactive.renderOnly node1 80 24
   let mut modalCorners1 := 0
   for y in [:24] do
@@ -584,7 +584,7 @@ test "modal visibility via dynWidget (like actual demo tab system)" := do
   inputs.fireKey { event := KeyEvent.char 'O', focusedWidget := none }
 
   -- Second render - modal should be visible
-  let node2 ← render
+  let node2 ← render.sample
   let buf2 := Terminus.Reactive.renderOnly node2 80 24
   let mut modalCorners2 := 0
   for y in [:24] do

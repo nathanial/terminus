@@ -123,7 +123,7 @@ test "useAnimationW works in WidgetM" := do
     let (animResult, _render) ← (runWidget do
       let (trigger, _) ← Reactive.newTriggerEvent (t := Spider) (a := Unit)
       let anim ← useAnimationW { durationMs := 100 } trigger
-      emit (pure RNode.empty)
+      emitStatic RNode.empty
       pure anim
     ).run events
 
@@ -135,7 +135,7 @@ test "usePulseW works in WidgetM" := do
     let (events, _) ← createInputs
     let (pulseDyn, _render) ← (runWidget do
       let p ← usePulseW 500
-      emit (pure RNode.empty)
+      emitStatic RNode.empty
       pure p
     ).run events
 
@@ -147,7 +147,7 @@ test "useCycleW works in WidgetM" := do
     let (events, _) ← createInputs
     let (cycleDyn, _render) ← (runWidget do
       let c ← useCycleW 1000
-      emit (pure RNode.empty)
+      emitStatic RNode.empty
       pure c
     ).run events
 
@@ -160,7 +160,7 @@ test "useAnimationPhasesW works in WidgetM" := do
     let (phaseDyn, _render) ← (runWidget do
       let (trigger, _) ← Reactive.newTriggerEvent (t := Spider) (a := String)
       let p ← useAnimationPhasesW #[("test", 100)] trigger
-      emit (pure RNode.empty)
+      emitStatic RNode.empty
       pure p
     ).run events
 
@@ -172,7 +172,7 @@ test "useBlinkingCursorW works in WidgetM" := do
     let (events, _) ← createInputs
     let (blinkDyn, _render) ← (runWidget do
       let b ← useBlinkingCursorW
-      emit (pure RNode.empty)
+      emitStatic RNode.empty
       pure b
     ).run events
 
@@ -185,7 +185,7 @@ test "useCountdownW works in WidgetM" := do
     let ((remainingDyn, runningDyn), _render) ← (runWidget do
       let (trigger, _) ← Reactive.newTriggerEvent (t := Spider) (a := Unit)
       let result ← useCountdownW 1000 trigger
-      emit (pure RNode.empty)
+      emitStatic RNode.empty
       pure result
     ).run events
 
@@ -200,7 +200,7 @@ test "useInterpolationW works in WidgetM" := do
     let (interpResult, _render) ← (runWidget do
       let (trigger, _) ← Reactive.newTriggerEvent (t := Spider) (a := Unit)
       let result ← useInterpolationW 100 0.0 100.0 trigger
-      emit (pure RNode.empty)
+      emitStatic RNode.empty
       pure result
     ).run events
 
@@ -213,7 +213,7 @@ test "AnimationResult has correct structure" := do
     let (animResult, _render) ← (runWidget do
       let (trigger, _) ← Reactive.newTriggerEvent (t := Spider) (a := Unit)
       let anim ← useAnimationW { durationMs := 100 } trigger
-      emit (pure RNode.empty)
+      emitStatic RNode.empty
       pure anim
     ).run events
 
@@ -229,7 +229,7 @@ test "InterpolatedResult has correct structure" := do
     let (interpResult, _render) ← (runWidget do
       let (trigger, _) ← Reactive.newTriggerEvent (t := Spider) (a := Unit)
       let result ← useInterpolationW 100 10.0 50.0 trigger
-      emit (pure RNode.empty)
+      emitStatic RNode.empty
       pure result
     ).run events
 

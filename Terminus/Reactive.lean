@@ -19,9 +19,10 @@
     let (_, render) ← runWidget do
       column' (gap := 1) (style := {}) do
         heading1' "Key Counter" Theme.dark
-        emitDynamic do
-          let n ← count.sample
-          pure (RNode.text s!"Keys pressed: {n}" (Theme.dark.bodyStyle))
+        let node ← count.map' (fun n =>
+          RNode.text s!"Keys pressed: {n}" (Theme.dark.bodyStyle)
+        )
+        emit node
 
     pure { render }
   ```

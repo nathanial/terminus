@@ -24,13 +24,14 @@ def mediaContent (theme : Theme) : WidgetM Unit := do
     let isBigText ← Dynamic.map' modeDyn (· == 1)
     let isImage ← Dynamic.map' modeDyn (· == 2)
 
-    emitDynamic do
-      let mode ← modeDyn.sample
+    let node ← modeDyn.map' (fun mode =>
       let label := match mode with
         | 0 => "Canvas"
         | 1 => "BigText"
         | _ => "Image"
-      pure (RNode.text s!"Current: {label}" theme.primaryStyle)
+      RNode.text s!"Current: {label}" theme.primaryStyle
+    )
+    emit node
 
     spacer' 0 1
 

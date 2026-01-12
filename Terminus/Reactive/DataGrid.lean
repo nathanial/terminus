@@ -191,10 +191,12 @@ def dataGrid' (data : Array (Array String)) (config : DataGridConfig := {})
 
   let dataRef ← SpiderM.liftIO (IO.mkRef data)
   let stateRef ← SpiderM.liftIO (IO.mkRef initialState)
-
-  -- Events and dynamics
   let (dataEvent, fireData) ← newTriggerEvent (t := Spider) (a := Array (Array String))
   let dataDyn ← holdDyn data dataEvent
+  let (stateEvent, fireState) ← newTriggerEvent (t := Spider) (a := DataGridState)
+  let stateDyn ← holdDyn initialState stateEvent
+
+  -- Events and dynamics
   let (posEvent, firePos) ← newTriggerEvent (t := Spider) (a := Nat × Nat)
   let posDyn ← holdDyn (initialState.selectedRow, initialState.selectedCol) posEvent
   let (editingEvent, fireEditing) ← newTriggerEvent (t := Spider) (a := Bool)
@@ -206,6 +208,7 @@ def dataGrid' (data : Array (Array String)) (config : DataGridConfig := {})
 
   let updateState : DataGridState → IO Unit := fun newState => do
     stateRef.set newState
+    fireState newState
     firePos (newState.selectedRow, newState.selectedCol)
     fireEditing newState.editing
 
@@ -312,74 +315,72 @@ def dataGrid' (data : Array (Array String)) (config : DataGridConfig := {})
             fireSelect (state.selectedRow, state.selectedCol)
           | _ => pure ()
 
-  -- Emit render function
-  emit do
-    let currentData ← dataRef.get
-    let state ← stateRef.get
-    let rows := currentData.size
-    let cols := colCount currentData
+  let node ← stateDyn.zipWith' (fun state currentData =>
+    Id.run do
+      let rows := currentData.size
+      let cols := colCount currentData
 
-    if rows == 0 || cols == 0 then
-      let emptyNode := RNode.text "(empty)" config.cellStyle
-      if config.borderType == .none then
-        pure emptyNode
+      if rows == 0 || cols == 0 then
+        let emptyNode := RNode.text "(empty)" config.cellStyle
+        if config.borderType == .none then
+          return emptyNode
+        else
+          return RNode.block config.title config.borderType config.borderStyle none emptyNode
       else
-        pure (RNode.block config.title config.borderType config.borderStyle none emptyNode)
-    else
-      let visibleRows := visibleCount config.maxVisibleRows rows
-      let visibleCols := visibleCount config.maxVisibleCols cols
-      let rowHeaderWidth :=
-        if config.showRowHeaders then
-          max config.rowHeaderWidth (toString rows).length
-        else 0
-      let startRow := state.scrollRow
-      let endRow := min (startRow + visibleRows) rows
-      let startCol := state.scrollCol
-      let endCol := min (startCol + visibleCols) cols
+        let visibleRows := visibleCount config.maxVisibleRows rows
+        let visibleCols := visibleCount config.maxVisibleCols cols
+        let rowHeaderWidth :=
+          if config.showRowHeaders then
+            max config.rowHeaderWidth (toString rows).length
+          else 0
+        let startRow := state.scrollRow
+        let endRow := min (startRow + visibleRows) rows
+        let startCol := state.scrollCol
+        let endCol := min (startCol + visibleCols) cols
 
-      let mut rowNodes : Array RNode := #[]
+        let mut rowNodes : Array RNode := #[]
 
-      -- Column headers
-      if config.showColumnHeaders then
-        let mut headerCells : Array RNode := #[]
-        if config.showRowHeaders then
-          headerCells := headerCells.push (RNode.text (padLeft "" rowHeaderWidth) config.rowHeaderStyle)
-        for c in [startCol:endCol] do
-          let label := match config.columnHeaders with
-            | some headers => headers.getD c (colLabel c)
-            | none => colLabel c
-          headerCells := headerCells.push (RNode.text (padRight label config.cellWidth) config.headerStyle)
-        rowNodes := rowNodes.push (RNode.row 1 {} headerCells)
+        if config.showColumnHeaders then
+          let mut headerCells : Array RNode := #[]
+          if config.showRowHeaders then
+            headerCells := headerCells.push (RNode.text (padLeft "" rowHeaderWidth) config.rowHeaderStyle)
+          for c in [startCol:endCol] do
+            let label := match config.columnHeaders with
+              | some headers => headers.getD c (colLabel c)
+              | none => colLabel c
+            headerCells := headerCells.push (RNode.text (padRight label config.cellWidth) config.headerStyle)
+          rowNodes := rowNodes.push (RNode.row 1 {} headerCells)
 
-      -- Data rows
-      for r in [startRow:endRow] do
-        let mut cells : Array RNode := #[]
-        if config.showRowHeaders then
-          let label := padLeft (toString (r + 1)) rowHeaderWidth
-          cells := cells.push (RNode.text label config.rowHeaderStyle)
+        for r in [startRow:endRow] do
+          let mut cells : Array RNode := #[]
+          if config.showRowHeaders then
+            let label := padLeft (toString (r + 1)) rowHeaderWidth
+            cells := cells.push (RNode.text label config.rowHeaderStyle)
 
-        for c in [startCol:endCol] do
-          let isSelected := r == state.selectedRow && c == state.selectedCol
-          let isEditing := isSelected && state.editing
-          let content :=
-            if isEditing then
-              let buffer := state.editBuffer
-              let display := if buffer.isEmpty then "|" else buffer ++ "|"
-              padRight display config.cellWidth
-            else
-              padRight (getCell currentData r c) config.cellWidth
-          let style := if isEditing then config.editingStyle
-            else if isSelected then config.selectedStyle
-            else config.cellStyle
-          cells := cells.push (RNode.text content style)
+          for c in [startCol:endCol] do
+            let isSelected := r == state.selectedRow && c == state.selectedCol
+            let isEditing := isSelected && state.editing
+            let content :=
+              if isEditing then
+                let buffer := state.editBuffer
+                let display := if buffer.isEmpty then "|" else buffer ++ "|"
+                padRight display config.cellWidth
+              else
+                padRight (getCell currentData r c) config.cellWidth
+            let style := if isEditing then config.editingStyle
+              else if isSelected then config.selectedStyle
+              else config.cellStyle
+            cells := cells.push (RNode.text content style)
 
-        rowNodes := rowNodes.push (RNode.row 1 {} cells)
+          rowNodes := rowNodes.push (RNode.row 1 {} cells)
 
-      let inner := RNode.column 0 {} rowNodes
-      if config.borderType == .none then
-        pure inner
-      else
-        pure (RNode.block config.title config.borderType config.borderStyle none inner)
+        let inner := RNode.column 0 {} rowNodes
+        if config.borderType == .none then
+          return inner
+        else
+          return RNode.block config.title config.borderType config.borderStyle none inner
+  ) dataDyn
+  emit node
 
   pure {
     data := dataDyn

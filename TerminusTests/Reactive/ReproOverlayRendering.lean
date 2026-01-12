@@ -49,7 +49,7 @@ test "Overlay should be rendered ON TOP of subsequent siblings" := do
       pure ()
     ).run events
 
-    let node ← SpiderM.liftIO render
+    let node ← SpiderM.liftIO render.sample
     -- Render to a 10x5 buffer
     -- "OVERLAY" is length 7. "SIBLING" is length 7.
     -- Both centered horizontally? No.

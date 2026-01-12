@@ -197,6 +197,47 @@ def flattenForest [Inhabited α] (roots : Array (TreeNode α)) : Array (FlatLine
     result := result ++ flattenTree root 0 #[i] isLast
   result
 
+private def renderTreeView [Inhabited α] [ToString α]
+    (roots : Array (TreeNode α)) (state : TreeState) (config : TreeConfig) : RNode :=
+  Id.run do
+    let flat := flattenForest roots
+
+    if flat.isEmpty then
+      return RNode.text "(empty)" config.style
+    else
+      let maxVis := config.maxVisible.getD flat.size
+
+      -- Calculate visible range
+      let startIdx := state.scrollOffset
+      let endIdx := min (startIdx + maxVis) flat.size
+
+      -- Build visible lines
+      let mut rows : Array RNode := #[]
+
+      for i in [startIdx:endIdx] do
+        if h : i < flat.size then
+          let line := flat[i]
+          let isSelected := i == state.selectedIndex
+
+          -- Build indent and connector
+          let indentStr := String.ofList (List.replicate (line.depth * config.indent) ' ')
+
+          -- Choose icon
+          let icon := if line.isLeaf then config.leafIcon
+            else if line.isExpanded then config.expandedIcon
+            else config.collapsedIcon
+
+          -- Build full text
+          let text := indentStr ++ icon ++ toString line.value
+
+          -- Choose style
+          let baseStyle := if line.isLeaf then config.style else config.branchStyle
+          let style := if isSelected then config.selectedStyle else baseStyle
+
+          rows := rows.push (RNode.text text style)
+
+      return RNode.column 0 {} rows
+
 /-- Get node at path. -/
 partial def getNodeAtPath [Inhabited α] (roots : Array (TreeNode α)) (path : Array Nat) : Option α :=
   match path.toList with
@@ -310,8 +351,14 @@ def tree' [Inhabited α] [ToString α] (root : TreeNode α) (config : TreeConfig
   let (nodeEvent, fireNode) ← newTriggerEvent (t := Spider) (a := Option α)
 
   -- Track state
-  let stateRef ← SpiderM.liftIO (IO.mkRef (TreeState.mk 0 0))
-  let rootsRef ← SpiderM.liftIO (IO.mkRef #[root])
+  let initialState := TreeState.mk 0 0
+  let initialRoots := #[root]
+  let stateRef ← SpiderM.liftIO (IO.mkRef initialState)
+  let rootsRef ← SpiderM.liftIO (IO.mkRef initialRoots)
+  let (stateEvent, fireState) ← newTriggerEvent (t := Spider) (a := TreeState)
+  let stateDyn ← holdDyn initialState stateEvent
+  let (rootsEvent, fireRoots) ← newTriggerEvent (t := Spider) (a := Array (TreeNode α))
+  let rootsDyn ← holdDyn initialRoots rootsEvent
 
   -- Initial flattening
   let initialFlat := flattenTree root 0 #[0] true
@@ -324,6 +371,14 @@ def tree' [Inhabited α] [ToString α] (root : TreeNode α) (config : TreeConfig
 
   -- Determine the tree's focus name
   let treeName := if config.focusName.isEmpty then widgetName else config.focusName
+
+  let updateState : TreeState → IO Unit := fun newState => do
+    stateRef.set newState
+    fireState newState
+
+  let updateRoots : Array (TreeNode α) → IO Unit := fun newRoots => do
+    rootsRef.set newRoots
+    fireRoots newRoots
 
   -- Subscribe to key events
   let _unsub ← SpiderM.liftIO <| events.keyEvent.subscribe fun kd => do
@@ -344,7 +399,7 @@ def tree' [Inhabited α] [ToString α] (root : TreeNode α) (config : TreeConfig
       | .up | .char 'k' =>
         let newState := state.moveUp flat.size |>.adjustScroll maxVis
         if newState.selectedIndex != state.selectedIndex then
-          stateRef.set newState
+          updateState newState
           if h : newState.selectedIndex < flat.size then
             let line := flat[newState.selectedIndex]
             firePath line.path
@@ -352,7 +407,7 @@ def tree' [Inhabited α] [ToString α] (root : TreeNode α) (config : TreeConfig
       | .down | .char 'j' =>
         let newState := state.moveDown flat.size |>.adjustScroll maxVis
         if newState.selectedIndex != state.selectedIndex then
-          stateRef.set newState
+          updateState newState
           if h : newState.selectedIndex < flat.size then
             let line := flat[newState.selectedIndex]
             firePath line.path
@@ -360,7 +415,7 @@ def tree' [Inhabited α] [ToString α] (root : TreeNode α) (config : TreeConfig
       | .home =>
         let newState := state.moveToFirst.adjustScroll maxVis
         if newState.selectedIndex != state.selectedIndex then
-          stateRef.set newState
+          updateState newState
           if h : 0 < flat.size then
             let line := flat[0]
             firePath line.path
@@ -368,7 +423,7 @@ def tree' [Inhabited α] [ToString α] (root : TreeNode α) (config : TreeConfig
       | .end =>
         let newState := state.moveToLast flat.size |>.adjustScroll maxVis
         if newState.selectedIndex != state.selectedIndex then
-          stateRef.set newState
+          updateState newState
           if h : newState.selectedIndex < flat.size then
             let line := flat[newState.selectedIndex]
             firePath line.path
@@ -381,7 +436,7 @@ def tree' [Inhabited α] [ToString α] (root : TreeNode α) (config : TreeConfig
           if !line.isLeaf && line.isExpanded then
             -- Collapse
             let newRoots := collapseAtPath roots line.path
-            rootsRef.set newRoots
+            updateRoots newRoots
             fireToggle line.path
           else if line.path.size > 1 then
             -- Move to parent (find parent's index in flat list)
@@ -389,7 +444,7 @@ def tree' [Inhabited α] [ToString α] (root : TreeNode α) (config : TreeConfig
             match flat.findIdx? (fun l => l.path == parentPath) with
             | some parentIdx =>
               let newState := { state with selectedIndex := parentIdx }.adjustScroll maxVis
-              stateRef.set newState
+              updateState newState
               if h : parentIdx < flat.size then
                 let parentLine := flat[parentIdx]
                 firePath parentLine.path
@@ -404,13 +459,13 @@ def tree' [Inhabited α] [ToString α] (root : TreeNode α) (config : TreeConfig
             if !line.isExpanded then
               -- Expand
               let newRoots := expandAtPath roots line.path
-              rootsRef.set newRoots
+              updateRoots newRoots
               fireToggle line.path
             else
               -- Move to first child (next item in flat list)
               let newState := state.moveDown flat.size |>.adjustScroll maxVis
               if newState.selectedIndex != state.selectedIndex then
-                stateRef.set newState
+                updateState newState
                 if h : newState.selectedIndex < flat.size then
                   let childLine := flat[newState.selectedIndex]
                   firePath childLine.path
@@ -424,51 +479,15 @@ def tree' [Inhabited α] [ToString α] (root : TreeNode α) (config : TreeConfig
           else
             -- Toggle branch
             let newRoots := toggleAtPath roots line.path
-            rootsRef.set newRoots
+            updateRoots newRoots
             fireToggle line.path
       | _ => pure ()
 
   -- Emit render function
-  emit do
-    let roots ← rootsRef.get
-    let flat := flattenForest roots
-
-    if flat.isEmpty then
-      pure (RNode.text "(empty)" config.style)
-    else
-      let state ← stateRef.get
-      let maxVis := config.maxVisible.getD flat.size
-
-      -- Calculate visible range
-      let startIdx := state.scrollOffset
-      let endIdx := min (startIdx + maxVis) flat.size
-
-      -- Build visible lines
-      let mut rows : Array RNode := #[]
-
-      for i in [startIdx:endIdx] do
-        if h : i < flat.size then
-          let line := flat[i]
-          let isSelected := i == state.selectedIndex
-
-          -- Build indent and connector
-          let indentStr := String.ofList (List.replicate (line.depth * config.indent) ' ')
-
-          -- Choose icon
-          let icon := if line.isLeaf then config.leafIcon
-            else if line.isExpanded then config.expandedIcon
-            else config.collapsedIcon
-
-          -- Build full text
-          let text := indentStr ++ icon ++ toString line.value
-
-          -- Choose style
-          let baseStyle := if line.isLeaf then config.style else config.branchStyle
-          let style := if isSelected then config.selectedStyle else baseStyle
-
-          rows := rows.push (RNode.text text style)
-
-      pure (RNode.column 0 {} rows)
+  let node ← stateDyn.zipWith' (fun state currentRoots =>
+    renderTreeView currentRoots state config
+  ) rootsDyn
+  emit node
 
   pure {
     selectedPath := selectedPathDyn
@@ -491,8 +510,14 @@ def forest' [Inhabited α] [ToString α] (roots : Array (TreeNode α)) (config :
   let (pathEvent, firePath) ← newTriggerEvent (t := Spider) (a := Array Nat)
   let (nodeEvent, fireNode) ← newTriggerEvent (t := Spider) (a := Option α)
 
-  let stateRef ← SpiderM.liftIO (IO.mkRef (TreeState.mk 0 0))
-  let rootsRef ← SpiderM.liftIO (IO.mkRef roots)
+  let initialState := TreeState.mk 0 0
+  let initialRoots := roots
+  let stateRef ← SpiderM.liftIO (IO.mkRef initialState)
+  let rootsRef ← SpiderM.liftIO (IO.mkRef initialRoots)
+  let (stateEvent, fireState) ← newTriggerEvent (t := Spider) (a := TreeState)
+  let stateDyn ← holdDyn initialState stateEvent
+  let (rootsEvent, fireRoots) ← newTriggerEvent (t := Spider) (a := Array (TreeNode α))
+  let rootsDyn ← holdDyn initialRoots rootsEvent
 
   let initialFlat := flattenForest roots
   let initialPath := if initialFlat.isEmpty then #[] else initialFlat[0]!.path
@@ -502,6 +527,14 @@ def forest' [Inhabited α] [ToString α] (roots : Array (TreeNode α)) (config :
   let selectedNodeDyn ← holdDyn initialNode nodeEvent
 
   let treeName := if config.focusName.isEmpty then widgetName else config.focusName
+
+  let updateState : TreeState → IO Unit := fun newState => do
+    stateRef.set newState
+    fireState newState
+
+  let updateRoots : Array (TreeNode α) → IO Unit := fun newRoots => do
+    rootsRef.set newRoots
+    fireRoots newRoots
 
   let _unsub ← SpiderM.liftIO <| events.keyEvent.subscribe fun kd => do
     let currentFocus ← focusedInput.sample
@@ -521,7 +554,7 @@ def forest' [Inhabited α] [ToString α] (roots : Array (TreeNode α)) (config :
       | .up | .char 'k' =>
         let newState := state.moveUp flat.size |>.adjustScroll maxVis
         if newState.selectedIndex != state.selectedIndex then
-          stateRef.set newState
+          updateState newState
           if h : newState.selectedIndex < flat.size then
             let line := flat[newState.selectedIndex]
             firePath line.path
@@ -529,21 +562,21 @@ def forest' [Inhabited α] [ToString α] (roots : Array (TreeNode α)) (config :
       | .down | .char 'j' =>
         let newState := state.moveDown flat.size |>.adjustScroll maxVis
         if newState.selectedIndex != state.selectedIndex then
-          stateRef.set newState
+          updateState newState
           if h : newState.selectedIndex < flat.size then
             let line := flat[newState.selectedIndex]
             firePath line.path
             fireNode (some line.value)
       | .home =>
         let newState := state.moveToFirst.adjustScroll maxVis
-        stateRef.set newState
+        updateState newState
         if h : 0 < flat.size then
           let line := flat[0]
           firePath line.path
           fireNode (some line.value)
       | .end =>
         let newState := state.moveToLast flat.size |>.adjustScroll maxVis
-        stateRef.set newState
+        updateState newState
         if h : newState.selectedIndex < flat.size then
           let line := flat[newState.selectedIndex]
           firePath line.path
@@ -554,14 +587,14 @@ def forest' [Inhabited α] [ToString α] (roots : Array (TreeNode α)) (config :
         | some line =>
           if !line.isLeaf && line.isExpanded then
             let newRoots := collapseAtPath currentRoots line.path
-            rootsRef.set newRoots
+            updateRoots newRoots
             fireToggle line.path
           else if line.path.size > 1 then
             let parentPath := line.path.pop
             match flat.findIdx? (fun l => l.path == parentPath) with
             | some parentIdx =>
               let newState := { state with selectedIndex := parentIdx }.adjustScroll maxVis
-              stateRef.set newState
+              updateState newState
               if h : parentIdx < flat.size then
                 let parentLine := flat[parentIdx]
                 firePath parentLine.path
@@ -574,12 +607,12 @@ def forest' [Inhabited α] [ToString α] (roots : Array (TreeNode α)) (config :
           if !line.isLeaf then
             if !line.isExpanded then
               let newRoots := expandAtPath currentRoots line.path
-              rootsRef.set newRoots
+              updateRoots newRoots
               fireToggle line.path
             else
               let newState := state.moveDown flat.size |>.adjustScroll maxVis
               if newState.selectedIndex != state.selectedIndex then
-                stateRef.set newState
+                updateState newState
                 if h : newState.selectedIndex < flat.size then
                   let childLine := flat[newState.selectedIndex]
                   firePath childLine.path
@@ -592,42 +625,14 @@ def forest' [Inhabited α] [ToString α] (roots : Array (TreeNode α)) (config :
             fireSelect line.value
           else
             let newRoots := toggleAtPath currentRoots line.path
-            rootsRef.set newRoots
+            updateRoots newRoots
             fireToggle line.path
       | _ => pure ()
 
-  emit do
-    let currentRoots ← rootsRef.get
-    let flat := flattenForest currentRoots
-
-    if flat.isEmpty then
-      pure (RNode.text "(empty)" config.style)
-    else
-      let state ← stateRef.get
-      let maxVis := config.maxVisible.getD flat.size
-
-      let startIdx := state.scrollOffset
-      let endIdx := min (startIdx + maxVis) flat.size
-
-      let mut rows : Array RNode := #[]
-
-      for i in [startIdx:endIdx] do
-        if h : i < flat.size then
-          let line := flat[i]
-          let isSelected := i == state.selectedIndex
-
-          let indentStr := String.ofList (List.replicate (line.depth * config.indent) ' ')
-          let icon := if line.isLeaf then config.leafIcon
-            else if line.isExpanded then config.expandedIcon
-            else config.collapsedIcon
-          let text := indentStr ++ icon ++ toString line.value
-
-          let baseStyle := if line.isLeaf then config.style else config.branchStyle
-          let style := if isSelected then config.selectedStyle else baseStyle
-
-          rows := rows.push (RNode.text text style)
-
-      pure (RNode.column 0 {} rows)
+  let node ← stateDyn.zipWith' (fun state currentRoots =>
+    renderTreeView currentRoots state config
+  ) rootsDyn
+  emit node
 
   pure {
     selectedPath := selectedPathDyn

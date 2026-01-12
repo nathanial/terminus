@@ -28,7 +28,7 @@ test "dataGrid' renders headers and cells" := do
       }
     ).run events
 
-    let node ← SpiderM.liftIO render
+    let node ← SpiderM.liftIO render.sample
     SpiderM.liftIO (ensure (rnodeContainsText node "ID") "expected column header")
     SpiderM.liftIO (ensure (rnodeContainsText node "Alice") "expected cell content")
     SpiderM.liftIO (ensure (rnodeContainsText node "2") "expected row header")

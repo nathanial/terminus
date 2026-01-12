@@ -152,7 +152,7 @@ inductive RNode : Type where
   /-- Image node using terminal image protocol. -/
   | image (source : ImageSource) (protocol : ImageProtocol) (width : Nat) (height : Nat)
       (preserveAspect : Bool) (altText : String)
-  deriving Repr, Inhabited
+  deriving Repr, Inhabited, BEq
 
 namespace RNode
 
@@ -387,6 +387,8 @@ structure TerminusEvents where
   resizeEvent : Reactive.Event Spider ResizeData
   /-- Tick events (fired each frame for animations). -/
   tickEvent : Reactive.Event Spider TickData
+  /-- Whether a tick stream is needed (set by useTick/useFrame hooks). -/
+  tickRequested : IO.Ref Bool
   /-- Component registry for focus management. -/
   registry : ComponentRegistry
   /-- Debug log function (writes to log file if debug enabled). -/
@@ -411,6 +413,7 @@ def createInputs (debugLog : String → IO Unit := fun _ => pure ()) : SpiderM (
   let (mouseEvent, fireMouse) ← Reactive.newTriggerEvent (t := Spider) (a := MouseData)
   let (resizeEvent, fireResize) ← Reactive.newTriggerEvent (t := Spider) (a := ResizeData)
   let (tickEvent, fireTick) ← Reactive.newTriggerEvent (t := Spider) (a := TickData)
+  let tickRequested ← SpiderM.liftIO (IO.mkRef false)
   let registry ← ComponentRegistry.create
 
   let events : TerminusEvents := {
@@ -418,6 +421,7 @@ def createInputs (debugLog : String → IO Unit := fun _ => pure ()) : SpiderM (
     mouseEvent := mouseEvent
     resizeEvent := resizeEvent
     tickEvent := tickEvent
+    tickRequested := tickRequested
     registry := registry
     debugLog := debugLog
   }

@@ -175,38 +175,39 @@ def logger' (config : LoggerConfig := {}) : WidgetM LoggerResult := do
       fireEntries #[]
 
   -- Emit render function
-  emit do
-    let entries ← entriesRef.get
+  let node ← entriesDyn.map' (fun entries =>
+    Id.run do
+      if entries.isEmpty then
+        return RNode.text "(no log entries)" config.debugStyle
+      else
+        -- Build log lines
+        let mut nodes : Array RNode := #[]
+        for entry in entries do
+          let levelStyle := config.styleFor entry.level
 
-    if entries.isEmpty then
-      pure (RNode.text "(no log entries)" config.debugStyle)
-    else
-      -- Build log lines
-      let mut nodes : Array RNode := #[]
-      for entry in entries do
-        let levelStyle := config.styleFor entry.level
+          -- Build the line
+          let mut parts : Array RNode := #[]
 
-        -- Build the line
-        let mut parts : Array RNode := #[]
+          -- Timestamp
+          if config.showTimestamp then
+            match entry.timestamp with
+            | some ts =>
+              if !ts.isEmpty then
+                parts := parts.push (RNode.text (ts ++ " ") config.timestampStyle)
+            | none => pure ()
 
-        -- Timestamp
-        if config.showTimestamp then
-          match entry.timestamp with
-          | some ts =>
-            if !ts.isEmpty then
-              parts := parts.push (RNode.text (ts ++ " ") config.timestampStyle)
-          | none => pure ()
+          -- Level tag
+          if config.showLevel then
+            parts := parts.push (RNode.text (entry.level.tag ++ " ") levelStyle)
 
-        -- Level tag
-        if config.showLevel then
-          parts := parts.push (RNode.text (entry.level.tag ++ " ") levelStyle)
+          -- Message
+          parts := parts.push (RNode.text entry.message levelStyle)
 
-        -- Message
-        parts := parts.push (RNode.text entry.message levelStyle)
+          nodes := nodes.push (RNode.row 0 {} parts)
 
-        nodes := nodes.push (RNode.row 0 {} parts)
-
-      pure (RNode.column 0 {} nodes)
+        return RNode.column 0 {} nodes
+  )
+  emit node
 
   pure {
     entries := entriesDyn
@@ -265,38 +266,39 @@ def loggerWithEvents' (logEvents : Reactive.Event Spider LogEntry)
   ) #[] combinedEvent
 
   -- Emit render function
-  emitDynamic do
-    let entries ← entriesDyn.sample
+  let node ← entriesDyn.map' (fun entries =>
+    Id.run do
+      if entries.isEmpty then
+        return RNode.text "(no log entries)" config.debugStyle
+      else
+        -- Build log lines
+        let mut nodes : Array RNode := #[]
+        for entry in entries do
+          let levelStyle := config.styleFor entry.level
 
-    if entries.isEmpty then
-      pure (RNode.text "(no log entries)" config.debugStyle)
-    else
-      -- Build log lines
-      let mut nodes : Array RNode := #[]
-      for entry in entries do
-        let levelStyle := config.styleFor entry.level
+          -- Build the line
+          let mut parts : Array RNode := #[]
 
-        -- Build the line
-        let mut parts : Array RNode := #[]
+          -- Timestamp
+          if config.showTimestamp then
+            match entry.timestamp with
+            | some ts =>
+              if !ts.isEmpty then
+                parts := parts.push (RNode.text (ts ++ " ") config.timestampStyle)
+            | none => pure ()
 
-        -- Timestamp
-        if config.showTimestamp then
-          match entry.timestamp with
-          | some ts =>
-            if !ts.isEmpty then
-              parts := parts.push (RNode.text (ts ++ " ") config.timestampStyle)
-          | none => pure ()
+          -- Level tag
+          if config.showLevel then
+            parts := parts.push (RNode.text (entry.level.tag ++ " ") levelStyle)
 
-        -- Level tag
-        if config.showLevel then
-          parts := parts.push (RNode.text (entry.level.tag ++ " ") levelStyle)
+          -- Message
+          parts := parts.push (RNode.text entry.message levelStyle)
 
-        -- Message
-        parts := parts.push (RNode.text entry.message levelStyle)
+          nodes := nodes.push (RNode.row 0 {} parts)
 
-        nodes := nodes.push (RNode.row 0 {} parts)
-
-      pure (RNode.column 0 {} nodes)
+        return RNode.column 0 {} nodes
+  )
+  emit node
 
   pure entriesDyn
 

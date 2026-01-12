@@ -142,8 +142,8 @@ def notifications' (config : NotificationConfig := {}) : WidgetM NotificationRes
   let nextIdRef ← SpiderM.liftIO (IO.mkRef 0)
   let currentTimeRef ← SpiderM.liftIO (IO.mkRef 0)
 
-  -- Create trigger for re-renders
-  let (_renderEvent, fireRender) ← newTriggerEvent (t := Spider) (a := Unit)
+  let (entriesEvent, fireEntries) ← newTriggerEvent (t := Spider) (a := Array NotificationEntry)
+  let entriesDyn ← holdDyn #[] entriesEvent
 
   -- Subscribe to tick events for auto-dismiss
   let _unsub ← SpiderM.liftIO <| tickEvent.subscribe fun td => do
@@ -160,7 +160,7 @@ def notifications' (config : NotificationConfig := {}) : WidgetM NotificationRes
       if remaining.size != entries.size then
         env.withFrame do
           entriesRef.set remaining
-          fireRender ()
+          fireEntries remaining
 
   -- Show function
   let showFn : NotificationLevel → String → IO Unit := fun level message => do
@@ -183,41 +183,43 @@ def notifications' (config : NotificationConfig := {}) : WidgetM NotificationRes
         entries.push entry
 
       entriesRef.set newEntries
-      fireRender ()
+      fireEntries newEntries
 
   -- Dismiss function (removes oldest)
   let dismissFn : IO Unit := do
     env.withFrame do
       let entries ← entriesRef.get
       if !entries.isEmpty then
-        entriesRef.set (entries.extract 1 entries.size)
-        fireRender ()
+        let remaining := entries.extract 1 entries.size
+        entriesRef.set remaining
+        fireEntries remaining
 
   -- Dismiss all function
   let dismissAllFn : IO Unit := do
     env.withFrame do
       entriesRef.set #[]
-      fireRender ()
+      fireEntries #[]
 
   -- Emit render function
-  emit do
-    let entries ← entriesRef.get
+  let node ← entriesDyn.map' (fun entries =>
+    Id.run do
+      if entries.isEmpty then
+        return RNode.empty
+      else
+        -- Build notification nodes
+        let mut nodes : Array RNode := #[]
+        for entry in entries do
+          let style := config.styleFor entry.level
+          let symbol := entry.level.symbol
 
-    if entries.isEmpty then
-      pure RNode.empty
-    else
-      -- Build notification nodes
-      let mut nodes : Array RNode := #[]
-      for entry in entries do
-        let style := config.styleFor entry.level
-        let symbol := entry.level.symbol
+          -- Simple notification format: [symbol] message
+          let text := s!"[{symbol}] {entry.message}"
+          nodes := nodes.push (RNode.text text style)
 
-        -- Simple notification format: [symbol] message
-        let text := s!"[{symbol}] {entry.message}"
-        nodes := nodes.push (RNode.text text style)
-
-      -- Stack vertically
-      pure (RNode.column 0 {} nodes)
+        -- Stack vertically
+        return RNode.column 0 {} nodes
+  )
+  emit node
 
   pure {
     «show» := showFn
@@ -307,24 +309,25 @@ def notificationsWithEvents' (showEvents : Reactive.Event Spider (NotificationLe
   ) (#[] : Array NotificationEntry) allEvents
 
   -- Emit render function
-  emitDynamic do
-    let entries ← entriesDyn.sample
+  let node ← entriesDyn.map' (fun entries =>
+    Id.run do
+      if entries.isEmpty then
+        return RNode.empty
+      else
+        -- Build notification nodes
+        let mut nodes : Array RNode := #[]
+        for entry in entries do
+          let style := config.styleFor entry.level
+          let symbol := entry.level.symbol
 
-    if entries.isEmpty then
-      pure RNode.empty
-    else
-      -- Build notification nodes
-      let mut nodes : Array RNode := #[]
-      for entry in entries do
-        let style := config.styleFor entry.level
-        let symbol := entry.level.symbol
+          -- Simple notification format: [symbol] message
+          let text := s!"[{symbol}] {entry.message}"
+          nodes := nodes.push (RNode.text text style)
 
-        -- Simple notification format: [symbol] message
-        let text := s!"[{symbol}] {entry.message}"
-        nodes := nodes.push (RNode.text text style)
-
-      -- Stack vertically
-      pure (RNode.column 0 {} nodes)
+        -- Stack vertically
+        return RNode.column 0 {} nodes
+  )
+  emit node
 
 /-! ## Convenience Functions -/
 

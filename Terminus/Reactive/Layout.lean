@@ -11,6 +11,16 @@ open Reactive Reactive.Host
 
 namespace Terminus.Reactive
 
+private def mkColumnNode (children : Array ComponentRender) : WidgetM (Dynamic Spider RNode) := do
+  let list ← Reactive.Dynamic.sequence children.toList
+  list.map' fun kids =>
+    if kids.isEmpty then
+      RNode.empty
+    else if h : kids.length = 1 then
+      kids.head!
+    else
+      RNode.column 0 {} kids.toArray
+
 /-! ## Split Direction -/
 
 /-- Direction for split layouts. -/
@@ -61,37 +71,21 @@ def horizontalSplit' (_leftPercent : Nat := 50) (config : PaneConfig := {})
     (left : WidgetM α) (right : WidgetM β) : WidgetM (α × β) := do
   -- Run left pane and collect its children
   let (leftResult, leftChildren) ← runWidgetChildren left
-  let leftRender : ComponentRender := do
-    if leftChildren.isEmpty then
-      pure RNode.empty
-    else if h : leftChildren.size = 1 then
-      leftChildren[0]
-    else
-      let nodes ← leftChildren.mapM id
-      pure (RNode.column 0 {} nodes)
+  let leftNode ← mkColumnNode leftChildren
 
   -- Run right pane and collect its children
   let (rightResult, rightChildren) ← runWidgetChildren right
-  let rightRender : ComponentRender := do
-    if rightChildren.isEmpty then
-      pure RNode.empty
-    else if h : rightChildren.size = 1 then
-      rightChildren[0]
-    else
-      let nodes ← rightChildren.mapM id
-      pure (RNode.column 0 {} nodes)
+  let rightNode ← mkColumnNode rightChildren
 
   -- Emit the combined row
-  emit do
-    let leftNode ← leftRender
-    let rightNode ← rightRender
-
-    -- Add divider if configured
+  let node ← leftNode.zipWith' (fun l r =>
     if config.showDivider then
       let divider := RNode.text "│" config.dividerStyle
-      pure (RNode.row config.gap {} #[leftNode, divider, rightNode])
+      RNode.row config.gap {} #[l, divider, r]
     else
-      pure (RNode.row config.gap {} #[leftNode, rightNode])
+      RNode.row config.gap {} #[l, r]
+  ) rightNode
+  emit node
 
   pure (leftResult, rightResult)
 
@@ -110,38 +104,21 @@ def verticalSplit' (_topPercent : Nat := 50) (config : PaneConfig := {})
     (top : WidgetM α) (bottom : WidgetM β) : WidgetM (α × β) := do
   -- Run top pane
   let (topResult, topChildren) ← runWidgetChildren top
-  let topRender : ComponentRender := do
-    if topChildren.isEmpty then
-      pure RNode.empty
-    else if h : topChildren.size = 1 then
-      topChildren[0]
-    else
-      let nodes ← topChildren.mapM id
-      pure (RNode.column 0 {} nodes)
+  let topNode ← mkColumnNode topChildren
 
   -- Run bottom pane
   let (bottomResult, bottomChildren) ← runWidgetChildren bottom
-  let bottomRender : ComponentRender := do
-    if bottomChildren.isEmpty then
-      pure RNode.empty
-    else if h : bottomChildren.size = 1 then
-      bottomChildren[0]
-    else
-      let nodes ← bottomChildren.mapM id
-      pure (RNode.column 0 {} nodes)
+  let bottomNode ← mkColumnNode bottomChildren
 
   -- Emit stacked column
-  emit do
-    let topNode ← topRender
-    let bottomNode ← bottomRender
-
-    -- Add divider if configured
+  let node ← topNode.zipWith' (fun t b =>
     if config.showDivider then
-      -- Create a horizontal line divider
       let divider := RNode.text "─────────────────────────────────────────" config.dividerStyle
-      pure (RNode.column config.gap {} #[topNode, divider, bottomNode])
+      RNode.column config.gap {} #[t, divider, b]
     else
-      pure (RNode.column config.gap {} #[topNode, bottomNode])
+      RNode.column config.gap {} #[t, b]
+  ) bottomNode
+  emit node
 
   pure (topResult, bottomResult)
 
@@ -172,26 +149,18 @@ def threeColumnSplit' (_leftPercent _centerPercent : Nat := 33)
   let (leftResult, leftChildren) ← runWidgetChildren left
   let (centerResult, centerChildren) ← runWidgetChildren center
   let (rightResult, rightChildren) ← runWidgetChildren right
+  let leftNode ← mkColumnNode leftChildren
+  let centerNode ← mkColumnNode centerChildren
+  let rightNode ← mkColumnNode rightChildren
 
-  let mkRender (children : Array ComponentRender) : ComponentRender := do
-    if children.isEmpty then
-      pure RNode.empty
-    else if h : children.size = 1 then
-      children[0]
-    else
-      let nodes ← children.mapM id
-      pure (RNode.column 0 {} nodes)
-
-  emit do
-    let leftNode ← mkRender leftChildren
-    let centerNode ← mkRender centerChildren
-    let rightNode ← mkRender rightChildren
-
+  let node ← leftNode.zipWith3' (fun l c r =>
     if config.showDivider then
       let divider := RNode.text "│" config.dividerStyle
-      pure (RNode.row config.gap {} #[leftNode, divider, centerNode, divider, rightNode])
+      RNode.row config.gap {} #[l, divider, c, divider, r]
     else
-      pure (RNode.row config.gap {} #[leftNode, centerNode, rightNode])
+      RNode.row config.gap {} #[l, c, r]
+  ) centerNode rightNode
+  emit node
 
   pure (leftResult, centerResult, rightResult)
 
@@ -203,26 +172,18 @@ def threeRowSplit' (_topPercent _middlePercent : Nat := 33)
   let (topResult, topChildren) ← runWidgetChildren top
   let (middleResult, middleChildren) ← runWidgetChildren middle
   let (bottomResult, bottomChildren) ← runWidgetChildren bottom
+  let topNode ← mkColumnNode topChildren
+  let middleNode ← mkColumnNode middleChildren
+  let bottomNode ← mkColumnNode bottomChildren
 
-  let mkRender (children : Array ComponentRender) : ComponentRender := do
-    if children.isEmpty then
-      pure RNode.empty
-    else if h : children.size = 1 then
-      children[0]
-    else
-      let nodes ← children.mapM id
-      pure (RNode.column 0 {} nodes)
-
-  emit do
-    let topNode ← mkRender topChildren
-    let middleNode ← mkRender middleChildren
-    let bottomNode ← mkRender bottomChildren
-
+  let node ← topNode.zipWith3' (fun t m b =>
     if config.showDivider then
       let divider := RNode.text "─────────────────────────────────────────" config.dividerStyle
-      pure (RNode.column config.gap {} #[topNode, divider, middleNode, divider, bottomNode])
+      RNode.column config.gap {} #[t, divider, m, divider, b]
     else
-      pure (RNode.column config.gap {} #[topNode, middleNode, bottomNode])
+      RNode.column config.gap {} #[t, m, b]
+  ) middleNode bottomNode
+  emit node
 
   pure (topResult, middleResult, bottomResult)
 

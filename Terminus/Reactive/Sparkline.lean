@@ -64,22 +64,21 @@ private def valueToBarIndex (value minVal maxVal : Float) : Nat :=
     ```
 -/
 def sparkline' (data : Array Float) (config : SparklineConfig := {}) : WidgetM Unit := do
-  emit do
-    if data.isEmpty then
-      pure RNode.empty
-    else
-      let displayData := match config.maxWidth with
-        | some w => data.toList.take w |>.toArray
-        | none => data
+  if data.isEmpty then
+    emitStatic RNode.empty
+  else
+    let displayData := match config.maxWidth with
+      | some w => data.toList.take w |>.toArray
+      | none => data
 
-      let minVal := computeMin displayData config.minValue
-      let maxVal := computeMax displayData config.maxValue
+    let minVal := computeMin displayData config.minValue
+    let maxVal := computeMax displayData config.maxValue
 
-      let chars := displayData.map fun v =>
-        let idx := valueToBarIndex v minVal maxVal
-        sparklineChars.getD idx '▁'
+    let chars := displayData.map fun v =>
+      let idx := valueToBarIndex v minVal maxVal
+      sparklineChars.getD idx '▁'
 
-      pure (RNode.text (String.ofList chars.toList) config.style)
+    emitStatic (RNode.text (String.ofList chars.toList) config.style)
 
 /-- Create a sparkline from integer data. -/
 def sparklineInt' (data : Array Int) (config : SparklineConfig := {}) : WidgetM Unit :=
@@ -99,10 +98,9 @@ def sparklineNat' (data : Array Nat) (config : SparklineConfig := {}) : WidgetM 
 -/
 def dynSparkline' (data : Reactive.Dynamic Spider (Array Float)) (config : SparklineConfig := {})
     : WidgetM Unit := do
-  emitDynamic do
-    let arr ← data.sample
+  let node ← data.map' fun arr =>
     if arr.isEmpty then
-      pure RNode.empty
+      RNode.empty
     else
       let displayData := match config.maxWidth with
         | some w => arr.toList.take w |>.toArray
@@ -115,7 +113,8 @@ def dynSparkline' (data : Reactive.Dynamic Spider (Array Float)) (config : Spark
         let idx := valueToBarIndex v minVal maxVal
         sparklineChars.getD idx '▁'
 
-      pure (RNode.text (String.ofList chars.toList) config.style)
+      RNode.text (String.ofList chars.toList) config.style
+  emit node
 
 /-! ## Labeled Sparkline -/
 
@@ -143,64 +142,64 @@ structure LabeledSparklineConfig extends SparklineConfig where
 -/
 def labeledSparkline' (label : String) (data : Array Float) (config : LabeledSparklineConfig := {})
     : WidgetM Unit := do
-  emit do
-    if data.isEmpty then
-      pure (RNode.text label config.labelStyle)
-    else
-      let displayData := match config.maxWidth with
-        | some w => data.toList.take w |>.toArray
-        | none => data
+  if data.isEmpty then
+    emitStatic (RNode.text label config.labelStyle)
+  else
+    let displayData := match config.maxWidth with
+      | some w => data.toList.take w |>.toArray
+      | none => data
 
-      let minVal := computeMin displayData config.minValue
-      let maxVal := computeMax displayData config.maxValue
+    let minVal := computeMin displayData config.minValue
+    let maxVal := computeMax displayData config.maxValue
 
-      let chars := displayData.map fun v =>
-        let idx := valueToBarIndex v minVal maxVal
-        sparklineChars.getD idx '▁'
+    let chars := displayData.map fun v =>
+      let idx := valueToBarIndex v minVal maxVal
+      sparklineChars.getD idx '▁'
 
-      let mut nodes : Array RNode := #[]
+    let mut nodes : Array RNode := #[]
 
-      if !label.isEmpty then
-        nodes := nodes.push (RNode.text (label ++ " ") config.labelStyle)
+    if !label.isEmpty then
+      nodes := nodes.push (RNode.text (label ++ " ") config.labelStyle)
 
-      nodes := nodes.push (RNode.text (String.ofList chars.toList) config.style)
+    nodes := nodes.push (RNode.text (String.ofList chars.toList) config.style)
 
-      if config.showValue then
-        if let some lastVal := data.back? then
-          nodes := nodes.push (RNode.text s!" {lastVal.toUInt32}" config.valueStyle)
+    if config.showValue then
+      if let some lastVal := data.back? then
+        nodes := nodes.push (RNode.text s!" {lastVal.toUInt32}" config.valueStyle)
 
-      pure (RNode.row 0 {} nodes)
+    emitStatic (RNode.row 0 {} nodes)
 
 /-- Create a dynamic labeled sparkline. -/
 def dynLabeledSparkline' (label : String) (data : Reactive.Dynamic Spider (Array Float))
     (config : LabeledSparklineConfig := {}) : WidgetM Unit := do
-  emitDynamic do
-    let arr ← data.sample
-    if arr.isEmpty then
-      pure (RNode.text label config.labelStyle)
-    else
-      let displayData := match config.maxWidth with
-        | some w => arr.toList.take w |>.toArray
-        | none => arr
+  let node ← data.map' fun arr =>
+    Id.run do
+      if arr.isEmpty then
+        return RNode.text label config.labelStyle
+      else
+        let displayData := match config.maxWidth with
+          | some w => arr.toList.take w |>.toArray
+          | none => arr
 
-      let minVal := computeMin displayData config.minValue
-      let maxVal := computeMax displayData config.maxValue
+        let minVal := computeMin displayData config.minValue
+        let maxVal := computeMax displayData config.maxValue
 
-      let chars := displayData.map fun v =>
-        let idx := valueToBarIndex v minVal maxVal
-        sparklineChars.getD idx '▁'
+        let chars := displayData.map fun v =>
+          let idx := valueToBarIndex v minVal maxVal
+          sparklineChars.getD idx '▁'
 
-      let mut nodes : Array RNode := #[]
+        let mut nodes : Array RNode := #[]
 
-      if !label.isEmpty then
-        nodes := nodes.push (RNode.text (label ++ " ") config.labelStyle)
+        if !label.isEmpty then
+          nodes := nodes.push (RNode.text (label ++ " ") config.labelStyle)
 
-      nodes := nodes.push (RNode.text (String.ofList chars.toList) config.style)
+        nodes := nodes.push (RNode.text (String.ofList chars.toList) config.style)
 
-      if config.showValue then
-        if let some lastVal := arr.back? then
-          nodes := nodes.push (RNode.text s!" {lastVal.toUInt32}" config.valueStyle)
+        if config.showValue then
+          if let some lastVal := arr.back? then
+            nodes := nodes.push (RNode.text s!" {lastVal.toUInt32}" config.valueStyle)
 
-      pure (RNode.row 0 {} nodes)
+        return RNode.row 0 {} nodes
+  emit node
 
 end Terminus.Reactive

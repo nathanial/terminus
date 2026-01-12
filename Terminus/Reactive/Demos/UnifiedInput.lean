@@ -133,8 +133,8 @@ def inputContent (theme : Theme) (_events : TerminusEvents) : WidgetM Unit := do
 
           spacer' 0 1
 
-          emitDynamic do
-            let ok ← form.isValid.sample
-            let status ← statusDyn.sample
+          let node ← form.isValid.zipWith' (fun ok status =>
             let validity := if ok then "valid" else "invalid"
-            pure (RNode.text s!"Status: {status} ({validity})" theme.captionStyle)
+            RNode.text s!"Status: {status} ({validity})" theme.captionStyle
+          ) statusDyn
+          emit node

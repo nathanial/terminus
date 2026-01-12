@@ -19,7 +19,7 @@ private def fnv1a64String (s : String) : UInt64 :=
 inductive ImageSource where
   | bytes (data : ByteArray)
   | path (path : System.FilePath)
-  deriving Inhabited
+  deriving Inhabited, BEq
 
 instance : Repr ImageSource where
   reprPrec s _ := match s with

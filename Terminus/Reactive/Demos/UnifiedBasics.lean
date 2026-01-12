@@ -46,17 +46,17 @@ def basicsContent (theme : Theme) : WidgetM Unit := do
 
           row' (gap := 1) {} do
             text' "Pulse:" theme.captionStyle
-            emitDynamic do
-              let on ← pulse.sample
+            let node ← pulse.map' (fun on =>
               if on then
-                pure (RNode.text "●" { fg := .ansi .green })
+                RNode.text "●" { fg := .ansi .green }
               else
-                pure (RNode.text "○" { fg := .ansi .brightBlack })
+                RNode.text "○" { fg := .ansi .brightBlack }
+            )
+            emit node
 
           row' (gap := 1) {} do
             text' "Cycle:" theme.captionStyle
-            emitDynamic do
-              let idx ← colorCycle.sample
+            let node ← colorCycle.map' (fun idx =>
               let colors := #[
                 Color.ansi .red, Color.ansi .green,
                 Color.ansi .yellow, Color.ansi .blue,
@@ -65,7 +65,9 @@ def basicsContent (theme : Theme) : WidgetM Unit := do
               let idxNat := idx.toUInt64.toNat
               let safeIdx := idxNat % colors.size
               let color := colors[safeIdx]!
-              pure (RNode.text "████" { fg := color })
+              RNode.text "████" { fg := color }
+            )
+            emit node
 
       -- Time tracking
       column' (gap := 1) {} do
@@ -79,22 +81,25 @@ def basicsContent (theme : Theme) : WidgetM Unit := do
 
           row' (gap := 1) {} do
             text' "Uptime:" theme.captionStyle
-            emitDynamic do
-              let ms ← elapsedMs.sample
+            let node ← elapsedMs.map' (fun ms =>
               let secs := ms / 1000
-              pure (RNode.text s!"{secs}s" theme.primaryStyle)
+              RNode.text s!"{secs}s" theme.primaryStyle
+            )
+            emit node
 
           row' (gap := 1) {} do
             text' "Keys:" theme.captionStyle
-            emitDynamic do
-              let count ← keyCount.sample
-              pure (RNode.text s!"{count}" theme.primaryStyle)
+            let node ← keyCount.map' (fun count =>
+              RNode.text s!"{count}" theme.primaryStyle
+            )
+            emit node
 
           row' (gap := 1) {} do
             text' "Last:" theme.captionStyle
-            emitDynamic do
-              let key ← lastKey.sample
-              pure (RNode.text key theme.primaryStyle)
+            let node ← lastKey.map' (fun key =>
+              RNode.text key theme.primaryStyle
+            )
+            emit node
 
     spacer' 0 1
 

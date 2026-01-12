@@ -16,39 +16,39 @@ These emit visual-only widgets without returning events or dynamics.
 
 /-- Emit plain text with a style. -/
 def text' (content : String) (style : Style) : WidgetM Unit := do
-  emit (pure (RNode.text content style))
+  emitStatic (RNode.text content style)
 
 /-- Emit styled text with foreground color. -/
 def styledText' (content : String) (fg : Color) : WidgetM Unit := do
-  emit (pure (RNode.text content { fg }))
+  emitStatic (RNode.text content { fg })
 
 /-- Emit a heading level 1. -/
 def heading1' (content : String) (theme : Theme) : WidgetM Unit := do
-  emit (pure (RNode.text content (theme.heading1Style)))
+  emitStatic (RNode.text content (theme.heading1Style))
 
 /-- Emit a heading level 2. -/
 def heading2' (content : String) (theme : Theme) : WidgetM Unit := do
-  emit (pure (RNode.text content (theme.heading2Style)))
+  emitStatic (RNode.text content (theme.heading2Style))
 
 /-- Emit a heading level 3. -/
 def heading3' (content : String) (theme : Theme) : WidgetM Unit := do
-  emit (pure (RNode.text content (theme.heading3Style)))
+  emitStatic (RNode.text content (theme.heading3Style))
 
 /-- Emit body text. -/
 def bodyText' (content : String) (theme : Theme) : WidgetM Unit := do
-  emit (pure (RNode.text content (theme.bodyStyle)))
+  emitStatic (RNode.text content (theme.bodyStyle))
 
 /-- Emit caption/muted text. -/
 def caption' (content : String) (theme : Theme) : WidgetM Unit := do
-  emit (pure (RNode.text content (theme.captionStyle)))
+  emitStatic (RNode.text content (theme.captionStyle))
 
 /-- Emit primary-colored text. -/
 def primaryText' (content : String) (theme : Theme) : WidgetM Unit := do
-  emit (pure (RNode.text content (theme.primaryStyle)))
+  emitStatic (RNode.text content (theme.primaryStyle))
 
 /-- Emit a spacer. -/
 def spacer' (width height : Nat := 1) : WidgetM Unit := do
-  emit (pure (RNode.spacer width height))
+  emitStatic (RNode.spacer width height)
 
 /-! ## Dynamic Text Components
 
@@ -57,45 +57,51 @@ These sample dynamics at render time to produce updated content.
 
 /-- Emit text that updates when the Dynamic changes. -/
 def dynText' (content : Dynamic Spider String) (style : Style) : WidgetM Unit := do
-  emit do
-    let text ← content.sample
-    pure (RNode.text text style)
+  let node ← content.map' fun text => RNode.text text style
+  emit node
 
 /-- Emit dynamic body text. -/
 def dynBodyText' (content : Dynamic Spider String) (theme : Theme) : WidgetM Unit := do
-  emit do
-    let text ← content.sample
-    pure (RNode.text text (theme.bodyStyle))
+  let node ← content.map' fun text => RNode.text text (theme.bodyStyle)
+  emit node
 
 /-- Emit dynamic caption text. -/
 def dynCaption' (content : Dynamic Spider String) (theme : Theme) : WidgetM Unit := do
-  emit do
-    let text ← content.sample
-    pure (RNode.text text (theme.captionStyle))
+  let node ← content.map' fun text => RNode.text text (theme.captionStyle)
+  emit node
 
 /-! ## Conditional Rendering -/
 
 /-- Emit a widget only when condition is true (sampled at render time). -/
 def when' (condition : Dynamic Spider Bool) (content : WidgetM Unit) : WidgetM Unit := do
   let (_, childRenders) ← runWidgetChildren content
-  emit do
-    let visible ← condition.sample
+  let childrenList ← Reactive.Dynamic.sequence childRenders.toList
+  let node ← condition.zipWith' (fun visible kids =>
     if visible then
-      let nodes ← childRenders.mapM id
-      pure (RNode.column 0 {} nodes)
+      if kids.isEmpty then
+        RNode.empty
+      else
+        RNode.column 0 {} kids.toArray
     else
-      pure RNode.empty
+      RNode.empty
+  ) childrenList
+  emit node
 
 /-- Emit one of two widgets based on condition (sampled at render time). -/
 def ifThenElse' (condition : Dynamic Spider Bool)
     (thenContent : WidgetM Unit) (elseContent : WidgetM Unit) : WidgetM Unit := do
   let (_, thenRenders) ← runWidgetChildren thenContent
   let (_, elseRenders) ← runWidgetChildren elseContent
-  emit do
-    let visible ← condition.sample
-    let renders := if visible then thenRenders else elseRenders
-    let nodes ← renders.mapM id
-    pure (RNode.column 0 {} nodes)
+  let thenList ← Reactive.Dynamic.sequence thenRenders.toList
+  let elseList ← Reactive.Dynamic.sequence elseRenders.toList
+  let node ← condition.zipWith3' (fun visible thenKids elseKids =>
+    let kids := if visible then thenKids else elseKids
+    if kids.isEmpty then
+      RNode.empty
+    else
+      RNode.column 0 {} kids.toArray
+  ) thenList elseList
+  emit node
 
 /-- Emit a dynamic widget (the IO action is run at render time). -/
 def emitDynamic (render : ComponentRender) : WidgetM Unit := emit render
@@ -141,22 +147,21 @@ def progressBar' (progress : Float) (config : ProgressBarConfig := {}) : WidgetM
 /-- Emit a dynamic progress bar that updates when the progress Dynamic changes. -/
 def dynProgressBar' (progress : Reactive.Dynamic Spider Float) (config : ProgressBarConfig := {})
     : WidgetM Unit := do
-  emit do
-    let p ← progress.sample
+  let node ← progress.map' fun p =>
     let clampedProgress := max 0.0 (min 1.0 p)
     let filledCount := (clampedProgress * config.width.toFloat).toUInt32.toNat
     let emptyCount := config.width - filledCount
     let filled := String.ofList (List.replicate filledCount config.filledChar)
     let empty := String.ofList (List.replicate emptyCount config.emptyChar)
-    -- Create a row with filled, empty, and optional percentage
     let filledNode := RNode.text filled config.filledStyle
     let emptyNode := RNode.text empty config.emptyStyle
     if config.showPercentage then
       let percent := (clampedProgress * 100).toUInt32
       let percentNode := RNode.text s!" {percent}%" config.percentageStyle
-      pure (RNode.row 0 {} #[filledNode, emptyNode, percentNode])
+      RNode.row 0 {} #[filledNode, emptyNode, percentNode]
     else
-      pure (RNode.row 0 {} #[filledNode, emptyNode])
+      RNode.row 0 {} #[filledNode, emptyNode]
+  emit node
 
 /-! ## Dynamic Widget Subtrees
 
@@ -181,45 +186,35 @@ def dynWidget (dynValue : Dynamic Spider a) (builder : a → WidgetM b)
 
   -- Initial build (Dynamic.sample is IO, so lift it)
   let initialValue ← SpiderM.liftIO dynValue.sample
-  let (((initialResult, initialRenders), _), initialScope) ← StateT.lift do
-    let widgetM := runWidgetChildren (builder initialValue)
-    let reactiveM := widgetM.run { children := #[] }
-    let spiderM := reactiveM.run events
+  let ((initialResult, initialRender), initialScope) ← StateT.lift do
+    let widgetM := runWidget (builder initialValue)
+    let spiderM := widgetM.run events
     SpiderM.withScope spiderM
 
-  -- Refs for current state
-  let rendersRef : IO.Ref (Array ComponentRender) ← SpiderM.liftIO (IO.mkRef initialRenders)
   let scopeRef : IO.Ref Reactive.SubscriptionScope ← SpiderM.liftIO (IO.mkRef initialScope)
 
-  -- Result tracking via trigger event
   let (resultTrigger, fireResult) ← newTriggerEvent
   let resultDyn ← holdDyn initialResult resultTrigger
 
-  -- Subscribe to rebuilds when dynValue changes
+  let (renderTrigger, fireRender) ← newTriggerEvent
+  let renderDynDyn ← holdDyn initialRender renderTrigger
+  let switchedRender ← Reactive.Dynamic.switch renderDynDyn
+
   let subscribeAction : SpiderM Unit := ⟨fun env => do
     let unsub ← Reactive.Event.subscribe dynValue.updated fun newValue => do
       let oldScope ← scopeRef.get
       oldScope.dispose
       let childScope ← env.currentScope.child
-      -- Run the builder with the new value in captured context
-      let widgetM := runWidgetChildren (builder newValue)
-      let reactiveM := widgetM.run { children := #[] }
-      let spiderM := reactiveM.run events
-      let ((result, renders), _) ← spiderM.run { env with currentScope := childScope }
-      rendersRef.set renders
+      let widgetM := runWidget (builder newValue)
+      let spiderM := widgetM.run events
+      let (result, render) ← spiderM.run { env with currentScope := childScope }
       scopeRef.set childScope
       fireResult result
+      fireRender render
     env.currentScope.register unsub⟩
   subscribeAction
 
-  -- Emit render that uses current renders
-  emit do
-    let renders ← rendersRef.get
-    if renders.isEmpty then
-      pure RNode.empty
-    else
-      let nodes ← renders.mapM id
-      pure (RNode.column 0 {} nodes)
+  emit switchedRender
 
   pure resultDyn
 

@@ -33,7 +33,7 @@ test "useAsyncW returns AsyncResult with loading false initially" := do
         text' "not loading" {}
     ).run events
 
-    let node ← SpiderM.liftIO render
+    let node ← SpiderM.liftIO render.sample
     SpiderM.liftIO (ensure (rnodeContainsText node "not loading") "should initially not be loading")
 
 test "useAsyncW result is none before trigger" := do
@@ -48,7 +48,7 @@ test "useAsyncW result is none before trigger" := do
       | some data => text' data {}
     ).run events
 
-    let node ← SpiderM.liftIO render
+    let node ← SpiderM.liftIO render.sample
     SpiderM.liftIO (ensure (rnodeContainsText node "none") "result should be none initially")
 
 test "useAsyncOnceW creates AsyncResult" := do
@@ -62,7 +62,7 @@ test "useAsyncOnceW creates AsyncResult" := do
       text' "ok" {}
     ).run events
 
-    let node ← SpiderM.liftIO render
+    let node ← SpiderM.liftIO render.sample
     SpiderM.liftIO (ensure (rnodeContainsText node "ok") "should create AsyncResult")
 
 -- ============================================================================
@@ -83,7 +83,7 @@ test "useStreamW returns StreamResult with empty chunks initially" := do
         text' "has data" {}
     ).run events
 
-    let node ← SpiderM.liftIO render
+    let node ← SpiderM.liftIO render.sample
     SpiderM.liftIO (ensure (rnodeContainsText node "empty") "chunks should be empty initially")
 
 test "useStreamW is not streaming initially" := do
@@ -100,7 +100,7 @@ test "useStreamW is not streaming initially" := do
         text' "not streaming" {}
     ).run events
 
-    let node ← SpiderM.liftIO render
+    let node ← SpiderM.liftIO render.sample
     SpiderM.liftIO (ensure (rnodeContainsText node "not streaming") "should not be streaming initially")
 
 -- ============================================================================
@@ -117,7 +117,7 @@ test "useDebounceAsyncW creates event" := do
       text' "ok" {}
     ).run events
 
-    let node ← SpiderM.liftIO render
+    let node ← SpiderM.liftIO render.sample
     SpiderM.liftIO (ensure (rnodeContainsText node "ok") "debounce event should be created")
 
 -- ============================================================================
@@ -130,15 +130,16 @@ test "useAsyncW loading state can be rendered with emitDynamic" := do
     let (_, render) ← (runWidget do
       let (trigger, _fireTrigger) ← Reactive.newTriggerEvent (t := Spider) (a := Unit)
       let asyncResult ← useAsyncW (pure "widget test") trigger
-      emitDynamic do
-        let loading ← asyncResult.loading.sample
+      let node ← asyncResult.loading.map' (fun loading =>
         if loading then
-          pure (RNode.text "loading" {})
+          RNode.text "loading" {}
         else
-          pure (RNode.text "idle" {})
+          RNode.text "idle" {}
+      )
+      emit node
     ).run events
 
-    let node ← SpiderM.liftIO render
+    let node ← SpiderM.liftIO render.sample
     SpiderM.liftIO (ensure (rnodeContainsText node "idle") "should show idle state")
 
 test "useAsyncOnceW result can be rendered with emitDynamic" := do
@@ -146,15 +147,16 @@ test "useAsyncOnceW result can be rendered with emitDynamic" := do
     let (events, _) ← createInputs
     let (_, render) ← (runWidget do
       let asyncResult ← useAsyncOnceW (pure "once test")
-      emitDynamic do
-        let result ← asyncResult.result.sample
+      let node ← asyncResult.result.map' (fun result =>
         match result with
-        | none => pure (RNode.text "pending" {})
-        | some data => pure (RNode.text data {})
+        | none => RNode.text "pending" {}
+        | some data => RNode.text data {}
+      )
+      emit node
     ).run events
 
     -- The async may or may not have completed by now - just verify structure works
-    let _node ← SpiderM.liftIO render
+    let _node ← SpiderM.liftIO render.sample
     SpiderM.liftIO (pure ())
 
 test "StreamResult chunks can be displayed dynamically" := do
@@ -164,16 +166,17 @@ test "StreamResult chunks can be displayed dynamically" := do
       let (trigger, _) ← Reactive.newTriggerEvent (t := Spider) (a := Unit)
       let streamAction : IO (Option String) := pure none
       let streamResult ← useStreamW streamAction trigger
-      emitDynamic do
-        let chunks ← streamResult.chunks.sample
+      let node ← streamResult.chunks.map' (fun chunks =>
         if chunks.isEmpty then
-          pure (RNode.text "no chunks" {})
+          RNode.text "no chunks" {}
         else
           let chunkText := String.intercalate ", " chunks.toList
-          pure (RNode.text chunkText {})
+          RNode.text chunkText {}
+      )
+      emit node
     ).run events
 
-    let node ← SpiderM.liftIO render
+    let node ← SpiderM.liftIO render.sample
     SpiderM.liftIO (ensure (rnodeContainsText node "no chunks") "should show no chunks initially")
 
 #generate_tests

@@ -111,7 +111,7 @@ test "canvas' creates canvas with drawing operations" := do
 
     -- Should have drawing operations available
     -- Just test that it compiles and runs
-    let node ← SpiderM.liftIO render
+    let node ← SpiderM.liftIO render.sample
     -- Canvas renders something
     pure ()
 
@@ -127,7 +127,7 @@ test "staticCanvas' renders a pre-built grid" := do
       staticCanvas' grid
     ).run events
 
-    let node ← SpiderM.liftIO render
+    let node ← SpiderM.liftIO render.sample
     -- Should render the grid
 
 -- ============================================================================
@@ -149,7 +149,7 @@ test "image' creates image node" := do
       image' "/path/to/image.png" { width := 30, height := 15 }
     ).run events
 
-    let node ← SpiderM.liftIO render
+    let node ← SpiderM.liftIO render.sample
     -- Should create an image node
 
 test "imageFromBytes' creates image from bytes" := do
@@ -162,7 +162,7 @@ test "imageFromBytes' creates image from bytes" := do
       imageFromBytes' bytes { width := 40, height := 20, altText := "Test Image" }
     ).run events
 
-    let node ← SpiderM.liftIO render
+    let node ← SpiderM.liftIO render.sample
 
 test "imagePlaceholder' shows alt text" := do
   runSpider do
@@ -172,7 +172,7 @@ test "imagePlaceholder' shows alt text" := do
       imagePlaceholder' "Loading..." {}
     ).run events
 
-    let node ← SpiderM.liftIO render
+    let node ← SpiderM.liftIO render.sample
     SpiderM.liftIO (ensure (rnodeContainsText node "Loading") "expected alt text")
 
 -- ============================================================================
@@ -230,7 +230,7 @@ test "bigText' renders big text" := do
       bigText' "HI" { font := .block }
     ).run events
 
-    let node ← SpiderM.liftIO render
+    let node ← SpiderM.liftIO render.sample
     -- Should contain the on character
     SpiderM.liftIO (ensure (rnodeContainsText node "█") "expected on char")
 
@@ -242,7 +242,7 @@ test "bigText' with small font" := do
       bigText' "AB" { font := .small }
     ).run events
 
-    let node ← SpiderM.liftIO render
+    let node ← SpiderM.liftIO render.sample
     -- Should contain the on character
     SpiderM.liftIO (ensure (rnodeContainsText node "█") "expected on char")
 
@@ -254,7 +254,7 @@ test "bigText' with slant font" := do
       bigText' "XY" { font := .slant }
     ).run events
 
-    let node ← SpiderM.liftIO render
+    let node ← SpiderM.liftIO render.sample
     -- Should contain the on character
     SpiderM.liftIO (ensure (rnodeContainsText node "█") "expected on char")
 
@@ -266,7 +266,7 @@ test "bigText' with custom on/off chars" := do
       bigText' "A" { onChar := '#', offChar := some '.' }
     ).run events
 
-    let node ← SpiderM.liftIO render
+    let node ← SpiderM.liftIO render.sample
     SpiderM.liftIO (ensure (rnodeContainsText node "#") "expected custom on char")
 
 test "bigTextMultiline' renders multiple lines" := do
@@ -277,7 +277,7 @@ test "bigTextMultiline' renders multiple lines" := do
       bigTextMultiline' "A\nB" {}
     ).run events
 
-    let node ← SpiderM.liftIO render
+    let node ← SpiderM.liftIO render.sample
     -- Should contain the on character
     SpiderM.liftIO (ensure (rnodeContainsText node "█") "expected on char")
 
@@ -289,7 +289,7 @@ test "bigText' handles empty string" := do
       bigText' "" {}
     ).run events
 
-    let node ← SpiderM.liftIO render
+    let node ← SpiderM.liftIO render.sample
     -- Should not crash
 
 -- ============================================================================

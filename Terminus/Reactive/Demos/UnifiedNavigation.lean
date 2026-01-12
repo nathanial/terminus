@@ -21,13 +21,14 @@ def navigationContent (theme : Theme) (_events : TerminusEvents) : WidgetM Unit 
             activeStyle := { fg := .ansi .cyan, modifier := { bold := true } }
           }
 
-          emitDynamic do
-            let idx ← tabResult.activeTab.sample
+          let node ← tabResult.activeTab.map' (fun idx =>
             let content := match idx with
               | 0 => "Welcome to the Home tab!"
               | 1 => "Configure your settings here."
               | _ => "Help: Use arrow keys to navigate."
-            pure (RNode.text content theme.bodyStyle)
+            RNode.text content theme.bodyStyle
+          )
+          emit node
 
       -- Tree demo
       column' (gap := 1) {} do
@@ -54,6 +55,7 @@ def navigationContent (theme : Theme) (_events : TerminusEvents) : WidgetM Unit 
 
           row' (gap := 1) {} do
             text' "Selected:" theme.captionStyle
-            emitDynamic do
-              let node ← treeResult.selectedNode.sample
-              pure (RNode.text (node.getD "(none)") theme.primaryStyle)
+            let node ← treeResult.selectedNode.map' (fun selected =>
+              RNode.text (selected.getD "(none)") theme.primaryStyle
+            )
+            emit node

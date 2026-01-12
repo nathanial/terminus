@@ -66,66 +66,46 @@ test "render empty node produces empty buffer" := do
 -- Dynamic Sampling Tests
 -- ============================================================================
 
-test "ComponentRender samples IO action each call" := do
-  let counterRef ← IO.mkRef 0
-  let render : ComponentRender := do
-    let n ← counterRef.get
-    counterRef.set (n + 1)
-    pure (RNode.text s!"Count: {n}" {})
+test "ComponentRender samples stable dynamic" := do
+  runSpider do
+    let render ← Dynamic.pureM (RNode.text "Stable" {})
+    let node1 ← SpiderM.liftIO render.sample
+    let node2 ← SpiderM.liftIO render.sample
+    match node1, node2 with
+    | .text c1 _, .text c2 _ =>
+      SpiderM.liftIO (c1 ≡ "Stable")
+      SpiderM.liftIO (c2 ≡ "Stable")
+    | _, _ => SpiderM.liftIO (ensure false "expected text nodes")
 
-  -- First call
-  let node1 ← render
-  -- Second call
-  let node2 ← render
-  -- Third call
-  let node3 ← render
+test "column combines static and dynamic children" := do
+  runSpider do
+    let (events, _) ← createInputs
+    let (event, trigger) ← Reactive.newTriggerEvent (t := Spider) (a := Unit)
+    let countDyn ← Reactive.foldDyn (fun _ n => n + 1) 0 event
 
-  -- Each call should have incremented the counter
-  match node1 with
-  | .text content _ => content ≡ "Count: 0"
-  | _ => ensure false "expected text node"
+    let (_, render) ← (runWidget do
+      column' (gap := 0) (style := {}) do
+        text' "Static" {}
+        let node ← countDyn.map' (fun n => RNode.text s!"Value: {n}" {})
+        emit node
+    ).run events
 
-  match node2 with
-  | .text content _ => content ≡ "Count: 1"
-  | _ => ensure false "expected text node"
+    let node1 ← SpiderM.liftIO render.sample
+    SpiderM.liftIO (trigger ())
+    let node2 ← SpiderM.liftIO render.sample
 
-  match node3 with
-  | .text content _ => content ≡ "Count: 2"
-  | _ => ensure false "expected text node"
-
-test "nested ComponentRender in column samples correctly" := do
-  let counterRef ← IO.mkRef 0
-  let childRender : ComponentRender := do
-    let n ← counterRef.get
-    counterRef.set (n + 1)
-    pure (RNode.text s!"Value: {n}" {})
-
-  -- Simulate what column' does: array of child renders
-  let childRenders : Array ComponentRender := #[
-    pure (RNode.text "Static" {}),
-    childRender
-  ]
-
-  -- First sampling
-  let nodes1 ← childRenders.mapM id
-  -- Second sampling
-  let nodes2 ← childRenders.mapM id
-
-  -- Check first sampling - nodes1 is Array RNode
-  if h : 1 < nodes1.size then
-    match nodes1[1] with
-    | .text content _ => content ≡ "Value: 0"
-    | _ => ensure false "expected text node"
-  else
-    ensure false "expected at least 2 nodes"
-
-  -- Check second sampling
-  if h : 1 < nodes2.size then
-    match nodes2[1] with
-    | .text content _ => content ≡ "Value: 1"
-    | _ => ensure false "expected text node"
-  else
-    ensure false "expected at least 2 nodes"
+    match node1, node2 with
+    | .column _ _ children1, .column _ _ children2 =>
+      if h1 : 1 < children1.size then
+        if h2 : 1 < children2.size then
+          match children1[1], children2[1] with
+          | .text c1 _, .text c2 _ =>
+            SpiderM.liftIO (c1 ≡ "Value: 0")
+            SpiderM.liftIO (c2 ≡ "Value: 1")
+          | _, _ => SpiderM.liftIO (ensure false "expected text nodes")
+        else SpiderM.liftIO (ensure false "expected 2 children in node2")
+      else SpiderM.liftIO (ensure false "expected 2 children in node1")
+    | _, _ => SpiderM.liftIO (ensure false "expected column nodes")
 
 -- ============================================================================
 -- Integration with Reactive library
@@ -171,23 +151,25 @@ test "holdDyn holds last event value" := do
 test "emitDynamic samples dynamic on each render call" := do
   runSpider do
     let (events, _) ← createInputs
-    let counterRef ← SpiderM.liftIO (IO.mkRef 0)
+    let (event, trigger) ← Reactive.newTriggerEvent (t := Spider) (a := Unit)
+    let countDyn ← Reactive.foldDyn (fun _ n => n + 1) 0 event
 
     let (_, render) ← (runWidget do
-      emitDynamic do
-        let n ← counterRef.get
-        counterRef.set (n + 1)
-        pure (RNode.text s!"Count: {n}" {})
+      let node ← countDyn.map' (fun n => RNode.text s!"Count: {n}" {})
+      emit node
     ).run events
 
     -- First render
-    let node1 ← SpiderM.liftIO render
+    let node1 ← SpiderM.liftIO render.sample
     match node1 with
     | .text content _ => SpiderM.liftIO (content ≡ "Count: 0")
     | _ => SpiderM.liftIO (ensure false "expected text node")
 
-    -- Second render (should sample again)
-    let node2 ← SpiderM.liftIO render
+    -- Trigger update
+    SpiderM.liftIO (trigger ())
+
+    -- Second render (should reflect update)
+    let node2 ← SpiderM.liftIO render.sample
     match node2 with
     | .text content _ => SpiderM.liftIO (content ≡ "Count: 1")
     | _ => SpiderM.liftIO (ensure false "expected text node")
@@ -195,21 +177,22 @@ test "emitDynamic samples dynamic on each render call" := do
 test "emitDynamic inside column samples on each render" := do
   runSpider do
     let (events, _) ← createInputs
-    let counterRef ← SpiderM.liftIO (IO.mkRef 0)
+    let (event, trigger) ← Reactive.newTriggerEvent (t := Spider) (a := Unit)
+    let countDyn ← Reactive.foldDyn (fun _ n => n + 1) 0 event
 
     let (_, render) ← (runWidget do
       column' (gap := 0) (style := {}) do
         text' "Header" {}
-        emitDynamic do
-          let n ← counterRef.get
-          counterRef.set (n + 1)
-          pure (RNode.text s!"Dynamic: {n}" {})
+        let node ← countDyn.map' (fun n => RNode.text s!"Dynamic: {n}" {})
+        emit node
     ).run events
 
     -- First render
-    let node1 ← SpiderM.liftIO render
+    let node1 ← SpiderM.liftIO render.sample
+    -- Trigger update
+    SpiderM.liftIO (trigger ())
     -- Second render
-    let node2 ← SpiderM.liftIO render
+    let node2 ← SpiderM.liftIO render.sample
 
     -- Extract the dynamic child from each
     match node1, node2 with
@@ -232,13 +215,12 @@ test "Dynamic value reflected in emitDynamic render" := do
     let countDyn ← Reactive.foldDyn (fun _ n => n + 1) 0 event
 
     let (_, render) ← (runWidget do
-      emitDynamic do
-        let n ← countDyn.sample
-        pure (RNode.text s!"Count: {n}" {})
+      let node ← countDyn.map' (fun n => RNode.text s!"Count: {n}" {})
+      emit node
     ).run events
 
     -- Initial render
-    let node1 ← SpiderM.liftIO render
+    let node1 ← SpiderM.liftIO render.sample
     match node1 with
     | .text content _ => SpiderM.liftIO (content ≡ "Count: 0")
     | _ => SpiderM.liftIO (ensure false "expected text node")
@@ -247,7 +229,7 @@ test "Dynamic value reflected in emitDynamic render" := do
     SpiderM.liftIO (trigger ())
 
     -- Render again - should show updated value
-    let node2 ← SpiderM.liftIO render
+    let node2 ← SpiderM.liftIO render.sample
     match node2 with
     | .text content _ => SpiderM.liftIO (content ≡ "Count: 1")
     | _ => SpiderM.liftIO (ensure false "expected text node")
@@ -263,20 +245,19 @@ test "buffer content changes when dynamic value changes" := do
     let countDyn ← Reactive.foldDyn (fun _ n => n + 1) 0 event
 
     let (_, render) ← (runWidget do
-      emitDynamic do
-        let n ← countDyn.sample
-        pure (RNode.text s!"{n}" {})
+      let node ← countDyn.map' (fun n => RNode.text s!"{n}" {})
+      emit node
     ).run events
 
     -- First render to buffer
-    let node1 ← SpiderM.liftIO render
+    let node1 ← SpiderM.liftIO render.sample
     let buf1 := Terminus.Reactive.renderOnly node1 10 5
 
     -- Fire event
     SpiderM.liftIO (trigger ())
 
     -- Second render to buffer
-    let node2 ← SpiderM.liftIO render
+    let node2 ← SpiderM.liftIO render.sample
     let buf2 := Terminus.Reactive.renderOnly node2 10 5
 
     -- Buffers should differ
@@ -304,12 +285,12 @@ test "dynProgressBar updates buffer when progress changes" := do
       }
     ).run events
 
-    let node1 ← SpiderM.liftIO render
+    let node1 ← SpiderM.liftIO render.sample
     let buf1 := Terminus.Reactive.renderOnly node1 10 2
 
     SpiderM.liftIO (trigger 0.6)
 
-    let node2 ← SpiderM.liftIO render
+    let node2 ← SpiderM.liftIO render.sample
     let buf2 := Terminus.Reactive.renderOnly node2 10 2
 
     -- Initial progress = 0.0 -> "-----"
@@ -339,12 +320,11 @@ test "row' with emitDynamic updates buffer" := do
     let (_, render) ← (runWidget do
       row' (gap := 1) (style := {}) do
         text' "Count:" {}
-        emitDynamic do
-          let n ← countDyn.sample
-          pure (RNode.text s!"{n}" {})
+        let node ← countDyn.map' (fun n => RNode.text s!"{n}" {})
+        emit node
     ).run events
 
-    let node1 ← SpiderM.liftIO render
+    let node1 ← SpiderM.liftIO render.sample
     let buf1 := Terminus.Reactive.renderOnly node1 20 2
 
     -- Check initial buffer has "Count:" and "0"
@@ -354,7 +334,7 @@ test "row' with emitDynamic updates buffer" := do
 
     SpiderM.liftIO (trigger ())
 
-    let node2 ← SpiderM.liftIO render
+    let node2 ← SpiderM.liftIO render.sample
     let buf2 := Terminus.Reactive.renderOnly node2 20 2
 
     -- Check updated buffer has "1"
@@ -375,12 +355,11 @@ test "column' with row' containing emitDynamic updates buffer" := do
         text' "Header" {}
         row' (gap := 1) (style := {}) do
           text' "Count:" {}
-          emitDynamic do
-            let n ← countDyn.sample
-            pure (RNode.text s!"{n}" {})
+          let node ← countDyn.map' (fun n => RNode.text s!"{n}" {})
+          emit node
     ).run events
 
-    let node1 ← SpiderM.liftIO render
+    let node1 ← SpiderM.liftIO render.sample
     let buf1 := Terminus.Reactive.renderOnly node1 20 5
 
     -- Header on row 0
@@ -388,7 +367,7 @@ test "column' with row' containing emitDynamic updates buffer" := do
 
     SpiderM.liftIO (trigger ())
 
-    let node2 ← SpiderM.liftIO render
+    let node2 ← SpiderM.liftIO render.sample
     let buf2 := Terminus.Reactive.renderOnly node2 20 5
 
     -- Verify buffers differ

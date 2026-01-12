@@ -62,21 +62,20 @@ private def thumbMetrics (position totalItems visibleItems trackLength : Nat) : 
 -/
 def scrollbar' (position totalItems visibleItems : Nat) (config : ScrollbarConfig := {})
     : WidgetM Unit := do
-  emit do
-    let trackLength := config.length
-    let (thumbSize, thumbPos) := thumbMetrics position totalItems visibleItems trackLength
+  let trackLength := config.length
+  let (thumbSize, thumbPos) := thumbMetrics position totalItems visibleItems trackLength
 
-    let mut parts : Array RNode := #[]
+  let mut parts : Array RNode := #[]
 
-    for i in [:trackLength] do
-      let inThumb := i >= thumbPos && i < thumbPos + thumbSize
-      let char := if inThumb then config.thumbChar else config.trackChar
-      let style := if inThumb then config.thumbStyle else config.trackStyle
-      parts := parts.push (RNode.text (String.singleton char) style)
+  for i in [:trackLength] do
+    let inThumb := i >= thumbPos && i < thumbPos + thumbSize
+    let char := if inThumb then config.thumbChar else config.trackChar
+    let style := if inThumb then config.thumbStyle else config.trackStyle
+    parts := parts.push (RNode.text (String.singleton char) style)
 
-    match config.orientation with
-    | .vertical => pure (RNode.column 0 {} parts)
-    | .horizontal => pure (RNode.row 0 {} parts)
+  match config.orientation with
+  | .vertical => emitStatic (RNode.column 0 {} parts)
+  | .horizontal => emitStatic (RNode.row 0 {} parts)
 
 /-- Create a dynamic scrollbar widget.
 
@@ -93,25 +92,24 @@ def dynScrollbar' (position : Reactive.Dynamic Spider Nat)
     (totalItems : Reactive.Dynamic Spider Nat)
     (visibleItems : Reactive.Dynamic Spider Nat)
     (config : ScrollbarConfig := {}) : WidgetM Unit := do
-  emitDynamic do
-    let pos ← position.sample
-    let total ← totalItems.sample
-    let visible ← visibleItems.sample
+  let node ← position.zipWith3' (fun pos total visible =>
+    Id.run do
+      let trackLength := config.length
+      let (thumbSize, thumbPos) := thumbMetrics pos total visible trackLength
 
-    let trackLength := config.length
-    let (thumbSize, thumbPos) := thumbMetrics pos total visible trackLength
+      let mut parts : Array RNode := #[]
 
-    let mut parts : Array RNode := #[]
+      for i in [:trackLength] do
+        let inThumb := i >= thumbPos && i < thumbPos + thumbSize
+        let char := if inThumb then config.thumbChar else config.trackChar
+        let style := if inThumb then config.thumbStyle else config.trackStyle
+        parts := parts.push (RNode.text (String.singleton char) style)
 
-    for i in [:trackLength] do
-      let inThumb := i >= thumbPos && i < thumbPos + thumbSize
-      let char := if inThumb then config.thumbChar else config.trackChar
-      let style := if inThumb then config.thumbStyle else config.trackStyle
-      parts := parts.push (RNode.text (String.singleton char) style)
-
-    match config.orientation with
-    | .vertical => pure (RNode.column 0 {} parts)
-    | .horizontal => pure (RNode.row 0 {} parts)
+      match config.orientation with
+      | .vertical => return RNode.column 0 {} parts
+      | .horizontal => return RNode.row 0 {} parts
+  ) totalItems visibleItems
+  emit node
 
 /-- Create a horizontal scrollbar. -/
 def hScrollbar' (position totalItems visibleItems : Nat) (length : Nat := 20)

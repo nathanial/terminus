@@ -122,10 +122,10 @@ def overlayDialogsSection (theme : Theme) (unfocusedKeys : Reactive.Event Spider
 
       spacer' 0 1
 
-      emitDynamic do
-        let status ← dialogStatusDyn.sample
-        let inputValue ← inputValueDyn.sample
-        pure (RNode.text s!"Last: {status} | Input: {inputValue}" theme.captionStyle)
+      let node ← dialogStatusDyn.zipWith' (fun status inputValue =>
+        RNode.text s!"Last: {status} | Input: {inputValue}" theme.captionStyle
+      ) inputValueDyn
+      emit node
 
 def overlayPopupSection (theme : Theme) (unfocusedKeys : Reactive.Event Spider KeyData) : WidgetM Unit := do
   -- Popup visibility as FRP toggle
@@ -141,10 +141,11 @@ def overlayPopupSection (theme : Theme) (unfocusedKeys : Reactive.Event Spider K
       popupWhen' "demo-popup" popupVisible { title := some "Popup" } do
         text' "This is a popup panel." theme.bodyStyle
         text' "Press P to toggle visibility." theme.captionStyle
-      emitDynamic do
-        let visible ← popupVisible.sample
+      let node ← popupVisible.map' (fun visible =>
         let label := if visible then "Visible" else "Hidden"
-        pure (RNode.text s!"Status: {label}" theme.captionStyle)
+        RNode.text s!"Status: {label}" theme.captionStyle
+      )
+      emit node
 
 def overlayContent (theme : Theme) : WidgetM Unit := do
   column' (gap := 1) {} do

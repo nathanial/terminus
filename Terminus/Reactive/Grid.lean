@@ -56,6 +56,60 @@ def mk' (content : String) (style : Style := {}) : GridCell :=
 
 end GridCell
 
+/-! ## Grid Rendering Helper -/
+
+private def renderGrid (width height : Nat) (config : GridConfig)
+    (cellAt : Nat → Nat → GridCell) : RNode := Id.run do
+  if width == 0 || height == 0 then
+    return RNode.empty
+  else
+    let cellW := config.cellWidth
+    let cellH := config.cellHeight
+
+    -- Calculate total dimensions
+    let borderOffset := if config.borderType != .none then 1 else 0
+    let totalWidth := width * cellW + borderOffset * 2
+
+    let mut rows : Array RNode := #[]
+
+    -- Top border
+    if config.borderType != .none then
+      let chars := BorderChars.fromType config.borderType
+      let topBorder := String.singleton chars.topLeft ++
+        String.ofList (List.replicate (totalWidth - 2) chars.horizontal) ++
+        String.singleton chars.topRight
+      rows := rows.push (RNode.text topBorder config.borderStyle)
+
+    -- Grid rows
+    for y in [:height] do
+      for _cellRow in [:cellH] do
+        -- Cells in this row
+        let mut cells : Array RNode := #[]
+        if config.borderType != .none then
+          let chars := BorderChars.fromType config.borderType
+          cells := cells.push (RNode.text (String.singleton chars.vertical) config.borderStyle)
+
+        for x in [:width] do
+          let cell := cellAt x y
+          cells := cells.push (RNode.text cell.content cell.style)
+
+        -- Right border
+        if config.borderType != .none then
+          let chars := BorderChars.fromType config.borderType
+          cells := cells.push (RNode.text (String.singleton chars.vertical) config.borderStyle)
+
+        rows := rows.push (RNode.row 0 {} cells)
+
+    -- Bottom border
+    if config.borderType != .none then
+      let chars := BorderChars.fromType config.borderType
+      let bottomBorder := String.singleton chars.bottomLeft ++
+        String.ofList (List.replicate (totalWidth - 2) chars.horizontal) ++
+        String.singleton chars.bottomRight
+      rows := rows.push (RNode.text bottomBorder config.borderStyle)
+
+    return RNode.column 0 {} rows
+
 /-! ## Grid Result -/
 
 /-- Result returned by grid widget for cursor-enabled grids. -/
@@ -72,117 +126,24 @@ structure GridResult where
 /-- Create a static grid widget.
     The renderCell function is called for each cell position. -/
 def grid' (width height : Nat)
-    (renderCell : Nat → Nat → IO GridCell)
+    (renderCell : Nat → Nat → GridCell)
     (config : GridConfig := {}) : WidgetM Unit := do
-  emit do
-    if width == 0 || height == 0 then
-      pure RNode.empty
-    else
-      let cellW := config.cellWidth
-      let cellH := config.cellHeight
-
-      -- Calculate total dimensions
-      let borderOffset := if config.borderType != .none then 1 else 0
-      let totalWidth := width * cellW + borderOffset * 2
-
-      let mut rows : Array RNode := #[]
-
-      -- Top border
-      if config.borderType != .none then
-        let chars := BorderChars.fromType config.borderType
-        let topBorder := String.singleton chars.topLeft ++
-          String.ofList (List.replicate (totalWidth - 2) chars.horizontal) ++
-          String.singleton chars.topRight
-        rows := rows.push (RNode.text topBorder config.borderStyle)
-
-      -- Grid rows
-      for y in [:height] do
-        for _cellRow in [:cellH] do
-          -- Cells in this row
-          let mut cells : Array RNode := #[]
-          if config.borderType != .none then
-            let chars := BorderChars.fromType config.borderType
-            cells := cells.push (RNode.text (String.singleton chars.vertical) config.borderStyle)
-
-          for x in [:width] do
-            let cell ← renderCell x y
-            cells := cells.push (RNode.text cell.content cell.style)
-
-          -- Right border
-          if config.borderType != .none then
-            let chars := BorderChars.fromType config.borderType
-            cells := cells.push (RNode.text (String.singleton chars.vertical) config.borderStyle)
-
-          rows := rows.push (RNode.row 0 {} cells)
-
-      -- Bottom border
-      if config.borderType != .none then
-        let chars := BorderChars.fromType config.borderType
-        let bottomBorder := String.singleton chars.bottomLeft ++
-          String.ofList (List.replicate (totalWidth - 2) chars.horizontal) ++
-          String.singleton chars.bottomRight
-        rows := rows.push (RNode.text bottomBorder config.borderStyle)
-
-      pure (RNode.column 0 {} rows)
+  emitStatic (renderGrid width height config renderCell)
 
 /-- Create a grid with dynamic cell content.
     The grid re-renders when the cell renderer function changes. -/
 def dynGrid' (width height : Nat)
     (cellContent : Reactive.Dynamic Spider (Nat → Nat → GridCell))
     (config : GridConfig := {}) : WidgetM Unit := do
-  emit do
-    let renderFn ← cellContent.sample
-    if width == 0 || height == 0 then
-      pure RNode.empty
-    else
-      let cellW := config.cellWidth
-      let cellH := config.cellHeight
-
-      let borderOffset := if config.borderType != .none then 1 else 0
-      let totalWidth := width * cellW + borderOffset * 2
-
-      let mut rows : Array RNode := #[]
-
-      -- Top border
-      if config.borderType != .none then
-        let chars := BorderChars.fromType config.borderType
-        let topBorder := String.singleton chars.topLeft ++
-          String.ofList (List.replicate (totalWidth - 2) chars.horizontal) ++
-          String.singleton chars.topRight
-        rows := rows.push (RNode.text topBorder config.borderStyle)
-
-      -- Grid rows
-      for y in [:height] do
-        for _cellRow in [:cellH] do
-          let mut cells : Array RNode := #[]
-          if config.borderType != .none then
-            let chars := BorderChars.fromType config.borderType
-            cells := cells.push (RNode.text (String.singleton chars.vertical) config.borderStyle)
-
-          for x in [:width] do
-            let cell := renderFn x y
-            cells := cells.push (RNode.text cell.content cell.style)
-
-          if config.borderType != .none then
-            let chars := BorderChars.fromType config.borderType
-            cells := cells.push (RNode.text (String.singleton chars.vertical) config.borderStyle)
-
-          rows := rows.push (RNode.row 0 {} cells)
-
-      -- Bottom border
-      if config.borderType != .none then
-        let chars := BorderChars.fromType config.borderType
-        let bottomBorder := String.singleton chars.bottomLeft ++
-          String.ofList (List.replicate (totalWidth - 2) chars.horizontal) ++
-          String.singleton chars.bottomRight
-        rows := rows.push (RNode.text bottomBorder config.borderStyle)
-
-      pure (RNode.column 0 {} rows)
+  let node ← cellContent.map' (fun renderFn =>
+    renderGrid width height config renderFn
+  )
+  emit node
 
 /-- Create a grid with cursor navigation support.
     Returns a GridResult with cursor position and events. -/
 def cursorGrid' (width height : Nat)
-    (renderCell : Nat → Nat → Bool → IO GridCell)  -- x, y, isCursor -> cell
+    (renderCell : Nat → Nat → Bool → GridCell)  -- x, y, isCursor -> cell
     (config : GridConfig := {}) : WidgetM GridResult := do
   let events ← getEventsW
 
@@ -240,56 +201,12 @@ def cursorGrid' (width height : Nat)
         fireMove newPos
 
   -- Emit render function
-  emit do
-    let (cursorX, cursorY) ← posRef.get
-
-    if width == 0 || height == 0 then
-      pure RNode.empty
-    else
-      let cellW := config.cellWidth
-      let cellH := config.cellHeight
-
-      let borderOffset := if config.borderType != .none then 1 else 0
-      let totalWidth := width * cellW + borderOffset * 2
-
-      let mut rows : Array RNode := #[]
-
-      -- Top border
-      if config.borderType != .none then
-        let chars := BorderChars.fromType config.borderType
-        let topBorder := String.singleton chars.topLeft ++
-          String.ofList (List.replicate (totalWidth - 2) chars.horizontal) ++
-          String.singleton chars.topRight
-        rows := rows.push (RNode.text topBorder config.borderStyle)
-
-      -- Grid rows
-      for y in [:height] do
-        for _cellRow in [:cellH] do
-          let mut cells : Array RNode := #[]
-          if config.borderType != .none then
-            let chars := BorderChars.fromType config.borderType
-            cells := cells.push (RNode.text (String.singleton chars.vertical) config.borderStyle)
-
-          for x in [:width] do
-            let isCursor := x == cursorX && y == cursorY
-            let cell ← renderCell x y isCursor
-            cells := cells.push (RNode.text cell.content cell.style)
-
-          if config.borderType != .none then
-            let chars := BorderChars.fromType config.borderType
-            cells := cells.push (RNode.text (String.singleton chars.vertical) config.borderStyle)
-
-          rows := rows.push (RNode.row 0 {} cells)
-
-      -- Bottom border
-      if config.borderType != .none then
-        let chars := BorderChars.fromType config.borderType
-        let bottomBorder := String.singleton chars.bottomLeft ++
-          String.ofList (List.replicate (totalWidth - 2) chars.horizontal) ++
-          String.singleton chars.bottomRight
-        rows := rows.push (RNode.text bottomBorder config.borderStyle)
-
-      pure (RNode.column 0 {} rows)
+  let node ← cursorPosDyn.map' (fun (cursorX, cursorY) =>
+    renderGrid width height config (fun x y =>
+      renderCell x y (x == cursorX && y == cursorY)
+    )
+  )
+  emit node
 
   pure {
     cursorPos := cursorPosDyn
@@ -304,17 +221,17 @@ def charGrid' (cells : Array (Array (Char × Style)))
     (config : GridConfig := {}) : WidgetM Unit := do
   let height := cells.size
   let width := if height > 0 then cells[0]!.size else 0
-  grid' width height (fun x y => do
+  grid' width height (fun x y =>
     if h : y < cells.size then
       let row := cells[y]
       if h2 : x < row.size then
         let (c, style) := row[x]
         let content := String.ofList (List.replicate config.cellWidth c)
-        pure { content, style }
+        { content, style }
       else
-        pure (GridCell.empty config.cellWidth)
+        GridCell.empty config.cellWidth
     else
-      pure (GridCell.empty config.cellWidth)
+      GridCell.empty config.cellWidth
   ) config
 
 /-- Create a colored block grid (like Tetris). Each cell is either a color or empty. -/
@@ -323,7 +240,7 @@ def blockGrid' (cells : Array (Array (Option Color)))
     (config : GridConfig := {}) : WidgetM Unit := do
   let height := cells.size
   let width := if height > 0 then cells[0]!.size else 0
-  grid' width height (fun x y => do
+  grid' width height (fun x y =>
     if h : y < cells.size then
       let row := cells[y]
       if h2 : x < row.size then
@@ -331,75 +248,33 @@ def blockGrid' (cells : Array (Array (Option Color)))
         | some color =>
           let content := "██"
           let style : Style := { fg := color }
-          pure { content, style }
+          { content, style }
         | none =>
           let content := String.ofList (List.replicate config.cellWidth config.emptyChar)
-          pure { content, style := emptyStyle }
+          { content, style := emptyStyle }
       else
-        pure (GridCell.empty config.cellWidth)
+        GridCell.empty config.cellWidth
     else
-      pure (GridCell.empty config.cellWidth)
+      GridCell.empty config.cellWidth
   ) config
 
 /-- Highlight a specific cell in a grid. -/
 def highlightedGrid' (width height : Nat)
     (highlightPos : Reactive.Dynamic Spider (Nat × Nat))
-    (renderCell : Nat → Nat → IO GridCell)
+    (renderCell : Nat → Nat → GridCell)
     (highlightStyle : Style := { bg := .ansi .cyan })
     (config : GridConfig := {}) : WidgetM Unit := do
-  emit do
-    let (hx, hy) ← highlightPos.sample
-
-    if width == 0 || height == 0 then
-      pure RNode.empty
-    else
-      let cellW := config.cellWidth
-      let cellH := config.cellHeight
-
-      let borderOffset := if config.borderType != .none then 1 else 0
-      let totalWidth := width * cellW + borderOffset * 2
-
-      let mut rows : Array RNode := #[]
-
-      -- Top border
-      if config.borderType != .none then
-        let chars := BorderChars.fromType config.borderType
-        let topBorder := String.singleton chars.topLeft ++
-          String.ofList (List.replicate (totalWidth - 2) chars.horizontal) ++
-          String.singleton chars.topRight
-        rows := rows.push (RNode.text topBorder config.borderStyle)
-
-      -- Grid rows
-      for y in [:height] do
-        for _cellRow in [:cellH] do
-          let mut cells : Array RNode := #[]
-          if config.borderType != .none then
-            let chars := BorderChars.fromType config.borderType
-            cells := cells.push (RNode.text (String.singleton chars.vertical) config.borderStyle)
-
-          for x in [:width] do
-            let cell ← renderCell x y
-            let isHighlight := x == hx && y == hy
-            let style := if isHighlight then
-              { cell.style with bg := highlightStyle.bg }
-            else
-              cell.style
-            cells := cells.push (RNode.text cell.content style)
-
-          if config.borderType != .none then
-            let chars := BorderChars.fromType config.borderType
-            cells := cells.push (RNode.text (String.singleton chars.vertical) config.borderStyle)
-
-          rows := rows.push (RNode.row 0 {} cells)
-
-      -- Bottom border
-      if config.borderType != .none then
-        let chars := BorderChars.fromType config.borderType
-        let bottomBorder := String.singleton chars.bottomLeft ++
-          String.ofList (List.replicate (totalWidth - 2) chars.horizontal) ++
-          String.singleton chars.bottomRight
-        rows := rows.push (RNode.text bottomBorder config.borderStyle)
-
-      pure (RNode.column 0 {} rows)
+  let node ← highlightPos.map' (fun (hx, hy) =>
+    renderGrid width height config (fun x y =>
+      let cell := renderCell x y
+      let isHighlight := x == hx && y == hy
+      let style := if isHighlight then
+        { cell.style with bg := highlightStyle.bg }
+      else
+        cell.style
+      { cell with style }
+    )
+  )
+  emit node
 
 end Terminus.Reactive

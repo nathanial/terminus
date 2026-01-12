@@ -37,7 +37,7 @@ test "gauge' renders filled and unfilled portions" := do
       gauge' 0.5 { width := 10, showPercent := false }
     ).run events
 
-    let node ← SpiderM.liftIO render
+    let node ← SpiderM.liftIO render.sample
     SpiderM.liftIO (ensure (rnodeContainsText node "█") "expected filled char")
     SpiderM.liftIO (ensure (rnodeContainsText node "░") "expected unfilled char")
 
@@ -49,7 +49,7 @@ test "gauge' shows percentage when enabled" := do
       gauge' 0.75 { width := 10, showPercent := true }
     ).run events
 
-    let node ← SpiderM.liftIO render
+    let node ← SpiderM.liftIO render.sample
     SpiderM.liftIO (ensure (rnodeContainsText node "75%") "expected percentage")
 
 test "gauge' clamps values to valid range" := do
@@ -61,7 +61,7 @@ test "gauge' clamps values to valid range" := do
       gauge' 1.5 { width := 10, showPercent := true }
     ).run events
 
-    let node1 ← SpiderM.liftIO render1
+    let node1 ← SpiderM.liftIO render1.sample
     SpiderM.liftIO (ensure (rnodeContainsText node1 "100%") "expected 100% for value > max")
 
     -- Value below min
@@ -69,7 +69,7 @@ test "gauge' clamps values to valid range" := do
       gauge' (-0.5) { width := 10, showPercent := true }
     ).run events
 
-    let node2 ← SpiderM.liftIO render2
+    let node2 ← SpiderM.liftIO render2.sample
     SpiderM.liftIO (ensure (rnodeContainsText node2 "0%") "expected 0% for value < min")
 
 test "gauge' shows label when provided" := do
@@ -80,7 +80,7 @@ test "gauge' shows label when provided" := do
       gauge' 0.5 { width := 10, label := some "Progress", showPercent := false }
     ).run events
 
-    let node ← SpiderM.liftIO render
+    let node ← SpiderM.liftIO render.sample
     SpiderM.liftIO (ensure (rnodeContainsText node "Progress") "expected label")
 
 -- ============================================================================
@@ -102,7 +102,7 @@ test "lineGauge' renders thin progress bar" := do
       lineGauge' 0.6 { width := 10 }
     ).run events
 
-    let node ← SpiderM.liftIO render
+    let node ← SpiderM.liftIO render.sample
     SpiderM.liftIO (ensure (rnodeContainsText node "━") "expected filled char")
 
 -- ============================================================================
@@ -123,7 +123,7 @@ test "vGauge' renders vertical gauge" := do
       vGauge' 0.5 { height := 6 }
     ).run events
 
-    let node ← SpiderM.liftIO render
+    let node ← SpiderM.liftIO render.sample
     SpiderM.liftIO (ensure (rnodeContainsText node "█") "expected filled char")
 
 -- ============================================================================
@@ -142,7 +142,7 @@ test "sparkline' renders data as bars" := do
       sparkline' #[1.0, 5.0, 3.0, 8.0, 2.0] {}
     ).run events
 
-    let node ← SpiderM.liftIO render
+    let node ← SpiderM.liftIO render.sample
     -- Should contain some sparkline characters
     SpiderM.liftIO (ensure (rnodeContainsText node "▁") "expected low bar char")
 
@@ -154,7 +154,7 @@ test "sparkline' handles empty data" := do
       sparkline' #[] {}
     ).run events
 
-    let _node ← SpiderM.liftIO render
+    let _node ← SpiderM.liftIO render.sample
     -- Should be empty node
 
 test "sparklineInt' converts int data" := do
@@ -165,7 +165,7 @@ test "sparklineInt' converts int data" := do
       sparklineInt' #[1, 5, 3, 8, 2] {}
     ).run events
 
-    let _node ← SpiderM.liftIO render
+    let _node ← SpiderM.liftIO render.sample
     -- Should render something
 
 test "sparklineNat' converts nat data" := do
@@ -176,7 +176,7 @@ test "sparklineNat' converts nat data" := do
       sparklineNat' #[1, 5, 3, 8, 2] {}
     ).run events
 
-    let _node ← SpiderM.liftIO render
+    let _node ← SpiderM.liftIO render.sample
     -- Should render something
 
 test "labeledSparkline' shows label and value" := do
@@ -187,7 +187,7 @@ test "labeledSparkline' shows label and value" := do
       labeledSparkline' "CPU" #[30.0, 45.0, 60.0, 55.0] { showValue := true }
     ).run events
 
-    let node ← SpiderM.liftIO render
+    let node ← SpiderM.liftIO render.sample
     SpiderM.liftIO (ensure (rnodeContainsText node "CPU") "expected label")
 
 -- ============================================================================
@@ -226,7 +226,7 @@ test "barChart' renders vertical bars" := do
       ] { size := 5 }
     ).run events
 
-    let node ← SpiderM.liftIO render
+    let node ← SpiderM.liftIO render.sample
     SpiderM.liftIO (ensure (rnodeContainsText node "█") "expected bar char")
     SpiderM.liftIO (ensure (rnodeContainsText node "A") "expected label A")
     SpiderM.liftIO (ensure (rnodeContainsText node "B") "expected label B")
@@ -242,7 +242,7 @@ test "barChart' renders horizontal bars" := do
       ] { orientation := .horizontal, size := 20 }
     ).run events
 
-    let node ← SpiderM.liftIO render
+    let node ← SpiderM.liftIO render.sample
     SpiderM.liftIO (ensure (rnodeContainsText node "█") "expected bar char")
 
 test "barChart' handles empty data" := do
@@ -253,7 +253,7 @@ test "barChart' handles empty data" := do
       barChart' #[] {}
     ).run events
 
-    let _node ← SpiderM.liftIO render
+    let _node ← SpiderM.liftIO render.sample
     -- Should be empty
 
 -- ============================================================================
@@ -297,7 +297,7 @@ test "lineChart' renders chart with axes" := do
       }
     ).run events
 
-    let node ← SpiderM.liftIO render
+    let node ← SpiderM.liftIO render.sample
     SpiderM.liftIO (ensure (rnodeContainsText node "│") "expected Y axis")
     SpiderM.liftIO (ensure (rnodeContainsText node "─") "expected X axis")
 
@@ -313,7 +313,7 @@ test "lineChart' shows legend" := do
       }
     ).run events
 
-    let node ← SpiderM.liftIO render
+    let node ← SpiderM.liftIO render.sample
     SpiderM.liftIO (ensure (rnodeContainsText node "Sales") "expected legend label")
 
 test "lineChart' handles empty series" := do
@@ -324,7 +324,7 @@ test "lineChart' handles empty series" := do
       lineChart' #[] {}
     ).run events
 
-    let _node ← SpiderM.liftIO render
+    let _node ← SpiderM.liftIO render.sample
     -- Should be empty
 
 -- ============================================================================
@@ -361,7 +361,7 @@ test "pieChart' renders distribution" := do
       ] {}
     ).run events
 
-    let node ← SpiderM.liftIO render
+    let node ← SpiderM.liftIO render.sample
     SpiderM.liftIO (ensure (rnodeContainsText node "Distribution") "expected title")
     SpiderM.liftIO (ensure (rnodeContainsText node "A") "expected label A")
     SpiderM.liftIO (ensure (rnodeContainsText node "B") "expected label B")
@@ -379,7 +379,7 @@ test "pieChart' shows percentages" := do
       ] { showPercent := true }
     ).run events
 
-    let node ← SpiderM.liftIO render
+    let node ← SpiderM.liftIO render.sample
     SpiderM.liftIO (ensure (rnodeContainsText node "50%") "expected 50%")
     SpiderM.liftIO (ensure (rnodeContainsText node "25%") "expected 25%")
 
@@ -391,7 +391,7 @@ test "pieChart' handles empty data" := do
       pieChart' #[] {}
     ).run events
 
-    let _node ← SpiderM.liftIO render
+    let _node ← SpiderM.liftIO render.sample
     -- Should be empty
 
 test "pieChart' filters zero values" := do
@@ -406,7 +406,7 @@ test "pieChart' filters zero values" := do
       ] {}
     ).run events
 
-    let node ← SpiderM.liftIO render
+    let node ← SpiderM.liftIO render.sample
     SpiderM.liftIO (ensure (rnodeContainsText node "Valid") "expected Valid label")
     -- Zero value slice should not appear
 

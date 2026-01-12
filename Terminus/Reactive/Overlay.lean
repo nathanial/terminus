@@ -77,34 +77,32 @@ def overlay' (visible : Reactive.Dynamic Spider Bool) (config : OverlayConfig :=
   let (baseResult, baseRenders) ← runWidgetChildren baseContent
   let (_, overlayRenders) ← runWidgetChildren overlayContent
 
-  emit do
-    let isVisible ← visible.sample
-    let baseNodes ← baseRenders.mapM id
-    let baseNode := if baseNodes.size == 1 then
-      baseNodes[0]!
-    else
-      RNode.column 0 {} baseNodes
-
-    if isVisible then
-      let overlayNodes ← overlayRenders.mapM id
-      let innerNode := if overlayNodes.size == 1 then
-        overlayNodes[0]!
+  let mkNode (renders : Array ComponentRender) : WidgetM (Dynamic Spider RNode) := do
+    let list ← Reactive.Dynamic.sequence renders.toList
+    list.map' fun nodes =>
+      if nodes.isEmpty then
+        RNode.empty
+      else if nodes.length = 1 then
+        nodes.head!
       else
-        RNode.column 0 {} overlayNodes
+        RNode.column 0 {} nodes.toArray
 
-      -- Wrap in block if border is requested
-      let overlayNode :=
+  let baseNode ← mkNode baseRenders
+  let overlayNode ← mkNode overlayRenders
+  let node ← visible.zipWith3' (fun isVisible base overlay =>
+    if isVisible then
+      let wrapped :=
         if config.border != .none then
           let title := none
-          let fillStyle := none -- Default overlay doesn't enforce fill, relies on content or backdrop
-          RNode.block title config.border config.borderStyle fillStyle innerNode
+          let fillStyle := none
+          RNode.block title config.border config.borderStyle fillStyle overlay
         else
-          innerNode
-
-      -- Use RNode.overlay for proper centering and backdrop support
-      pure (RNode.overlay baseNode overlayNode config.backdropStyle)
+          overlay
+      RNode.overlay base wrapped config.backdropStyle
     else
-      pure baseNode
+      base
+  ) baseNode overlayNode
+  emit node
 
   pure baseResult
 
@@ -115,20 +113,22 @@ def overlayWhen' (visible : Reactive.Dynamic Spider Bool) (config : OverlayConfi
     (content : WidgetM α) : WidgetM Unit := do
   let (_, contentRenders) ← runWidgetChildren content
 
-  emit do
-    let isVisible ← visible.sample
-    if isVisible then
-      let nodes ← contentRenders.mapM id
-      let contentNode := if nodes.isEmpty then
-        RNode.empty
-      else if nodes.size == 1 then
-        nodes[0]!
-      else
-        RNode.column 0 {} nodes
-      -- Use RNode.overlay with empty base - content will be centered
-      pure (RNode.overlay RNode.empty contentNode config.backdropStyle)
+  let list ← Reactive.Dynamic.sequence contentRenders.toList
+  let contentNode ← list.map' fun nodes =>
+    if nodes.isEmpty then
+      RNode.empty
+    else if nodes.length = 1 then
+      nodes.head!
     else
-      pure RNode.empty
+      RNode.column 0 {} nodes.toArray
+
+  let node ← visible.zipWith' (fun isVisible contentNode =>
+    if isVisible then
+      RNode.overlay RNode.empty contentNode config.backdropStyle
+    else
+      RNode.empty
+  ) contentNode
+  emit node
 
 /-! ## Modal Dialog
 
@@ -357,6 +357,8 @@ def inputDialog' (prompt : String) (visible : Reactive.Dynamic Spider Bool) (the
 
   -- Track input value
   let inputRef ← SpiderM.liftIO (IO.mkRef "")
+  let (inputEvent, fireInput) ← newTriggerEvent (t := Spider) (a := String)
+  let inputDyn ← holdDyn "" inputEvent
 
   -- Focus management for the input
   let dialogInputName := "input-dialog-field"
@@ -380,9 +382,15 @@ def inputDialog' (prompt : String) (visible : Reactive.Dynamic Spider Bool) (the
         match ke.code with
         | .char c =>
           if c.val >= 32 then
-            inputRef.modify (· ++ c.toString)
+            let current ← inputRef.get
+            let updated := current ++ c.toString
+            inputRef.set updated
+            fireInput updated
         | .backspace =>
-          inputRef.modify fun s => s.dropRight 1
+          let current ← inputRef.get
+          let updated := current.dropRight 1
+          inputRef.set updated
+          fireInput updated
         | .enter =>
           let value ← inputRef.get
           fireSubmitted value
@@ -401,16 +409,18 @@ def inputDialog' (prompt : String) (visible : Reactive.Dynamic Spider Bool) (the
       text' prompt theme.bodyStyle
       spacer' 1 1
       -- Simple text display for the input (full textInput' would create circular dep)
-      emitDynamic do
-        let currentFocus ← events.registry.focusedInput.sample
-        let isFocused := currentFocus == some dialogInputName
-        let value ← inputRef.get
+      let focusDyn ← events.registry.focusedInput.map' (fun currentFocus =>
+        currentFocus == some dialogInputName
+      )
+      let node ← focusDyn.zipWith' (fun isFocused value =>
         let display := if value.isEmpty then
           if isFocused then "|" else placeholder
         else
           if isFocused then value ++ "|" else value
         let style := if isFocused then theme.primaryStyle else theme.bodyStyle
-        pure (RNode.text display style)
+        RNode.text display style
+      ) inputDyn
+      emit node
       spacer' 1 1
       row' (gap := 2) {} do
         text' "[Enter] Submit" theme.captionStyle

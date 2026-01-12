@@ -146,6 +146,8 @@ def selectableList' [ToString α] (items : Array α) (initial : Nat := 0)
   let initialState : ListState :=
     ({ selected := initialSelected, scrollOffset := 0 } : ListState).adjustScroll maxVis
   let stateRef ← SpiderM.liftIO (IO.mkRef initialState)
+  let (stateEvent, fireState) ← newTriggerEvent (t := Spider) (a := ListState)
+  let stateDyn ← holdDyn initialState stateEvent
 
   -- Create dynamics
   let selectedIndexDyn ← holdDyn initialSelected indexEvent
@@ -189,6 +191,7 @@ def selectableList' [ToString α] (items : Array α) (initial : Nat := 0)
       -- Update state and fire events if selection changed
       if newState.selected != state.selected then
         stateRef.set newState
+        fireState newState
         fireIndex newState.selected
         fireSelectionChange newState.selected
         -- Call external scroll callback if provided
@@ -201,41 +204,37 @@ def selectableList' [ToString α] (items : Array α) (initial : Nat := 0)
           fireItem none
       else if newState.scrollOffset != state.scrollOffset then
         stateRef.set newState
+        fireState newState
 
-  -- Emit render function
-  emit do
-    if items.isEmpty then
-      pure (RNode.text "(empty)" config.style)
-    else
-      let state ← stateRef.get
-      let maxVis := config.maxVisible.getD items.size
+  let node ← stateDyn.map' fun state =>
+    Id.run do
+      if items.isEmpty then
+        return RNode.text "(empty)" config.style
+      else
+        let maxVis := config.maxVisible.getD items.size
 
-      -- Calculate visible range
-      let startIdx := state.scrollOffset
-      let endIdx := min (startIdx + maxVis) items.size
+        let startIdx := state.scrollOffset
+        let endIdx := min (startIdx + maxVis) items.size
 
-      -- Build visible items
-      let mut rows : Array RNode := #[]
+        let mut rows : Array RNode := #[]
 
-      -- Show "more above" indicator
-      if config.showScrollIndicators && startIdx > 0 then
-        rows := rows.push (RNode.text "  ..." config.scrollIndicatorStyle)
+        if config.showScrollIndicators && startIdx > 0 then
+          rows := rows.push (RNode.text "  ..." config.scrollIndicatorStyle)
 
-      -- Render visible items
-      for i in [startIdx:endIdx] do
-        if h : i < items.size then
-          let item := items[i]
-          let isSelected := i == state.selected
-          let itemPrefix := if isSelected then config.selectedPrefix else config.unselectedPrefix
-          let style := if isSelected then config.selectedStyle else config.style
-          let text := itemPrefix ++ toString item
-          rows := rows.push (RNode.text text style)
+        for i in [startIdx:endIdx] do
+          if h : i < items.size then
+            let item := items[i]
+            let isSelected := i == state.selected
+            let itemPrefix := if isSelected then config.selectedPrefix else config.unselectedPrefix
+            let style := if isSelected then config.selectedStyle else config.style
+            let text := itemPrefix ++ toString item
+            rows := rows.push (RNode.text text style)
 
-      -- Show "more below" indicator
-      if config.showScrollIndicators && endIdx < items.size then
-        rows := rows.push (RNode.text "  ..." config.scrollIndicatorStyle)
+        if config.showScrollIndicators && endIdx < items.size then
+          rows := rows.push (RNode.text "  ..." config.scrollIndicatorStyle)
 
-      pure (RNode.column 0 {} rows)
+        return RNode.column 0 {} rows
+  emit node
 
   pure {
     selectedIndex := selectedIndexDyn
@@ -266,6 +265,8 @@ def dynSelectableList' [ToString α] (items : Reactive.Dynamic Spider (Array α)
   let initialSelected := if initial < initialItems.size then initial else 0
   let initialState : ListState := { selected := initialSelected, scrollOffset := 0 }
   let stateRef ← SpiderM.liftIO (IO.mkRef initialState)
+  let (stateEvent, fireState) ← newTriggerEvent (t := Spider) (a := ListState)
+  let stateDyn ← holdDyn initialState stateEvent
 
   -- Create dynamics
   let selectedIndexDyn ← holdDyn initialSelected indexEvent
@@ -310,6 +311,7 @@ def dynSelectableList' [ToString α] (items : Reactive.Dynamic Spider (Array α)
       -- Update state and fire events if selection changed
       if newState.selected != state.selected then
         stateRef.set newState
+        fireState newState
         fireIndex newState.selected
         fireSelectionChange newState.selected
         -- Call external scroll callback if provided
@@ -322,6 +324,7 @@ def dynSelectableList' [ToString α] (items : Reactive.Dynamic Spider (Array α)
           fireItem none
       else if newState.scrollOffset != state.scrollOffset then
         stateRef.set newState
+        fireState newState
 
   -- Subscribe to item changes to adjust selection
   let _unsub2 ← SpiderM.liftIO <| items.updated.subscribe fun newItems => do
@@ -331,53 +334,48 @@ def dynSelectableList' [ToString α] (items : Reactive.Dynamic Spider (Array α)
       let newSelected := if newItems.isEmpty then 0 else newItems.size - 1
       let newState := { state with selected := newSelected }
       stateRef.set newState
+      fireState newState
       fireIndex newSelected
       if h : newSelected < newItems.size then
         fireItem (some newItems[newSelected])
       else
         fireItem none
 
-  -- Emit render function
-  emit do
-    let currentItems ← items.sample
-    if currentItems.isEmpty then
-      pure (RNode.text "(empty)" config.style)
-    else
-      let state ← stateRef.get
-      let maxVis := config.maxVisible.getD currentItems.size
-
-      -- Ensure selection is still valid
-      let selected := if state.selected >= currentItems.size then
-        if currentItems.isEmpty then 0 else currentItems.size - 1
+  let node ← stateDyn.zipWith' (fun state currentItems =>
+    Id.run do
+      if currentItems.isEmpty then
+        return RNode.text "(empty)" config.style
       else
-        state.selected
+        let maxVis := config.maxVisible.getD currentItems.size
 
-      -- Calculate visible range
-      let startIdx := state.scrollOffset
-      let endIdx := min (startIdx + maxVis) currentItems.size
+        let selected := if state.selected >= currentItems.size then
+          if currentItems.isEmpty then 0 else currentItems.size - 1
+        else
+          state.selected
 
-      -- Build visible items
-      let mut rows : Array RNode := #[]
+        let startIdx := state.scrollOffset
+        let endIdx := min (startIdx + maxVis) currentItems.size
 
-      -- Show "more above" indicator
-      if config.showScrollIndicators && startIdx > 0 then
-        rows := rows.push (RNode.text "  ..." config.scrollIndicatorStyle)
+        let mut rows : Array RNode := #[]
 
-      -- Render visible items
-      for i in [startIdx:endIdx] do
-        if h : i < currentItems.size then
-          let item := currentItems[i]
-          let isSelected := i == selected
-          let itemPrefix := if isSelected then config.selectedPrefix else config.unselectedPrefix
-          let style := if isSelected then config.selectedStyle else config.style
-          let text := itemPrefix ++ toString item
-          rows := rows.push (RNode.text text style)
+        if config.showScrollIndicators && startIdx > 0 then
+          rows := rows.push (RNode.text "  ..." config.scrollIndicatorStyle)
 
-      -- Show "more below" indicator
-      if config.showScrollIndicators && endIdx < currentItems.size then
-        rows := rows.push (RNode.text "  ..." config.scrollIndicatorStyle)
+        for i in [startIdx:endIdx] do
+          if h : i < currentItems.size then
+            let item := currentItems[i]
+            let isSelected := i == selected
+            let itemPrefix := if isSelected then config.selectedPrefix else config.unselectedPrefix
+            let style := if isSelected then config.selectedStyle else config.style
+            let text := itemPrefix ++ toString item
+            rows := rows.push (RNode.text text style)
 
-      pure (RNode.column 0 {} rows)
+        if config.showScrollIndicators && endIdx < currentItems.size then
+          rows := rows.push (RNode.text "  ..." config.scrollIndicatorStyle)
+
+        return RNode.column 0 {} rows
+  ) items
+  emit node
 
   pure {
     selectedIndex := selectedIndexDyn
@@ -410,6 +408,8 @@ def numberedList' [ToString α] (items : Array α) (initial : Nat := 0)
   -- Track internal state
   let initialSelected := if initial < items.size then initial else 0
   let stateRef ← SpiderM.liftIO (IO.mkRef initialSelected)
+  let (stateEvent, fireState) ← newTriggerEvent (t := Spider) (a := Nat)
+  let stateDyn ← holdDyn initialSelected stateEvent
 
   -- Create dynamics
   let selectedIndexDyn ← holdDyn initialSelected indexEvent
@@ -447,6 +447,7 @@ def numberedList' [ToString α] (items : Array α) (initial : Nat := 0)
         if state > 0 then
           let newIdx := state - 1
           stateRef.set newIdx
+          fireState newIdx
           fireIndex newIdx
           fireSelectionChange newIdx
           match config.scrollToY with
@@ -458,6 +459,7 @@ def numberedList' [ToString α] (items : Array α) (initial : Nat := 0)
         if state < items.size - 1 then
           let newIdx := state + 1
           stateRef.set newIdx
+          fireState newIdx
           fireIndex newIdx
           fireSelectionChange newIdx
           match config.scrollToY with
@@ -470,25 +472,25 @@ def numberedList' [ToString α] (items : Array α) (initial : Nat := 0)
           fireSelect items[state]
       | _ => pure ()
 
-  -- Emit render function
-  emit do
-    if items.isEmpty then
-      pure (RNode.text "(empty)" config.style)
-    else
-      let selected ← stateRef.get
-      let mut rows : Array RNode := #[]
+  let node ← stateDyn.map' fun selected =>
+    Id.run do
+      if items.isEmpty then
+        return RNode.text "(empty)" config.style
+      else
+        let mut rows : Array RNode := #[]
 
-      for i in [0:items.size] do
-        if h : i < items.size then
-          let item := items[i]
-          let isSelected := i == selected
-          let num := i + 1
-          let itemPrefix := if isSelected then s!"> {num}. " else s!"  {num}. "
-          let style := if isSelected then config.selectedStyle else config.style
-          let text := itemPrefix ++ toString item
-          rows := rows.push (RNode.text text style)
+        for i in [0:items.size] do
+          if h : i < items.size then
+            let item := items[i]
+            let isSelected := i == selected
+            let num := i + 1
+            let itemPrefix := if isSelected then s!"> {num}. " else s!"  {num}. "
+            let style := if isSelected then config.selectedStyle else config.style
+            let text := itemPrefix ++ toString item
+            rows := rows.push (RNode.text text style)
 
-      pure (RNode.column 0 {} rows)
+        return RNode.column 0 {} rows
+  emit node
 
   pure {
     selectedIndex := selectedIndexDyn

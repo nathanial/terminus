@@ -239,7 +239,10 @@ def calendar' (name : String) (year : Nat) (month : Nat) (initialDay : Option Na
     | some d => max 1 (min d maxDays)
     | none => 1
 
-  let stateRef ← SpiderM.liftIO (IO.mkRef (CalendarState.mk year normalizedMonth initialSelected))
+  let initialState := CalendarState.mk year normalizedMonth initialSelected
+  let stateRef ← SpiderM.liftIO (IO.mkRef initialState)
+  let (stateEvent, fireState) ← newTriggerEvent (t := Spider) (a := CalendarState)
+  let stateDyn ← holdDyn initialState stateEvent
 
   -- Events
   let (selectEvent, fireSelect) ← newTriggerEvent (t := Spider) (a := CalendarDate)
@@ -269,6 +272,7 @@ def calendar' (name : String) (year : Nat) (month : Nat) (initialDay : Option Na
     | .left | .char 'h' =>
       let newState := state.prevDay
       stateRef.set newState
+      fireState newState
       fireDate newState.toDate
       if (newState.year, newState.month) != oldMonth then
         fireCurrentMonth (newState.year, newState.month)
@@ -277,6 +281,7 @@ def calendar' (name : String) (year : Nat) (month : Nat) (initialDay : Option Na
     | .right | .char 'l' =>
       let newState := state.nextDay
       stateRef.set newState
+      fireState newState
       fireDate newState.toDate
       if (newState.year, newState.month) != oldMonth then
         fireCurrentMonth (newState.year, newState.month)
@@ -285,6 +290,7 @@ def calendar' (name : String) (year : Nat) (month : Nat) (initialDay : Option Na
     | .up | .char 'k' =>
       let newState := state.prevWeek
       stateRef.set newState
+      fireState newState
       fireDate newState.toDate
       if (newState.year, newState.month) != oldMonth then
         fireCurrentMonth (newState.year, newState.month)
@@ -293,6 +299,7 @@ def calendar' (name : String) (year : Nat) (month : Nat) (initialDay : Option Na
     | .down | .char 'j' =>
       let newState := state.nextWeek
       stateRef.set newState
+      fireState newState
       fireDate newState.toDate
       if (newState.year, newState.month) != oldMonth then
         fireCurrentMonth (newState.year, newState.month)
@@ -301,6 +308,7 @@ def calendar' (name : String) (year : Nat) (month : Nat) (initialDay : Option Na
     | .pageUp =>
       let newState := state.prevMonthState
       stateRef.set newState
+      fireState newState
       fireDate newState.toDate
       fireCurrentMonth (newState.year, newState.month)
       fireMonthChange (newState.year, newState.month)
@@ -308,6 +316,7 @@ def calendar' (name : String) (year : Nat) (month : Nat) (initialDay : Option Na
     | .pageDown =>
       let newState := state.nextMonthState
       stateRef.set newState
+      fireState newState
       fireDate newState.toDate
       fireCurrentMonth (newState.year, newState.month)
       fireMonthChange (newState.year, newState.month)
@@ -317,61 +326,58 @@ def calendar' (name : String) (year : Nat) (month : Nat) (initialDay : Option Na
 
     | _ => pure ()
 
-  -- Render
-  emit do
-    let state ← stateRef.get
-    let firstDay := CalendarDate.firstDayOfMonth state.year state.month
-    let numDays := CalendarDate.daysInMonth state.year state.month
+  let node ← stateDyn.map' fun state =>
+    Id.run do
+      let firstDay := CalendarDate.firstDayOfMonth state.year state.month
+      let numDays := CalendarDate.daysInMonth state.year state.month
 
-    let mut nodes : Array RNode := #[]
+      let mut nodes : Array RNode := #[]
 
-    -- Header: Month Year
-    let monthName := CalendarDate.monthNames.getD ((state.month - 1) % 12) "?"
-    let header := s!"{monthName} {state.year}"
-    nodes := nodes.push (RNode.text header config.headerStyle)
+      let monthName := CalendarDate.monthNames.getD ((state.month - 1) % 12) "?"
+      let header := s!"{monthName} {state.year}"
+      nodes := nodes.push (RNode.text header config.headerStyle)
 
-    -- Day headers
-    let dayHeaders := if config.weekStartsMonday then dayHeadersMonday else dayHeadersSunday
-    nodes := nodes.push (RNode.text dayHeaders config.dayHeaderStyle)
+      let dayHeaders := if config.weekStartsMonday then dayHeadersMonday else dayHeadersSunday
+      nodes := nodes.push (RNode.text dayHeaders config.dayHeaderStyle)
 
-    -- Day grid (up to 6 rows of 7 days)
-    let adjustedFirstDay := if config.weekStartsMonday then
-      (firstDay + 6) % 7  -- Shift Sunday (0) to end
-    else firstDay
+      let adjustedFirstDay := if config.weekStartsMonday then
+        (firstDay + 6) % 7
+      else firstDay
 
-    let mut day := 1
-    for row in [:6] do
-      if day > numDays then break
+      let mut day := 1
+      for row in [:6] do
+        if day > numDays then break
 
-      let mut rowParts : Array RNode := #[]
-      for col in [:7] do
-        let cellPos := row * 7 + col
+        let mut rowParts : Array RNode := #[]
+        for col in [:7] do
+          let cellPos := row * 7 + col
 
-        if cellPos < adjustedFirstDay || day > numDays then
-          -- Empty cell
-          rowParts := rowParts.push (RNode.text "   " {})
-        else
-          -- Day cell
-          let isSelected := day == state.selectedDay
-          let isWeekend := if config.weekStartsMonday then col >= 5 else col == 0 || col == 6
-          let isToday := match config.today with
-            | some t => t.year == state.year && t.month == state.month && t.day == day
-            | none => false
+          if cellPos < adjustedFirstDay || day > numDays then
+            -- Empty cell
+            rowParts := rowParts.push (RNode.text "   " {})
+          else
+            -- Day cell
+            let isSelected := day == state.selectedDay
+            let isWeekend := if config.weekStartsMonday then col >= 5 else col == 0 || col == 6
+            let isToday := match config.today with
+              | some t => t.year == state.year && t.month == state.month && t.day == day
+              | none => false
 
-          let style := if isSelected then config.selectedStyle
-                       else if isToday then config.todayStyle
-                       else if isWeekend then config.weekendStyle
-                       else config.normalStyle
+            let style := if isSelected then config.selectedStyle
+                         else if isToday then config.todayStyle
+                         else if isWeekend then config.weekendStyle
+                         else config.normalStyle
 
-          -- Format day (right-aligned in 2 chars + space)
-          let dayStr := if day < 10 then s!" {day} " else s!"{day} "
-          rowParts := rowParts.push (RNode.text dayStr style)
+            -- Format day (right-aligned in 2 chars + space)
+            let dayStr := if day < 10 then s!" {day} " else s!"{day} "
+            rowParts := rowParts.push (RNode.text dayStr style)
 
-          day := day + 1
+            day := day + 1
 
-      nodes := nodes.push (RNode.row 0 {} rowParts)
+        nodes := nodes.push (RNode.row 0 {} rowParts)
 
-    pure (RNode.column 0 {} nodes)
+      return RNode.column 0 {} nodes
+  emit node
 
   pure {
     selectedDate := dateDyn

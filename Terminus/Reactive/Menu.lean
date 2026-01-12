@@ -268,7 +268,10 @@ def menu' (name : String) (items : Array MenuItem') (config : MenuConfig := {})
   let focusedInput ← useFocusedInputW
 
   -- State
-  let stateRef ← SpiderM.liftIO (IO.mkRef (MenuState.mk 0 #[]))
+  let initialState := MenuState.mk 0 #[]
+  let stateRef ← SpiderM.liftIO (IO.mkRef initialState)
+  let (stateEvent, fireState) ← newTriggerEvent (t := Spider) (a := MenuState)
+  let stateDyn ← holdDyn initialState stateEvent
 
   -- Events
   let (selectEvent, fireSelect) ← newTriggerEvent (t := Spider) (a := Array Nat × String)
@@ -284,6 +287,10 @@ def menu' (name : String) (items : Array MenuItem') (config : MenuConfig := {})
   let events ← getEventsW
   let inputName := if name.isEmpty then widgetName else name
 
+  let updateState : MenuState → IO Unit := fun newState => do
+    stateRef.set newState
+    fireState newState
+
   let _unsub ← SpiderM.liftIO <| events.keyEvent.subscribe fun kd => do
     let currentFocus ← focusedInput.sample
     let isFocused := currentFocus == some inputName
@@ -296,7 +303,7 @@ def menu' (name : String) (items : Array MenuItem') (config : MenuConfig := {})
     match kd.event.code with
     | .down | .char 'j' =>
       let newState := state.navigateNext currentItems
-      stateRef.set newState
+      updateState newState
       let path := newState.openPath.push newState.selectedIndex
       firePath path
       let item := getItemAtPath items path
@@ -304,7 +311,7 @@ def menu' (name : String) (items : Array MenuItem') (config : MenuConfig := {})
 
     | .up | .char 'k' =>
       let newState := state.navigatePrev currentItems
-      stateRef.set newState
+      updateState newState
       let path := newState.openPath.push newState.selectedIndex
       firePath path
       let item := getItemAtPath items path
@@ -316,7 +323,7 @@ def menu' (name : String) (items : Array MenuItem') (config : MenuConfig := {})
         if item.enabled && !item.isSeparator then
           if item.hasSubmenu then
             let newState := state.openSubmenu
-            stateRef.set newState
+            updateState newState
             let path := newState.openPath.push newState.selectedIndex
             firePath path
             let subItem := getItemAtPath items path
@@ -329,7 +336,7 @@ def menu' (name : String) (items : Array MenuItem') (config : MenuConfig := {})
     | .left =>
       if state.hasOpenSubmenu then
         let newState := state.closeSubmenu
-        stateRef.set newState
+        updateState newState
         let path := newState.openPath.push newState.selectedIndex
         firePath path
         let item := getItemAtPath items path
@@ -338,7 +345,7 @@ def menu' (name : String) (items : Array MenuItem') (config : MenuConfig := {})
     | .escape =>
       if state.hasOpenSubmenu then
         let newState := state.closeSubmenu
-        stateRef.set newState
+        updateState newState
         let path := newState.openPath.push newState.selectedIndex
         firePath path
         let item := getItemAtPath items path
@@ -349,12 +356,11 @@ def menu' (name : String) (items : Array MenuItem') (config : MenuConfig := {})
     | _ => pure ()
 
   -- Render
-  emit do
-    let state ← stateRef.get
+  let node ← stateDyn.map' (fun state =>
     let currentItems := getCurrentItems items state.openPath
 
     if currentItems.isEmpty then
-      pure RNode.empty
+      RNode.empty
     else
       -- Calculate menu width
       let maxWidth := currentItems.foldl (fun acc item =>
@@ -368,7 +374,9 @@ def menu' (name : String) (items : Array MenuItem') (config : MenuConfig := {})
         let isSelected := i == state.selectedIndex
         renderMenuItem item isSelected config maxWidth
 
-      pure (RNode.column 0 {} nodes)
+      RNode.column 0 {} nodes
+  )
+  emit node
 
   pure {
     selectedPath := pathDyn

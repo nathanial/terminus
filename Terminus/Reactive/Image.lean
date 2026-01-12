@@ -36,9 +36,8 @@ structure ImageConfig where
     ```
 -/
 def image' (path : System.FilePath) (config : ImageConfig := {}) : WidgetM Unit := do
-  emit do
-    pure (RNode.image (.path path) config.protocol config.width config.height
-      config.preserveAspect config.altText)
+  emitStatic (RNode.image (.path path) config.protocol config.width config.height
+    config.preserveAspect config.altText)
 
 /-- Create an image widget from raw bytes.
 
@@ -49,9 +48,8 @@ def image' (path : System.FilePath) (config : ImageConfig := {}) : WidgetM Unit 
     ```
 -/
 def imageFromBytes' (bytes : ByteArray) (config : ImageConfig := {}) : WidgetM Unit := do
-  emit do
-    pure (RNode.image (.bytes bytes) config.protocol config.width config.height
-      config.preserveAspect config.altText)
+  emitStatic (RNode.image (.bytes bytes) config.protocol config.width config.height
+    config.preserveAspect config.altText)
 
 /-- Create a dynamic image widget from a file path dynamic.
 
@@ -63,10 +61,10 @@ def imageFromBytes' (bytes : ByteArray) (config : ImageConfig := {}) : WidgetM U
 -/
 def dynImage' (path : Reactive.Dynamic Spider System.FilePath) (config : ImageConfig := {})
     : WidgetM Unit := do
-  emitDynamic do
-    let p ← path.sample
-    pure (RNode.image (.path p) config.protocol config.width config.height
-      config.preserveAspect config.altText)
+  let node ← path.map' fun p =>
+    RNode.image (.path p) config.protocol config.width config.height
+      config.preserveAspect config.altText
+  emit node
 
 /-- Create a dynamic image widget from raw bytes dynamic.
 
@@ -78,10 +76,10 @@ def dynImage' (path : Reactive.Dynamic Spider System.FilePath) (config : ImageCo
 -/
 def dynImageFromBytes' (bytes : Reactive.Dynamic Spider ByteArray) (config : ImageConfig := {})
     : WidgetM Unit := do
-  emitDynamic do
-    let b ← bytes.sample
-    pure (RNode.image (.bytes b) config.protocol config.width config.height
-      config.preserveAspect config.altText)
+  let node ← bytes.map' fun b =>
+    RNode.image (.bytes b) config.protocol config.width config.height
+      config.preserveAspect config.altText
+  emit node
 
 /-- Create an image placeholder (for when no image is available).
     Shows the alt text in a bordered area.
@@ -92,9 +90,7 @@ def dynImageFromBytes' (bytes : Reactive.Dynamic Spider ByteArray) (config : Ima
     ```
 -/
 def imagePlaceholder' (altText : String) (_config : ImageConfig := {}) : WidgetM Unit := do
-  emit do
-    -- Create a bordered box with centered alt text
-    let text := s!"[{altText}]"
-    pure (RNode.text text Style.dim)
+  let text := s!"[{altText}]"
+  emitStatic (RNode.text text Style.dim)
 
 end Terminus.Reactive

@@ -259,7 +259,7 @@ test "checkbox' renders label" := do
       pure ()
     ).run events
 
-    let node ← SpiderM.liftIO render
+    let node ← SpiderM.liftIO render.sample
     SpiderM.liftIO (ensure (rnodeContainsText node "Accept terms") "should show label")
 
 -- ============================================================================
@@ -274,7 +274,7 @@ test "labeledOptionSelector' renders label" := do
       pure ()
     ).run events
 
-    let node ← SpiderM.liftIO render
+    let node ← SpiderM.liftIO render.sample
     SpiderM.liftIO (ensure (rnodeContainsText node "Priority:") "should contain label")
 
 -- ============================================================================
@@ -289,7 +289,7 @@ test "inlineLabeledInput' renders label and input" := do
       pure ()
     ).run events
 
-    let node ← SpiderM.liftIO render
+    let node ← SpiderM.liftIO render.sample
     SpiderM.liftIO (ensure (rnodeContainsText node "Name:") "should contain label")
 
 -- ============================================================================
@@ -304,7 +304,7 @@ test "fieldGroup' renders with title" := do
         text' "Content" {}
     ).run events
 
-    let node ← SpiderM.liftIO render
+    let node ← SpiderM.liftIO render.sample
     SpiderM.liftIO (ensure (rnodeContainsText node "Personal Info") "should contain title")
     SpiderM.liftIO (ensure (rnodeContainsText node "Content") "should contain content")
 

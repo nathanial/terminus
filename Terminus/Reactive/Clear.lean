@@ -37,11 +37,10 @@ structure ClearConfig where
     ```
 -/
 def clear' (config : ClearConfig := {}) : WidgetM Unit := do
-  emit do
-    let fillStr := String.ofList (List.replicate config.width config.fillChar)
-    let lines := (List.range config.height).map fun _ =>
-      RNode.text fillStr config.style
-    pure (RNode.column 0 {} lines.toArray)
+  let fillStr := String.ofList (List.replicate config.width config.fillChar)
+  let lines := (List.range config.height).map fun _ =>
+    RNode.text fillStr config.style
+  emitStatic (RNode.column 0 {} lines.toArray)
 
 /-- Create a horizontal spacer.
 
@@ -51,8 +50,7 @@ def clear' (config : ClearConfig := {}) : WidgetM Unit := do
     ```
 -/
 def hSpace' (width : Nat) (style : Style := {}) : WidgetM Unit := do
-  emit do
-    pure (RNode.text (String.ofList (List.replicate width ' ')) style)
+  emitStatic (RNode.text (String.ofList (List.replicate width ' ')) style)
 
 /-- Create a vertical spacer.
 
@@ -62,10 +60,9 @@ def hSpace' (width : Nat) (style : Style := {}) : WidgetM Unit := do
     ```
 -/
 def vSpace' (height : Nat) (style : Style := {}) : WidgetM Unit := do
-  emit do
-    let lines := (List.range height).map fun _ =>
-      RNode.text " " style
-    pure (RNode.column 0 {} lines.toArray)
+  let lines := (List.range height).map fun _ =>
+    RNode.text " " style
+  emitStatic (RNode.column 0 {} lines.toArray)
 
 /-- Create a filled rectangle.
 
@@ -75,11 +72,10 @@ def vSpace' (height : Nat) (style : Style := {}) : WidgetM Unit := do
     ```
 -/
 def filledRect' (width height : Nat) (char : Char := ' ') (style : Style := {}) : WidgetM Unit := do
-  emit do
-    let line := String.ofList (List.replicate width char)
-    let lines := (List.range height).map fun _ =>
-      RNode.text line style
-    pure (RNode.column 0 {} lines.toArray)
+  let line := String.ofList (List.replicate width char)
+  let lines := (List.range height).map fun _ =>
+    RNode.text line style
+  emitStatic (RNode.column 0 {} lines.toArray)
 
 /-- Create a background layer.
 
@@ -95,8 +91,7 @@ def filledRect' (width height : Nat) (char : Char := ' ') (style : Style := {}) 
 -/
 def background' (style : Style) : WidgetM Unit := do
   -- Just emit a styled empty space - the layout system handles sizing
-  emit do
-    pure (RNode.text " " style)
+  emitStatic (RNode.text " " style)
 
 /-! ## Separator Widgets -/
 
@@ -108,8 +103,7 @@ def background' (style : Style) : WidgetM Unit := do
     ```
 -/
 def hSeparator' (width : Nat) (char : Char := '─') (style : Style := {}) : WidgetM Unit := do
-  emit do
-    pure (RNode.text (String.ofList (List.replicate width char)) style)
+  emitStatic (RNode.text (String.ofList (List.replicate width char)) style)
 
 /-- Create a vertical separator line.
 
@@ -119,10 +113,9 @@ def hSeparator' (width : Nat) (char : Char := '─') (style : Style := {}) : Wid
     ```
 -/
 def vSeparator' (height : Nat) (char : Char := '│') (style : Style := {}) : WidgetM Unit := do
-  emit do
-    let charStr := String.singleton char
-    let lines := (List.range height).map fun _ =>
-      RNode.text charStr style
-    pure (RNode.column 0 {} lines.toArray)
+  let charStr := String.singleton char
+  let lines := (List.range height).map fun _ =>
+    RNode.text charStr style
+  emitStatic (RNode.column 0 {} lines.toArray)
 
 end Terminus.Reactive

@@ -29,7 +29,7 @@ test "horizontalSplit' creates row with children" := do
         (do text' "Right" {})
     ).run events
 
-    let node ← SpiderM.liftIO render
+    let node ← SpiderM.liftIO render.sample
     match node with
     | .row _ _ children =>
       -- Should have 3 children: left, divider, right (when showDivider is true by default)
@@ -45,7 +45,7 @@ test "horizontalSplit' without divider creates row with two children" := do
         (do text' "Right" {})
     ).run events
 
-    let node ← SpiderM.liftIO render
+    let node ← SpiderM.liftIO render.sample
     match node with
     | .row _ _ children =>
       SpiderM.liftIO (children.size ≡ 2)
@@ -60,7 +60,7 @@ test "horizontalSplit' renders left pane content" := do
         (do text' "Right Content" {})
     ).run events
 
-    let node ← SpiderM.liftIO render
+    let node ← SpiderM.liftIO render.sample
     SpiderM.liftIO (ensure (rnodeContainsText node "Left Content") "should contain left content")
 
 test "horizontalSplit' renders right pane content" := do
@@ -72,7 +72,7 @@ test "horizontalSplit' renders right pane content" := do
         (do text' "Right Content" {})
     ).run events
 
-    let node ← SpiderM.liftIO render
+    let node ← SpiderM.liftIO render.sample
     SpiderM.liftIO (ensure (rnodeContainsText node "Right Content") "should contain right content")
 
 -- ============================================================================
@@ -88,7 +88,7 @@ test "verticalSplit' creates column with children" := do
         (do text' "Bottom" {})
     ).run events
 
-    let node ← SpiderM.liftIO render
+    let node ← SpiderM.liftIO render.sample
     match node with
     | .column _ _ children =>
       -- Should have 3 children: top, divider, bottom
@@ -104,7 +104,7 @@ test "verticalSplit' without divider creates column with two children" := do
         (do text' "Bottom" {})
     ).run events
 
-    let node ← SpiderM.liftIO render
+    let node ← SpiderM.liftIO render.sample
     match node with
     | .column _ _ children =>
       SpiderM.liftIO (children.size ≡ 2)
@@ -119,7 +119,7 @@ test "verticalSplit' renders top pane content" := do
         (do text' "Bottom Content" {})
     ).run events
 
-    let node ← SpiderM.liftIO render
+    let node ← SpiderM.liftIO render.sample
     SpiderM.liftIO (ensure (rnodeContainsText node "Top Content") "should contain top content")
 
 test "verticalSplit' renders bottom pane content" := do
@@ -131,7 +131,7 @@ test "verticalSplit' renders bottom pane content" := do
         (do text' "Bottom Content" {})
     ).run events
 
-    let node ← SpiderM.liftIO render
+    let node ← SpiderM.liftIO render.sample
     SpiderM.liftIO (ensure (rnodeContainsText node "Bottom Content") "should contain bottom content")
 
 -- ============================================================================
@@ -147,7 +147,7 @@ test "splitPane' with horizontal direction creates row" := do
         (do text' "B" {})
     ).run events
 
-    let node ← SpiderM.liftIO render
+    let node ← SpiderM.liftIO render.sample
     match node with
     | .row _ _ _ => SpiderM.liftIO (pure ())
     | _ => SpiderM.liftIO (ensure false "expected row node")
@@ -161,7 +161,7 @@ test "splitPane' with vertical direction creates column" := do
         (do text' "B" {})
     ).run events
 
-    let node ← SpiderM.liftIO render
+    let node ← SpiderM.liftIO render.sample
     match node with
     | .column _ _ _ => SpiderM.liftIO (pure ())
     | _ => SpiderM.liftIO (ensure false "expected column node")
@@ -180,7 +180,7 @@ test "threeColumnSplit' creates row with three panes" := do
         (do text' "Right" {})
     ).run events
 
-    let node ← SpiderM.liftIO render
+    let node ← SpiderM.liftIO render.sample
     match node with
     | .row _ _ children =>
       SpiderM.liftIO (children.size ≡ 3)
@@ -196,7 +196,7 @@ test "threeColumnSplit' with dividers creates row with five elements" := do
         (do text' "Right" {})
     ).run events
 
-    let node ← SpiderM.liftIO render
+    let node ← SpiderM.liftIO render.sample
     match node with
     | .row _ _ children =>
       -- 3 panes + 2 dividers = 5 children
@@ -216,7 +216,7 @@ test "sidebarLayout' left position contains both panes" := do
         (do text' "Content" {})
     ).run events
 
-    let node ← SpiderM.liftIO render
+    let node ← SpiderM.liftIO render.sample
     SpiderM.liftIO (ensure (rnodeContainsText node "Sidebar") "should contain sidebar")
     SpiderM.liftIO (ensure (rnodeContainsText node "Content") "should contain content")
 
@@ -229,7 +229,7 @@ test "sidebarLayout' right position contains both panes" := do
         (do text' "Content" {})
     ).run events
 
-    let node ← SpiderM.liftIO render
+    let node ← SpiderM.liftIO render.sample
     SpiderM.liftIO (ensure (rnodeContainsText node "Sidebar") "should contain sidebar")
     SpiderM.liftIO (ensure (rnodeContainsText node "Content") "should contain content")
 
@@ -246,7 +246,7 @@ test "headerLayout' renders header and content" := do
         (do text' "Main Content" {})
     ).run events
 
-    let node ← SpiderM.liftIO render
+    let node ← SpiderM.liftIO render.sample
     SpiderM.liftIO (ensure (rnodeContainsText node "Header") "should contain header")
     SpiderM.liftIO (ensure (rnodeContainsText node "Main Content") "should contain main content")
 
@@ -259,7 +259,7 @@ test "footerLayout' renders content and footer" := do
         (do text' "Footer" {})
     ).run events
 
-    let node ← SpiderM.liftIO render
+    let node ← SpiderM.liftIO render.sample
     SpiderM.liftIO (ensure (rnodeContainsText node "Main Content") "should contain main content")
     SpiderM.liftIO (ensure (rnodeContainsText node "Footer") "should contain footer")
 
@@ -273,7 +273,7 @@ test "headerFooterLayout' renders all three sections" := do
         (do text' "Footer" {})
     ).run events
 
-    let node ← SpiderM.liftIO render
+    let node ← SpiderM.liftIO render.sample
     SpiderM.liftIO (ensure (rnodeContainsText node "Header") "should contain header")
     SpiderM.liftIO (ensure (rnodeContainsText node "Body") "should contain body")
     SpiderM.liftIO (ensure (rnodeContainsText node "Footer") "should contain footer")
@@ -295,7 +295,7 @@ test "nested splits work correctly" := do
         (do text' "Right" {})
     ).run events
 
-    let node ← SpiderM.liftIO render
+    let node ← SpiderM.liftIO render.sample
     SpiderM.liftIO (ensure (rnodeContainsText node "TopLeft") "should contain TopLeft")
     SpiderM.liftIO (ensure (rnodeContainsText node "BottomLeft") "should contain BottomLeft")
     SpiderM.liftIO (ensure (rnodeContainsText node "Right") "should contain Right")

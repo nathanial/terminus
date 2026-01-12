@@ -144,6 +144,8 @@ def textInput' (name : String) (initial : String := "")
   -- Track internal state
   let initialState : TextInputState := { text := initial, cursor := initial.length }
   let stateRef ← SpiderM.liftIO (IO.mkRef initialState)
+  let (stateEvent, fireState) ← newTriggerEvent (t := Spider) (a := TextInputState)
+  let stateDyn ← holdDyn initialState stateEvent
 
   -- Create dynamic for the text value
   let (valueEvent, fireValue) ← newTriggerEvent (t := Spider) (a := String)
@@ -188,70 +190,64 @@ def textInput' (name : String) (initial : String := "")
       -- Update state and fire events if text changed
       if newState.text != state.text then
         stateRef.set newState
+        fireState newState
         fireValue newState.text
         fireChange newState.text
       else if newState.cursor != state.cursor then
         stateRef.set newState
+        fireState newState
 
   -- Emit render function
-  emit do
-    let state ← stateRef.get
-    let currentFocus ← focusedInput.sample
-    let inputName := if name.isEmpty then widgetName else name
-    let isFocused := currentFocus == some inputName
+  let inputName := if name.isEmpty then widgetName else name
+  let node ← focusedInput.zipWith' (fun currentFocus state =>
+    Id.run do
+      let isFocused := currentFocus == some inputName
 
-    -- Build display string
-    let displayText := if state.text.isEmpty && !isFocused then
-      config.placeholder
-    else
-      state.text
-
-    -- Determine style based on focus
-    let textStyle := if state.text.isEmpty && !isFocused then
-      config.placeholderStyle
-    else if isFocused then
-      config.focusedStyle
-    else
-      config.style
-
-    -- Build the display with cursor if focused
-    if isFocused && !state.text.isEmpty then
-      -- Split text at cursor and insert cursor character
-      let before := state.text.take state.cursor
-      let after := state.text.drop state.cursor
-      let cursorStr := config.cursorChar.toString
-
-      -- Create row with before, cursor, after
-      let beforeNode := if before.isEmpty then RNode.empty else RNode.text before textStyle
-      let cursorNode := RNode.text cursorStr config.cursorStyle
-      let afterNode := if after.isEmpty then RNode.empty else RNode.text after textStyle
-
-      -- Pad to minimum width
-      let currentLen := state.text.length + 1  -- +1 for cursor
-      let padding := if currentLen < config.width then config.width - currentLen else 0
-      let padNode := if padding > 0 then RNode.text (String.ofList (List.replicate padding ' ')) textStyle else RNode.empty
-
-      -- Filter out empty nodes
-      let mut nodes : Array RNode := #[]
-      if !before.isEmpty then nodes := nodes.push beforeNode
-      nodes := nodes.push cursorNode
-      if !after.isEmpty then nodes := nodes.push afterNode
-      if padding > 0 then nodes := nodes.push padNode
-      pure (RNode.row 0 {} nodes)
-    else if isFocused then
-      -- Empty text with cursor
-      let cursorNode := RNode.text config.cursorChar.toString config.cursorStyle
-      let padding := if config.width > 1 then config.width - 1 else 0
-      let padNode := if padding > 0 then RNode.text (String.ofList (List.replicate padding ' ')) textStyle else RNode.empty
-      pure (RNode.row 0 {} #[cursorNode, padNode])
-    else
-      -- Not focused - just show text (or placeholder)
-      let padding := if displayText.length < config.width then config.width - displayText.length else 0
-      let padNode := if padding > 0 then RNode.text (String.ofList (List.replicate padding ' ')) textStyle else RNode.empty
-      if displayText.isEmpty then
-        pure padNode
+      let displayText := if state.text.isEmpty && !isFocused then
+        config.placeholder
       else
-        pure (RNode.row 0 {} #[RNode.text displayText textStyle, padNode])
+        state.text
+
+      let textStyle := if state.text.isEmpty && !isFocused then
+        config.placeholderStyle
+      else if isFocused then
+        config.focusedStyle
+      else
+        config.style
+
+      if isFocused && !state.text.isEmpty then
+        let before := state.text.take state.cursor
+        let after := state.text.drop state.cursor
+        let cursorStr := config.cursorChar.toString
+
+        let beforeNode := if before.isEmpty then RNode.empty else RNode.text before textStyle
+        let cursorNode := RNode.text cursorStr config.cursorStyle
+        let afterNode := if after.isEmpty then RNode.empty else RNode.text after textStyle
+
+        let currentLen := state.text.length + 1
+        let padding := if currentLen < config.width then config.width - currentLen else 0
+        let padNode := if padding > 0 then RNode.text (String.ofList (List.replicate padding ' ')) textStyle else RNode.empty
+
+        let mut nodes : Array RNode := #[]
+        if !before.isEmpty then nodes := nodes.push beforeNode
+        nodes := nodes.push cursorNode
+        if !after.isEmpty then nodes := nodes.push afterNode
+        if padding > 0 then nodes := nodes.push padNode
+        RNode.row 0 {} nodes
+      else if isFocused then
+        let cursorNode := RNode.text config.cursorChar.toString config.cursorStyle
+        let padding := if config.width > 1 then config.width - 1 else 0
+        let padNode := if padding > 0 then RNode.text (String.ofList (List.replicate padding ' ')) textStyle else RNode.empty
+        RNode.row 0 {} #[cursorNode, padNode]
+      else
+        let padding := if displayText.length < config.width then config.width - displayText.length else 0
+        let padNode := if padding > 0 then RNode.text (String.ofList (List.replicate padding ' ')) textStyle else RNode.empty
+        if displayText.isEmpty then
+          padNode
+        else
+          RNode.row 0 {} #[RNode.text displayText textStyle, padNode]
+  ) stateDyn
+  emit node
 
   pure {
     value := valueDyn
@@ -263,7 +259,7 @@ def textInput' (name : String) (initial : String := "")
 /-- Create a labeled text input with the label above. -/
 def labeledTextInput' (label : String) (name : String) (initial : String := "")
     (config : TextInputConfig := {}) (theme : Theme := .dark) : WidgetM TextInputResult := do
-  emit (pure (RNode.text label theme.bodyStyle))
+  emitStatic (RNode.text label theme.bodyStyle)
   textInput' name initial config
 
 /-- Create a text input that auto-focuses on creation. -/

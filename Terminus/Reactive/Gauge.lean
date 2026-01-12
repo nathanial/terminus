@@ -66,35 +66,29 @@ private def ratioToPercent (ratio : Float) : Nat :=
     ```
 -/
 def gauge' (value : Float) (config : GaugeConfig := {}) : WidgetM Unit := do
-  emit do
-    let ratio := normalizeValue value config.minValue config.maxValue
-    let filledWidth := (ratio * config.width.toFloat).toUInt32.toNat
-    let unfilledWidth := config.width - filledWidth
+  let ratio := normalizeValue value config.minValue config.maxValue
+  let filledWidth := (ratio * config.width.toFloat).toUInt32.toNat
+  let unfilledWidth := config.width - filledWidth
 
-    -- Build the bar
-    let filledStr := String.ofList (List.replicate filledWidth config.filledChar)
-    let unfilledStr := String.ofList (List.replicate unfilledWidth config.unfilledChar)
+  let filledStr := String.ofList (List.replicate filledWidth config.filledChar)
+  let unfilledStr := String.ofList (List.replicate unfilledWidth config.unfilledChar)
 
-    let mut nodes : Array RNode := #[]
+  let mut nodes : Array RNode := #[]
 
-    -- Add label if present
-    if let some label := config.label then
-      nodes := nodes.push (RNode.text (label ++ " ") config.labelStyle)
+  if let some label := config.label then
+    nodes := nodes.push (RNode.text (label ++ " ") config.labelStyle)
 
-    -- Add filled portion
-    if filledWidth > 0 then
-      nodes := nodes.push (RNode.text filledStr config.filledStyle)
+  if filledWidth > 0 then
+    nodes := nodes.push (RNode.text filledStr config.filledStyle)
 
-    -- Add unfilled portion
-    if unfilledWidth > 0 then
-      nodes := nodes.push (RNode.text unfilledStr config.unfilledStyle)
+  if unfilledWidth > 0 then
+    nodes := nodes.push (RNode.text unfilledStr config.unfilledStyle)
 
-    -- Add percentage if requested
-    if config.showPercent then
-      let pct := ratioToPercent ratio
-      nodes := nodes.push (RNode.text s!" {pct}%" config.percentStyle)
+  if config.showPercent then
+    let pct := ratioToPercent ratio
+    nodes := nodes.push (RNode.text s!" {pct}%" config.percentStyle)
 
-    pure (RNode.row 0 {} nodes)
+  emitStatic (RNode.row 0 {} nodes)
 
 /-- Create a dynamic gauge widget.
 
@@ -106,31 +100,32 @@ def gauge' (value : Float) (config : GaugeConfig := {}) : WidgetM Unit := do
 -/
 def dynGauge' (value : Reactive.Dynamic Spider Float) (config : GaugeConfig := {})
     : WidgetM Unit := do
-  emitDynamic do
-    let v ← value.sample
-    let ratio := normalizeValue v config.minValue config.maxValue
-    let filledWidth := (ratio * config.width.toFloat).toUInt32.toNat
-    let unfilledWidth := config.width - filledWidth
+  let node ← value.map' fun v =>
+    Id.run do
+      let ratio := normalizeValue v config.minValue config.maxValue
+      let filledWidth := (ratio * config.width.toFloat).toUInt32.toNat
+      let unfilledWidth := config.width - filledWidth
 
-    let filledStr := String.ofList (List.replicate filledWidth config.filledChar)
-    let unfilledStr := String.ofList (List.replicate unfilledWidth config.unfilledChar)
+      let filledStr := String.ofList (List.replicate filledWidth config.filledChar)
+      let unfilledStr := String.ofList (List.replicate unfilledWidth config.unfilledChar)
 
-    let mut nodes : Array RNode := #[]
+      let mut nodes : Array RNode := #[]
 
-    if let some label := config.label then
-      nodes := nodes.push (RNode.text (label ++ " ") config.labelStyle)
+      if let some label := config.label then
+        nodes := nodes.push (RNode.text (label ++ " ") config.labelStyle)
 
-    if filledWidth > 0 then
-      nodes := nodes.push (RNode.text filledStr config.filledStyle)
+      if filledWidth > 0 then
+        nodes := nodes.push (RNode.text filledStr config.filledStyle)
 
-    if unfilledWidth > 0 then
-      nodes := nodes.push (RNode.text unfilledStr config.unfilledStyle)
+      if unfilledWidth > 0 then
+        nodes := nodes.push (RNode.text unfilledStr config.unfilledStyle)
 
-    if config.showPercent then
-      let pct := ratioToPercent ratio
-      nodes := nodes.push (RNode.text s!" {pct}%" config.percentStyle)
+      if config.showPercent then
+        let pct := ratioToPercent ratio
+        nodes := nodes.push (RNode.text s!" {pct}%" config.percentStyle)
 
-    pure (RNode.row 0 {} nodes)
+      return RNode.row 0 {} nodes
+  emit node
 
 /-! ## LineGauge Configuration -/
 
@@ -170,30 +165,29 @@ structure LineGaugeConfig where
     ```
 -/
 def lineGauge' (value : Float) (config : LineGaugeConfig := {}) : WidgetM Unit := do
-  emit do
-    let ratio := normalizeValue value config.minValue config.maxValue
-    let filledWidth := (ratio * config.width.toFloat).toUInt32.toNat
-    let unfilledWidth := config.width - filledWidth
+  let ratio := normalizeValue value config.minValue config.maxValue
+  let filledWidth := (ratio * config.width.toFloat).toUInt32.toNat
+  let unfilledWidth := config.width - filledWidth
 
-    let filledStr := String.ofList (List.replicate filledWidth config.filledChar)
-    let unfilledStr := String.ofList (List.replicate unfilledWidth config.unfilledChar)
+  let filledStr := String.ofList (List.replicate filledWidth config.filledChar)
+  let unfilledStr := String.ofList (List.replicate unfilledWidth config.unfilledChar)
 
-    let mut nodes : Array RNode := #[]
+  let mut nodes : Array RNode := #[]
 
-    if let some label := config.label then
-      nodes := nodes.push (RNode.text (label ++ " ") config.labelStyle)
+  if let some label := config.label then
+    nodes := nodes.push (RNode.text (label ++ " ") config.labelStyle)
 
-    if filledWidth > 0 then
-      nodes := nodes.push (RNode.text filledStr config.filledStyle)
+  if filledWidth > 0 then
+    nodes := nodes.push (RNode.text filledStr config.filledStyle)
 
-    if unfilledWidth > 0 then
-      nodes := nodes.push (RNode.text unfilledStr config.unfilledStyle)
+  if unfilledWidth > 0 then
+    nodes := nodes.push (RNode.text unfilledStr config.unfilledStyle)
 
-    if config.showPercent then
-      let pct := ratioToPercent ratio
-      nodes := nodes.push (RNode.text s!" {pct}%" config.percentStyle)
+  if config.showPercent then
+    let pct := ratioToPercent ratio
+    nodes := nodes.push (RNode.text s!" {pct}%" config.percentStyle)
 
-    pure (RNode.row 0 {} nodes)
+  emitStatic (RNode.row 0 {} nodes)
 
 /-- Create a dynamic line gauge widget.
 
@@ -205,31 +199,32 @@ def lineGauge' (value : Float) (config : LineGaugeConfig := {}) : WidgetM Unit :
 -/
 def dynLineGauge' (value : Reactive.Dynamic Spider Float) (config : LineGaugeConfig := {})
     : WidgetM Unit := do
-  emitDynamic do
-    let v ← value.sample
-    let ratio := normalizeValue v config.minValue config.maxValue
-    let filledWidth := (ratio * config.width.toFloat).toUInt32.toNat
-    let unfilledWidth := config.width - filledWidth
+  let node ← value.map' fun v =>
+    Id.run do
+      let ratio := normalizeValue v config.minValue config.maxValue
+      let filledWidth := (ratio * config.width.toFloat).toUInt32.toNat
+      let unfilledWidth := config.width - filledWidth
 
-    let filledStr := String.ofList (List.replicate filledWidth config.filledChar)
-    let unfilledStr := String.ofList (List.replicate unfilledWidth config.unfilledChar)
+      let filledStr := String.ofList (List.replicate filledWidth config.filledChar)
+      let unfilledStr := String.ofList (List.replicate unfilledWidth config.unfilledChar)
 
-    let mut nodes : Array RNode := #[]
+      let mut nodes : Array RNode := #[]
 
-    if let some label := config.label then
-      nodes := nodes.push (RNode.text (label ++ " ") config.labelStyle)
+      if let some label := config.label then
+        nodes := nodes.push (RNode.text (label ++ " ") config.labelStyle)
 
-    if filledWidth > 0 then
-      nodes := nodes.push (RNode.text filledStr config.filledStyle)
+      if filledWidth > 0 then
+        nodes := nodes.push (RNode.text filledStr config.filledStyle)
 
-    if unfilledWidth > 0 then
-      nodes := nodes.push (RNode.text unfilledStr config.unfilledStyle)
+      if unfilledWidth > 0 then
+        nodes := nodes.push (RNode.text unfilledStr config.unfilledStyle)
 
-    if config.showPercent then
-      let pct := ratioToPercent ratio
-      nodes := nodes.push (RNode.text s!" {pct}%" config.percentStyle)
+      if config.showPercent then
+        let pct := ratioToPercent ratio
+        nodes := nodes.push (RNode.text s!" {pct}%" config.percentStyle)
 
-    pure (RNode.row 0 {} nodes)
+      return RNode.row 0 {} nodes
+  emit node
 
 /-! ## Vertical Gauge -/
 
@@ -259,39 +254,38 @@ structure VGaugeConfig where
     ```
 -/
 def vGauge' (value : Float) (config : VGaugeConfig := {}) : WidgetM Unit := do
-  emit do
-    let ratio := normalizeValue value config.minValue config.maxValue
-    let filledHeight := (ratio * config.height.toFloat).toUInt32.toNat
-    let unfilledHeight := config.height - filledHeight
+  let ratio := normalizeValue value config.minValue config.maxValue
+  let filledHeight := (ratio * config.height.toFloat).toUInt32.toNat
+  let unfilledHeight := config.height - filledHeight
 
-    -- Build rows from top to bottom (unfilled first, then filled)
-    let mut rows : Array RNode := #[]
+  let mut rows : Array RNode := #[]
 
-    for _ in [:unfilledHeight] do
-      rows := rows.push (RNode.text (String.singleton config.unfilledChar) config.unfilledStyle)
+  for _ in [:unfilledHeight] do
+    rows := rows.push (RNode.text (String.singleton config.unfilledChar) config.unfilledStyle)
 
-    for _ in [:filledHeight] do
-      rows := rows.push (RNode.text (String.singleton config.filledChar) config.filledStyle)
+  for _ in [:filledHeight] do
+    rows := rows.push (RNode.text (String.singleton config.filledChar) config.filledStyle)
 
-    pure (RNode.column 0 {} rows)
+  emitStatic (RNode.column 0 {} rows)
 
 /-- Create a dynamic vertical gauge widget. -/
 def dynVGauge' (value : Reactive.Dynamic Spider Float) (config : VGaugeConfig := {})
     : WidgetM Unit := do
-  emitDynamic do
-    let v ← value.sample
-    let ratio := normalizeValue v config.minValue config.maxValue
-    let filledHeight := (ratio * config.height.toFloat).toUInt32.toNat
-    let unfilledHeight := config.height - filledHeight
+  let node ← value.map' fun v =>
+    Id.run do
+      let ratio := normalizeValue v config.minValue config.maxValue
+      let filledHeight := (ratio * config.height.toFloat).toUInt32.toNat
+      let unfilledHeight := config.height - filledHeight
 
-    let mut rows : Array RNode := #[]
+      let mut rows : Array RNode := #[]
 
-    for _ in [:unfilledHeight] do
-      rows := rows.push (RNode.text (String.singleton config.unfilledChar) config.unfilledStyle)
+      for _ in [:unfilledHeight] do
+        rows := rows.push (RNode.text (String.singleton config.unfilledChar) config.unfilledStyle)
 
-    for _ in [:filledHeight] do
-      rows := rows.push (RNode.text (String.singleton config.filledChar) config.filledStyle)
+      for _ in [:filledHeight] do
+        rows := rows.push (RNode.text (String.singleton config.filledChar) config.filledStyle)
 
-    pure (RNode.column 0 {} rows)
+      return RNode.column 0 {} rows
+  emit node
 
 end Terminus.Reactive

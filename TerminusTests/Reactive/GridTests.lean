@@ -40,12 +40,12 @@ test "grid' renders simple grid" := do
   runSpider do
     let (events, _) ← createInputs
     let (_, render) ← (runWidget do
-      grid' 3 2 (fun x y => do
-        pure { content := s!"{x}{y}", style := {} }
+      grid' 3 2 (fun x y =>
+        { content := s!"{x}{y}", style := {} }
       ) {}
     ).run events
 
-    let node ← SpiderM.liftIO render
+    let node ← SpiderM.liftIO render.sample
     -- Grid should contain cell content like "00", "10", "01", etc.
     SpiderM.liftIO (ensure (rnodeContainsText node "00") "expected cell 0,0")
     SpiderM.liftIO (ensure (rnodeContainsText node "10") "expected cell 1,0")
@@ -55,10 +55,10 @@ test "grid' handles empty grid" := do
   runSpider do
     let (events, _) ← createInputs
     let (_, render) ← (runWidget do
-      grid' 0 0 (fun _ _ => pure (GridCell.empty 2)) {}
+      grid' 0 0 (fun _ _ => GridCell.empty 2) {}
     ).run events
 
-    let node ← SpiderM.liftIO render
+    let node ← SpiderM.liftIO render.sample
     -- Empty grid should render as empty node
     match node with
     | RNode.empty => pure ()
@@ -68,12 +68,12 @@ test "grid' renders with border" := do
   runSpider do
     let (events, _) ← createInputs
     let (_, render) ← (runWidget do
-      grid' 2 2 (fun _ _ => do
-        pure { content := "XX", style := {} }
+      grid' 2 2 (fun _ _ =>
+        { content := "XX", style := {} }
       ) { borderType := .rounded }
     ).run events
 
-    let node ← SpiderM.liftIO render
+    let node ← SpiderM.liftIO render.sample
     -- Should contain border chars
     SpiderM.liftIO (ensure (rnodeContainsText node "╭") "expected top-left border")
     SpiderM.liftIO (ensure (rnodeContainsText node "╮") "expected top-right border")
@@ -89,9 +89,9 @@ test "cursorGrid' starts at position 0,0" := do
     let (events, inputs) ← createInputs
     SpiderM.liftIO <| events.registry.fireFocus (some "grid_0")
     let (result, _render) ← (runWidget do
-      cursorGrid' 4 4 (fun _x _y isCursor => do
+      cursorGrid' 4 4 (fun _x _y isCursor =>
         let content := if isCursor then ">>" else "  "
-        pure { content, style := {} }
+        { content, style := {} }
       ) { focusName := "grid_0" }
     ).run events
     pure (result, inputs)
@@ -110,8 +110,8 @@ test "cursorGrid' arrow keys move cursor" := do
     let (events, inputs) ← createInputs
     SpiderM.liftIO <| events.registry.fireFocus (some "grid_0")
     let (result, _render) ← (runWidget do
-      cursorGrid' 4 4 (fun _ _ _ => do
-        pure { content := "  ", style := {} }
+      cursorGrid' 4 4 (fun _ _ _ =>
+        { content := "  ", style := {} }
       ) { focusName := "grid_0" }
     ).run events
     pure (result, inputs)
@@ -147,8 +147,8 @@ test "cursorGrid' vim keys work" := do
     let (events, inputs) ← createInputs
     SpiderM.liftIO <| events.registry.fireFocus (some "grid_0")
     let (result, _render) ← (runWidget do
-      cursorGrid' 4 4 (fun _ _ _ => do
-        pure { content := "  ", style := {} }
+      cursorGrid' 4 4 (fun _ _ _ =>
+        { content := "  ", style := {} }
       ) { focusName := "grid_0" }
     ).run events
     pure (result, inputs)
@@ -184,8 +184,8 @@ test "cursorGrid' respects boundaries" := do
     let (events, inputs) ← createInputs
     SpiderM.liftIO <| events.registry.fireFocus (some "grid_0")
     let (result, _render) ← (runWidget do
-      cursorGrid' 3 3 (fun _ _ _ => do
-        pure { content := "  ", style := {} }
+      cursorGrid' 3 3 (fun _ _ _ =>
+        { content := "  ", style := {} }
       ) { focusName := "grid_0" }
     ).run events
     pure (result, inputs)
@@ -218,8 +218,8 @@ test "cursorGrid' home moves to start of row" := do
     let (events, inputs) ← createInputs
     SpiderM.liftIO <| events.registry.fireFocus (some "grid_0")
     let (result, _render) ← (runWidget do
-      cursorGrid' 5 5 (fun _ _ _ => do
-        pure { content := "  ", style := {} }
+      cursorGrid' 5 5 (fun _ _ _ =>
+        { content := "  ", style := {} }
       ) { focusName := "grid_0" }
     ).run events
     pure (result, inputs)
@@ -245,8 +245,8 @@ test "cursorGrid' end moves to end of row" := do
     let (events, inputs) ← createInputs
     SpiderM.liftIO <| events.registry.fireFocus (some "grid_0")
     let (result, _render) ← (runWidget do
-      cursorGrid' 5 5 (fun _ _ _ => do
-        pure { content := "  ", style := {} }
+      cursorGrid' 5 5 (fun _ _ _ =>
+        { content := "  ", style := {} }
       ) { focusName := "grid_0" }
     ).run events
     pure (result, inputs)
@@ -267,8 +267,8 @@ test "cursorGrid' fires onSelect on enter" := do
     let (events, inputs) ← createInputs
     SpiderM.liftIO <| events.registry.fireFocus (some "grid_0")
     let (result, _render) ← (runWidget do
-      cursorGrid' 3 3 (fun _ _ _ => do
-        pure { content := "  ", style := {} }
+      cursorGrid' 3 3 (fun _ _ _ =>
+        { content := "  ", style := {} }
       ) { focusName := "grid_0" }
     ).run events
     pure (result, inputs)
@@ -298,8 +298,8 @@ test "cursorGrid' fires onCursorMove" := do
     let (events, inputs) ← createInputs
     SpiderM.liftIO <| events.registry.fireFocus (some "grid_0")
     let (result, _render) ← (runWidget do
-      cursorGrid' 3 3 (fun _ _ _ => do
-        pure { content := "  ", style := {} }
+      cursorGrid' 3 3 (fun _ _ _ =>
+        { content := "  ", style := {} }
       ) { focusName := "grid_0" }
     ).run events
     pure (result, inputs)
@@ -336,7 +336,7 @@ test "charGrid' renders char array" := do
       charGrid' cells {}
     ).run events
 
-    let node ← SpiderM.liftIO render
+    let node ← SpiderM.liftIO render.sample
     SpiderM.liftIO (ensure (rnodeContainsText node "AA") "expected AA")
     SpiderM.liftIO (ensure (rnodeContainsText node "BB") "expected BB")
     SpiderM.liftIO (ensure (rnodeContainsText node "CC") "expected CC")
@@ -353,7 +353,7 @@ test "blockGrid' renders colored blocks" := do
       blockGrid' cells {}
     ).run events
 
-    let node ← SpiderM.liftIO render
+    let node ← SpiderM.liftIO render.sample
     -- Should contain filled blocks
     SpiderM.liftIO (ensure (rnodeContainsText node "██") "expected filled blocks")
 

@@ -291,24 +291,20 @@ def scrollView' (config : ScrollViewConfig := {})
       stateRef.set newState
       fireScroll newState
 
-  -- Emit render function
-  emit do
-    let state ← stateRef.get
-
-    -- Render only visible children based on scroll offset
+  let childrenList ← Reactive.Dynamic.sequence childRenders.toList
+  let node ← scrollDyn.zipWith' (fun state nodes =>
+    let arr := nodes.toArray
     let startIdx := state.offsetY
-    let endIdx := min (startIdx + config.maxVisible) childRenders.size
-    let visibleRenders := childRenders.toSubarray startIdx endIdx |>.toArray
-
-    let childNodes ← visibleRenders.mapM id
-    let contentNode := RNode.column 0 {} childNodes
-
-    -- Add scrollbar if needed and configured
+    let endIdx := min (startIdx + config.maxVisible) arr.size
+    let visible := arr.toSubarray startIdx endIdx |>.toArray
+    let contentNode := RNode.column 0 {} visible
     if config.showVerticalScrollbar && state.needsVerticalScroll then
       let scrollbar := renderVerticalScrollbar state config config.maxVisible
-      pure (RNode.row 0 {} #[contentNode, scrollbar])
+      RNode.row 0 {} #[contentNode, scrollbar]
     else
-      pure contentNode
+      contentNode
+  ) childrenList
+  emit node
 
   pure {
     content := result

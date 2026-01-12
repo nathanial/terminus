@@ -92,7 +92,7 @@ test "tree' renders tree nodes" := do
       pure ()
     ).run events
 
-    let node ← SpiderM.liftIO render
+    let node ← SpiderM.liftIO render.sample
     -- Tree renders with icons, so use containsText for substring matching
     SpiderM.liftIO (ensure (rnodeContainsText node "Root") "expected Root")
     SpiderM.liftIO (ensure (rnodeContainsText node "Child1") "expected Child1")
@@ -394,7 +394,7 @@ test "tree' renders empty state" := do
       pure ()
     ).run events
 
-    let node ← SpiderM.liftIO render
+    let node ← SpiderM.liftIO render.sample
     SpiderM.liftIO (ensure (rnodeHasText node "(empty)") "expected empty message")
 
 test "forest' handles multiple roots" := do
@@ -410,7 +410,7 @@ test "forest' handles multiple roots" := do
       pure ()
     ).run events
 
-    let node ← SpiderM.liftIO render
+    let node ← SpiderM.liftIO render.sample
     -- Tree renders with icons, so use containsText for substring matching
     SpiderM.liftIO (ensure (rnodeContainsText node "Root1") "expected Root1")
     SpiderM.liftIO (ensure (rnodeContainsText node "Root2") "expected Root2")

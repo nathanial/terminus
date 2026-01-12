@@ -297,6 +297,8 @@ def textArea' (name : String) (initial : String := "")
   -- Track internal state
   let initialState := TextAreaState.fromString initial
   let stateRef ← SpiderM.liftIO (IO.mkRef initialState)
+  let (stateEvent, fireState) ← newTriggerEvent (t := Spider) (a := TextAreaState)
+  let stateDyn ← holdDyn initialState stateEvent
 
   -- Create dynamics for content and cursor position
   let (contentEvent, fireContent) ← newTriggerEvent (t := Spider) (a := String)
@@ -366,39 +368,34 @@ def textArea' (name : String) (initial : String := "")
       let newText := newState.getText
       if newText != oldText then
         stateRef.set newState
+        fireState newState
         fireContent newText
         fireChange newText
         fireCursor (newState.line, newState.column)
       else if newState.line != state.line || newState.column != state.column || newState.scrollOffset != state.scrollOffset then
         stateRef.set newState
+        fireState newState
         fireCursor (newState.line, newState.column)
 
-  -- Emit render function
-  emit do
-    let state ← stateRef.get
-    let currentFocus ← focusedInput.sample
-    let inputName := if name.isEmpty then widgetName else name
+  let inputName := if name.isEmpty then widgetName else name
+  let node ← focusedInput.zipWith' (fun currentFocus state =>
     let isFocused := currentFocus == some inputName
 
-    -- Calculate line number width
     let lineCount := state.lines.size
     let lineNumWidth := if config.showLineNumbers then
       if config.lineNumberWidth > 0 then config.lineNumberWidth
       else max 2 (toString lineCount).length
     else 0
 
-    -- Determine which lines to render
     let startLine := state.scrollOffset
     let endLine := min (startLine + visibleLines) lineCount
 
-    -- Build rows for each visible line
     let lineIndices := List.range' startLine (endLine - startLine)
     let rows := lineIndices.filterMap fun lineIdx =>
       if lineIdx < state.lines.size then
         let lineText := state.lines[lineIdx]!
         let isCurrentLine := lineIdx == state.line
 
-        -- Line number
         let lineNumNode := if config.showLineNumbers then
           let numStr := toString (lineIdx + 1)
           let padded := String.ofList (List.replicate (lineNumWidth - numStr.length) ' ') ++ numStr ++ " "
@@ -406,20 +403,15 @@ def textArea' (name : String) (initial : String := "")
         else
           RNode.empty
 
-        -- Line content with cursor
         let lineNode := if isFocused && isCurrentLine then
-          -- Show cursor on this line
           let before := lineText.take state.column
           let after := lineText.drop state.column
           let cursorStr := config.cursorChar.toString
 
           let cursorNode := RNode.text cursorStr config.cursorStyle
-
-          -- Padding
           let currentLen := lineText.length + 1
           let padding := if currentLen < config.minWidth then config.minWidth - currentLen else 0
 
-          -- Build nodes array - only include non-empty components
           let nodes := #[]
             |> (if before.isEmpty then id else (·.push (RNode.text before config.focusedStyle)))
             |>.push cursorNode
@@ -427,13 +419,11 @@ def textArea' (name : String) (initial : String := "")
             |> (if padding > 0 then (·.push (RNode.text (String.ofList (List.replicate padding ' ')) config.focusedStyle)) else id)
           RNode.row 0 {} nodes
         else
-          -- Regular line without cursor
           let style := if isFocused then config.focusedStyle else config.style
           let padding := if lineText.length < config.minWidth then config.minWidth - lineText.length else 0
           let padStr := String.ofList (List.replicate padding ' ')
           RNode.text (lineText ++ padStr) style
 
-        -- Combine line number and content
         let rowNode := if config.showLineNumbers then
           RNode.row 0 {} #[lineNumNode, lineNode]
         else
@@ -443,7 +433,6 @@ def textArea' (name : String) (initial : String := "")
       else
         none
 
-    -- If no lines to show, show empty line with cursor
     let finalRows := if rows.isEmpty then
       let cursorNode := if isFocused then
         RNode.text config.cursorChar.toString config.cursorStyle
@@ -453,7 +442,9 @@ def textArea' (name : String) (initial : String := "")
     else
       rows
 
-    pure (RNode.column 0 {} finalRows.toArray)
+    RNode.column 0 {} finalRows.toArray
+  ) stateDyn
+  emit node
 
   pure {
     content := contentDyn
@@ -466,7 +457,7 @@ def textArea' (name : String) (initial : String := "")
 /-- Create a labeled text area with the label above. -/
 def labeledTextArea' (label : String) (name : String) (initial : String := "")
     (config : TextAreaConfig := {}) (theme : Theme := .dark) : WidgetM TextAreaResult := do
-  emit (pure (RNode.text label theme.bodyStyle))
+  emitStatic (RNode.text label theme.bodyStyle)
   textArea' name initial config
 
 /-- Create a text area that auto-focuses on creation. -/
@@ -480,49 +471,45 @@ def focusedTextArea' (name : String) (initial : String := "")
 /-- Create a read-only text display (no editing, but scrollable). -/
 def textDisplay' (content : Reactive.Dynamic Spider String)
     (config : TextAreaConfig := {}) : WidgetM Unit := do
-  emit do
-    let text ← content.sample
-    let lines := if text.isEmpty then #[""] else text.splitOn "\n" |>.toArray
-    let lineCount := lines.size
+  let node ← content.map' fun text =>
+    Id.run do
+      let lines := if text.isEmpty then #[""] else text.splitOn "\n" |>.toArray
+      let lineCount := lines.size
 
-    -- Calculate line number width
-    let lineNumWidth := if config.showLineNumbers then
-      if config.lineNumberWidth > 0 then config.lineNumberWidth
-      else max 2 (toString lineCount).length
-    else 0
+      let lineNumWidth := if config.showLineNumbers then
+        if config.lineNumberWidth > 0 then config.lineNumberWidth
+        else max 2 (toString lineCount).length
+      else 0
 
-    -- Determine visible lines
-    let visibleLines := config.maxVisibleLines.getD lines.size
-    let endLine := min visibleLines lineCount
+      let visibleLines := config.maxVisibleLines.getD lines.size
+      let endLine := min visibleLines lineCount
 
-    let mut rows : Array RNode := #[]
+      let mut rows : Array RNode := #[]
 
-    for lineIdx in [:endLine] do
-      if h : lineIdx < lines.size then
-        let lineText := lines[lineIdx]
+      for lineIdx in [:endLine] do
+        if h : lineIdx < lines.size then
+          let lineText := lines[lineIdx]
 
-        -- Line number
-        let lineNumNode := if config.showLineNumbers then
-          let numStr := toString (lineIdx + 1)
-          let padded := String.ofList (List.replicate (lineNumWidth - numStr.length) ' ') ++ numStr ++ " "
-          RNode.text padded config.lineNumberStyle
-        else
-          RNode.empty
+          let lineNumNode := if config.showLineNumbers then
+            let numStr := toString (lineIdx + 1)
+            let padded := String.ofList (List.replicate (lineNumWidth - numStr.length) ' ') ++ numStr ++ " "
+            RNode.text padded config.lineNumberStyle
+          else
+            RNode.empty
 
-        -- Line content
-        let lineNode := RNode.text lineText config.style
+          let lineNode := RNode.text lineText config.style
 
-        -- Combine
-        let rowNode := if config.showLineNumbers then
-          RNode.row 0 {} #[lineNumNode, lineNode]
-        else
-          lineNode
+          let rowNode := if config.showLineNumbers then
+            RNode.row 0 {} #[lineNumNode, lineNode]
+          else
+            lineNode
 
-        rows := rows.push rowNode
+          rows := rows.push rowNode
 
-    if rows.isEmpty then
-      pure RNode.empty
-    else
-      pure (RNode.column 0 {} rows)
+      if rows.isEmpty then
+        return RNode.empty
+      else
+        return RNode.column 0 {} rows
+  emit node
 
 end Terminus.Reactive

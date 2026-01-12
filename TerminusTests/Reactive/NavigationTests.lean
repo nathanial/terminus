@@ -95,7 +95,7 @@ test "menu' renders items" := do
       menu' "test-menu" items {}
     ).run events
 
-    let node ← SpiderM.liftIO render
+    let node ← SpiderM.liftIO render.sample
     SpiderM.liftIO (ensure (rnodeContainsText node "File") "expected File")
     SpiderM.liftIO (ensure (rnodeContainsText node "Edit") "expected Edit")
     SpiderM.liftIO (ensure (rnodeContainsText node "View") "expected View")
@@ -112,7 +112,7 @@ test "menu' renders shortcuts" := do
       menu' "test-menu" items {}
     ).run events
 
-    let node ← SpiderM.liftIO render
+    let node ← SpiderM.liftIO render.sample
     SpiderM.liftIO (ensure (rnodeContainsText node "Ctrl+S") "expected Ctrl+S shortcut")
     SpiderM.liftIO (ensure (rnodeContainsText node "Ctrl+Q") "expected Ctrl+Q shortcut")
 
@@ -187,7 +187,7 @@ test "table' renders header" := do
       table' "test-table" columns rows {}
     ).run events
 
-    let node ← SpiderM.liftIO render
+    let node ← SpiderM.liftIO render.sample
     SpiderM.liftIO (ensure (rnodeContainsText node "Name") "expected Name header")
     SpiderM.liftIO (ensure (rnodeContainsText node "Age") "expected Age header")
 
@@ -204,7 +204,7 @@ test "table' renders rows" := do
       table' "test-table" columns rows {}
     ).run events
 
-    let node ← SpiderM.liftIO render
+    let node ← SpiderM.liftIO render.sample
     SpiderM.liftIO (ensure (rnodeContainsText node "First") "expected First row")
     SpiderM.liftIO (ensure (rnodeContainsText node "Second") "expected Second row")
 
@@ -218,7 +218,7 @@ test "simpleTable' creates table from arrays" := do
       simpleTable' "test-table" headers data {}
     ).run events
 
-    let node ← SpiderM.liftIO render
+    let node ← SpiderM.liftIO render.sample
     SpiderM.liftIO (ensure (rnodeContainsText node "Col1") "expected Col1 header")
     SpiderM.liftIO (ensure (rnodeContainsText node "A") "expected A cell")
 
@@ -314,7 +314,7 @@ test "calendar' renders month header" := do
       calendar' "test-cal" 2024 3 (some 15) {}
     ).run events
 
-    let node ← SpiderM.liftIO render
+    let node ← SpiderM.liftIO render.sample
     SpiderM.liftIO (ensure (rnodeContainsText node "March") "expected March")
     SpiderM.liftIO (ensure (rnodeContainsText node "2024") "expected 2024")
 
@@ -326,7 +326,7 @@ test "calendar' renders day headers" := do
       calendar' "test-cal" 2024 1 none {}
     ).run events
 
-    let node ← SpiderM.liftIO render
+    let node ← SpiderM.liftIO render.sample
     SpiderM.liftIO (ensure (rnodeContainsText node "Su") "expected Su")
     SpiderM.liftIO (ensure (rnodeContainsText node "Mo") "expected Mo")
     SpiderM.liftIO (ensure (rnodeContainsText node "Fr") "expected Fr")
@@ -339,7 +339,7 @@ test "calendar' renders day numbers" := do
       calendar' "test-cal" 2024 1 none {}
     ).run events
 
-    let node ← SpiderM.liftIO render
+    let node ← SpiderM.liftIO render.sample
     SpiderM.liftIO (ensure (rnodeContainsText node "15") "expected day 15")
     SpiderM.liftIO (ensure (rnodeContainsText node "31") "expected day 31")
 

@@ -34,17 +34,17 @@ def reactiveDemoApp : ReactiveTermM ReactiveAppState := do
       text' "=== Reactive Demo ===" theme.heading1Style
       row' (gap := 1) {} do
         text' "Elapsed:" theme.bodyStyle
-        emitDynamic do
-          let ms ← elapsedMs.sample
+        let node ← elapsedMs.map' (fun ms =>
           let seconds := ms / 1000
           let minutes := seconds / 60
           let secs := seconds % 60
-          pure (RNode.text s!"{minutes}:{String.ofList (if secs < 10 then ['0'] else [])}{secs}" theme.primaryStyle)
+          RNode.text s!"{minutes}:{String.ofList (if secs < 10 then ['0'] else [])}{secs}" theme.primaryStyle
+        )
+        emit node
       row' (gap := 1) {} do
         text' "Last key:" theme.bodyStyle
-        emitDynamic do
-          let key ← lastKey.sample
-          pure (RNode.text key theme.primaryStyle)
+        let node ← lastKey.map' (fun key => RNode.text key theme.primaryStyle)
+        emit node
   pure { render }
 
 /-- Minimal input demo app for testing rendering. -/
@@ -99,21 +99,20 @@ test "reactive app loop updates buffer on tick events" := do
     let (events, inputs) ← createInputs
     let countDyn ← Reactive.foldDyn (fun _ n => n + 1) 0 events.tickEvent
     let (_, render) ← (runWidget do
-      emitDynamic do
-        let n ← countDyn.sample
-        pure (RNode.text s!"{n}" {})
+      let node ← countDyn.map' (fun n => RNode.text s!"{n}" {})
+      emit node
     ).run events
     pure (render, inputs)
   ).run env
 
   env.postBuildTrigger ()
 
-  let node1 ← render
+  let node1 ← render.sample
   let buf1 := Terminus.Reactive.renderOnly node1 10 2
 
   inputs.fireTick { frame := 1, elapsedMs := 16 }
 
-  let node2 ← render
+  let node2 ← render.sample
   let buf2 := Terminus.Reactive.renderOnly node2 10 2
 
   (buf1.get 0 0).char ≡ '0'
@@ -127,21 +126,20 @@ test "reactive app loop updates buffer on key events" := do
     let (events, inputs) ← createInputs
     let countDyn ← Reactive.foldDyn (fun _ n => n + 1) 0 events.keyEvent
     let (_, render) ← (runWidget do
-      emitDynamic do
-        let n ← countDyn.sample
-        pure (RNode.text s!"{n}" {})
+      let node ← countDyn.map' (fun n => RNode.text s!"{n}" {})
+      emit node
     ).run events
     pure (render, inputs)
   ).run env
 
   env.postBuildTrigger ()
 
-  let node1 ← render
+  let node1 ← render.sample
   let buf1 := Terminus.Reactive.renderOnly node1 10 2
 
   inputs.fireKey { event := KeyEvent.char 'a', focusedWidget := none }
 
-  let node2 ← render
+  let node2 ← render.sample
   let buf2 := Terminus.Reactive.renderOnly node2 10 2
 
   (buf1.get 0 0).char ≡ '0'
@@ -161,9 +159,8 @@ test "runReactiveLoop updates frames with TerminalMock" := do
       let tickEvents ← useTick
       let countDyn ← Reactive.foldDyn (fun _ n => n + 1) 0 tickEvents
       let (_, render) ← runWidget do
-        emitDynamic do
-          let n ← countDyn.sample
-          pure (RNode.text s!"{n}" {})
+        let node ← countDyn.map' (fun n => RNode.text s!"{n}" {})
+        emit node
       pure { render }
     let appState ← setup.run events
     pure (appState, events, inputs)
@@ -173,16 +170,21 @@ test "runReactiveLoop updates frames with TerminalMock" := do
 
   let framesRef ← IO.mkRef (#[] : Array Buffer)
   let clockRef ← IO.mkRef 0
+  let signalsRef ← IO.mkRef ([LoopSignal.tick, LoopSignal.render, LoopSignal.tick, LoopSignal.render, LoopSignal.shutdown] : List LoopSignal)
 
   let deps : LoopDeps MockTerminalIO := {
-    eventSource := Events.poll
+    nextSignal := do
+      let signals ← liftM (m := IO) signalsRef.get
+      match signals with
+      | [] => pure .shutdown
+      | s :: rest =>
+        liftM (m := IO) (signalsRef.set rest)
+        pure s
     nowMs := do
       let n ← liftM (m := IO) clockRef.get
       liftM (m := IO) (clockRef.set (n + 16))
       pure n
-    sleepMs := fun _ => pure ()
     log := fun _ => pure ()
-    maxFrames := some 3
     onFrame := fun _ buf =>
       liftM (m := IO) <| framesRef.modify (fun frames => frames.push buf)
   }
@@ -217,7 +219,7 @@ test "ReactiveDemo widget updates on tick and key events" := do
 
   env.postBuildTrigger ()
 
-  let node1 ← appState.render
+  let node1 ← appState.render.sample
   let buf1 := Terminus.Reactive.renderOnly node1 80 24
 
   (rnodeHasText node1 "0:00") ≡ true
@@ -225,7 +227,7 @@ test "ReactiveDemo widget updates on tick and key events" := do
 
   inputs.fireTick { frame := 1, elapsedMs := 1500 }
 
-  let node2 ← appState.render
+  let node2 ← appState.render.sample
   let buf2 := Terminus.Reactive.renderOnly node2 80 24
 
   (rnodeHasText node2 "0:01") ≡ true
@@ -233,7 +235,7 @@ test "ReactiveDemo widget updates on tick and key events" := do
 
   inputs.fireKey { event := KeyEvent.char 'a', focusedWidget := none }
 
-  let node3 ← appState.render
+  let node3 ← appState.render.sample
   let buf3 := Terminus.Reactive.renderOnly node3 80 24
 
   (rnodeHasText node3 "'a'") ≡ true
@@ -255,10 +257,10 @@ test "Events.poll and tick drive frame-to-frame changes" := do
       let keyCount ← Reactive.foldDyn (fun _ n => n + 1) 0 keyEvents
       let tickCount ← Reactive.foldDyn (fun _ n => n + 1) 0 tickEvents
       let (_, render) ← runWidget do
-        emitDynamic do
-          let k ← keyCount.sample
-          let t ← tickCount.sample
-          pure (RNode.text s!"Key={k} Tick={t}" {})
+        let node ← keyCount.zipWith' (fun k t =>
+          RNode.text s!"Key={k} Tick={t}" {}
+        ) tickCount
+        emit node
       pure { render }
     let appState ← setup.run events
     pure (appState, events, inputs)
@@ -268,16 +270,21 @@ test "Events.poll and tick drive frame-to-frame changes" := do
 
   let rowsRef ← IO.mkRef (#[] : Array String)
   let clockRef ← IO.mkRef 0
+  let signalsRef ← IO.mkRef ([LoopSignal.input (.key (KeyEvent.char 'x')), LoopSignal.tick, LoopSignal.render, LoopSignal.tick, LoopSignal.render, LoopSignal.shutdown] : List LoopSignal)
 
   let deps : LoopDeps MockTerminalIO := {
-    eventSource := Events.poll
+    nextSignal := do
+      let signals ← liftM (m := IO) signalsRef.get
+      match signals with
+      | [] => pure .shutdown
+      | s :: rest =>
+        liftM (m := IO) (signalsRef.set rest)
+        pure s
     nowMs := do
       let n ← liftM (m := IO) clockRef.get
       liftM (m := IO) (clockRef.set (n + 16))
       pure n
-    sleepMs := fun _ => pure ()
     log := fun _ => pure ()
-    maxFrames := some 2
     onFrame := fun _ buf =>
       let row := bufferRowPrefix buf 0 20
       liftM (m := IO) <| rowsRef.modify (fun rows => rows.push row)
@@ -288,12 +295,12 @@ test "Events.poll and tick drive frame-to-frame changes" := do
     let termRef ← liftM (m := IO) (IO.mkRef term)
     runReactiveLoop { frameMs := 0 } events inputs appState.render termRef deps
 
-  let initialState : MockTerminalState := { inputQueue := [120] } -- 'x'
+  let initialState : MockTerminalState := {}
   let _ ← action.run initialState
 
   let rows ← rowsRef.get
   match rows.toList with
-  | row1 :: row2 :: _ =>
+  | _ :: row1 :: row2 :: _ =>
     let expected1 := "Key=1 Tick=1"
     let expected2 := "Key=1 Tick=2"
     (row1.take expected1.length) ≡ expected1
@@ -318,7 +325,7 @@ test "titledBlock with content renders correctly" := do
         text' "Line 2" {}
     ).run events
 
-    let node ← SpiderM.liftIO render
+    let node ← SpiderM.liftIO render.sample
     let buf := Terminus.Reactive.renderOnly node 40 10
 
     -- Title should appear in top border
@@ -341,7 +348,7 @@ test "reactiveInputApp renders correctly" := do
 
   env.postBuildTrigger ()
 
-  let node ← appState.render
+  let node ← appState.render.sample
   let buf := Terminus.Reactive.renderOnly node 80 60
 
   -- Check header is at top

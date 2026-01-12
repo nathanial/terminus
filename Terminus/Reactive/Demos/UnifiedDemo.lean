@@ -110,10 +110,11 @@ def mainContent (theme : Theme) (events : TerminusEvents) : WidgetM Unit := do
 
 def footerContent (theme : Theme) : WidgetM Unit := do
   let focusedInput ← useFocusedInputW
-  emitDynamic do
-    let focused ← focusedInput.sample
+  let node ← focusedInput.map' (fun focused =>
     let focusName := focused.getD "(none)"
-    pure (RNode.text s!"Focused: {focusName}" theme.captionStyle)
+    RNode.text s!"Focused: {focusName}" theme.captionStyle
+  )
+  emit node
 
 def app : ReactiveTermM ReactiveAppState := do
   let theme := Theme.dark

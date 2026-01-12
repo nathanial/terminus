@@ -53,7 +53,7 @@ test "spinner' renders current frame" := do
       spinner' (some "Loading") frameIndexDyn { style := .ascii }
     ).run events
 
-    let node ← SpiderM.liftIO render
+    let node ← SpiderM.liftIO render.sample
     -- Should contain the first ASCII frame "|" and the label
     SpiderM.liftIO (ensure (rnodeContainsText node "|") "expected | frame")
     SpiderM.liftIO (ensure (rnodeContainsText node "Loading") "expected label")
@@ -66,7 +66,7 @@ test "animatedSpinner' renders with label" := do
       animatedSpinner' (some "Processing...") 80 { style := .dots }
     ).run events
 
-    let node ← SpiderM.liftIO render
+    let node ← SpiderM.liftIO render.sample
     SpiderM.liftIO (ensure (rnodeContainsText node "Processing...") "expected label")
 
 -- ============================================================================
@@ -104,7 +104,7 @@ test "logger' starts with empty entries" := do
     let entries ← SpiderM.liftIO result.entries.sample
     SpiderM.liftIO (entries.size ≡ 0)
 
-    let node ← SpiderM.liftIO render
+    let node ← SpiderM.liftIO render.sample
     SpiderM.liftIO (ensure (rnodeContainsText node "no log entries") "expected empty message")
 
 test "logger' log function adds entries" := do
@@ -168,7 +168,7 @@ test "logger' renders entries with level tags" := do
 
     SpiderM.liftIO <| result.log .error "Something bad happened"
 
-    let node ← SpiderM.liftIO render
+    let node ← SpiderM.liftIO render.sample
     SpiderM.liftIO (ensure (rnodeContainsText node "[ERROR]") "expected error tag")
     SpiderM.liftIO (ensure (rnodeContainsText node "Something bad happened") "expected message")
 
@@ -190,7 +190,7 @@ test "notifications' starts empty" := do
       notifications' {}
     ).run events
 
-    let node ← SpiderM.liftIO render
+    let node ← SpiderM.liftIO render.sample
     -- Empty notifications should render as RNode.empty or nothing visible
     SpiderM.liftIO (ensure (!rnodeContainsText node "[i]" && !rnodeContainsText node "[+]") "expected empty")
 
@@ -205,7 +205,7 @@ test "notifications' show function adds notification" := do
     -- Show a notification
     SpiderM.liftIO <| result.«show» .success "Operation completed"
 
-    let node ← SpiderM.liftIO render
+    let node ← SpiderM.liftIO render.sample
     SpiderM.liftIO (ensure (rnodeContainsText node "[+]") "expected success symbol")
     SpiderM.liftIO (ensure (rnodeContainsText node "Operation completed") "expected message")
 
@@ -222,7 +222,7 @@ test "notifications' respects maxVisible" := do
     SpiderM.liftIO <| result.«show» .info "Message 2"
     SpiderM.liftIO <| result.«show» .info "Message 3"
 
-    let node ← SpiderM.liftIO render
+    let node ← SpiderM.liftIO render.sample
     -- Should only show last 2 (Message 2 and Message 3)
     SpiderM.liftIO (ensure (!rnodeContainsText node "Message 1") "should not have Message 1")
     SpiderM.liftIO (ensure (rnodeContainsText node "Message 2") "should have Message 2")
@@ -242,7 +242,7 @@ test "notifications' dismiss removes oldest" := do
     -- Dismiss oldest
     SpiderM.liftIO result.dismiss
 
-    let node ← SpiderM.liftIO render
+    let node ← SpiderM.liftIO render.sample
     SpiderM.liftIO (ensure (!rnodeContainsText node "First") "First should be dismissed")
     SpiderM.liftIO (ensure (rnodeContainsText node "Second") "Second should remain")
 
@@ -260,7 +260,7 @@ test "notifications' dismissAll clears all" := do
     -- Dismiss all
     SpiderM.liftIO result.dismissAll
 
-    let node ← SpiderM.liftIO render
+    let node ← SpiderM.liftIO render.sample
     SpiderM.liftIO (ensure (!rnodeContainsText node "[i]") "all should be dismissed")
 
 test "notifications' shows different level styles" := do
@@ -276,7 +276,7 @@ test "notifications' shows different level styles" := do
     SpiderM.liftIO <| result.«show» .warning "Warning msg"
     SpiderM.liftIO <| result.«show» .error "Error msg"
 
-    let node ← SpiderM.liftIO render
+    let node ← SpiderM.liftIO render.sample
     SpiderM.liftIO (ensure (rnodeContainsText node "[i]") "should have info symbol")
     SpiderM.liftIO (ensure (rnodeContainsText node "[+]") "should have success symbol")
     SpiderM.liftIO (ensure (rnodeContainsText node "[!]") "should have warning symbol")

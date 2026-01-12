@@ -288,11 +288,10 @@ def canvas' (config : CanvasConfig := {}) : WidgetM CanvasResult := do
     clear := modifyGrid (·.clear)
   }
 
-  -- Emit the grid as rows (reads from ref each render)
-  emit do
-    let grid ← gridRef.get
+  let node ← gridDyn.map' fun grid =>
     let rows := grid.toRNodes
-    pure (RNode.column 0 {} rows)
+    RNode.column 0 {} rows
+  emit node
 
   pure result
 
@@ -307,9 +306,7 @@ def canvas' (config : CanvasConfig := {}) : WidgetM CanvasResult := do
     ```
 -/
 def staticCanvas' (grid : BrailleGrid) : WidgetM Unit := do
-  emit do
-    let rows := grid.toRNodes
-    pure (RNode.column 0 {} rows)
+  emitStatic (RNode.column 0 {} grid.toRNodes)
 
 /-- Create a dynamic canvas from a grid dynamic.
 
@@ -320,9 +317,9 @@ def staticCanvas' (grid : BrailleGrid) : WidgetM Unit := do
     ```
 -/
 def dynCanvas' (grid : Reactive.Dynamic Spider BrailleGrid) : WidgetM Unit := do
-  emitDynamic do
-    let g ← grid.sample
+  let node ← grid.map' fun g =>
     let rows := g.toRNodes
-    pure (RNode.column 0 {} rows)
+    RNode.column 0 {} rows
+  emit node
 
 end Terminus.Reactive

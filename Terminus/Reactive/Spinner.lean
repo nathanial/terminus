@@ -102,22 +102,17 @@ def spinner' (label : Option String := none) (frameIndex : Reactive.Dynamic Spid
   let _unsub2 ← SpiderM.liftIO <| frameIndex.updated.subscribe fun newIdx =>
     fireFrame (config.style.frameAt newIdx)
 
-  -- Emit render function
-  emitDynamic do
-    let idx ← frameIndex.sample
-    let frameStr := config.style.frameAt idx
-
+  let node ← frameResultDyn.map' fun frameStr =>
     match label with
     | some lbl =>
-      -- Render spinner + space + label
-      pure (RNode.row 0 {} #[
+      RNode.row 0 {} #[
         RNode.text frameStr config.textStyle,
         RNode.text " " {},
         RNode.text lbl config.labelStyle
-      ])
+      ]
     | none =>
-      -- Just the spinner
-      pure (RNode.text frameStr config.textStyle)
+      RNode.text frameStr config.textStyle
+  emit node
 
   pure { frame := frameResultDyn }
 
@@ -156,20 +151,17 @@ def animatedSpinner' (label : Option String := none) (intervalMs : Nat := 80)
       frameIndexRef.set newIdx
       fireFrame (config.style.frameAt newIdx)
 
-  -- Emit render function
-  emit do
-    let idx ← frameIndexRef.get
-    let frameStr := config.style.frameAt idx
-
+  let node ← frameDyn.map' fun frameStr =>
     match label with
     | some lbl =>
-      pure (RNode.row 0 {} #[
+      RNode.row 0 {} #[
         RNode.text frameStr config.textStyle,
         RNode.text " " {},
         RNode.text lbl config.labelStyle
-      ])
+      ]
     | none =>
-      pure (RNode.text frameStr config.textStyle)
+      RNode.text frameStr config.textStyle
+  emit node
 
   pure { frame := frameDyn }
 
@@ -185,7 +177,7 @@ def customSpinner' (frames : Array String) (label : Option String := none)
     (intervalMs : Nat := 80) (config : SpinnerConfig := {}) : WidgetM SpinnerResult := do
   if frames.isEmpty then
     -- Empty frames - just show placeholder
-    emit (pure (RNode.text "?" config.textStyle))
+    emitStatic (RNode.text "?" config.textStyle)
     let (neverEvent, _) ← newTriggerEvent (t := Spider) (a := String)
     let dyn ← holdDyn "?" neverEvent
     pure { frame := dyn }
@@ -209,19 +201,17 @@ def customSpinner' (frames : Array String) (label : Option String := none)
         if h : newIdx < frames.size then
           fireFrame frames[newIdx]
 
-    emit do
-      let idx ← frameIndexRef.get
-      let frameStr := if h : idx < frames.size then frames[idx] else "?"
-
+    let node ← frameDyn.map' fun frameStr =>
       match label with
       | some lbl =>
-        pure (RNode.row 0 {} #[
+        RNode.row 0 {} #[
           RNode.text frameStr config.textStyle,
           RNode.text " " {},
           RNode.text lbl config.labelStyle
-        ])
+        ]
       | none =>
-        pure (RNode.text frameStr config.textStyle)
+        RNode.text frameStr config.textStyle
+    emit node
 
     pure { frame := frameDyn }
 

@@ -28,7 +28,7 @@ test "tabs' renders all labels" := do
       pure ()
     ).run events
 
-    let node ← SpiderM.liftIO render
+    let node ← SpiderM.liftIO render.sample
     SpiderM.liftIO (ensure (rnodeHasText node "Home") "expected Home label")
     SpiderM.liftIO (ensure (rnodeHasText node "Settings") "expected Settings label")
     SpiderM.liftIO (ensure (rnodeHasText node "Help") "expected Help label")
@@ -220,7 +220,7 @@ test "numberedTabs' shows number prefixes" := do
       pure ()
     ).run events
 
-    let node ← SpiderM.liftIO render
+    let node ← SpiderM.liftIO render.sample
     -- Should have "1. Alpha", "2. Beta", "3. Gamma"
     SpiderM.liftIO (ensure (rnodeHasText node "1. Alpha") "expected numbered Alpha")
     SpiderM.liftIO (ensure (rnodeHasText node "2. Beta") "expected numbered Beta")
@@ -261,7 +261,7 @@ test "tabs' renders empty state gracefully" := do
       pure ()
     ).run events
 
-    let node ← SpiderM.liftIO render
+    let node ← SpiderM.liftIO render.sample
     SpiderM.liftIO (ensure (rnodeHasText node "(no tabs)") "expected empty tabs message")
 
 test "tabs' ignores keys when not focused" := do

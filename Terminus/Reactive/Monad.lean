@@ -3,6 +3,7 @@
   The ReactiveTermM and WidgetM monads for building reactive terminal widgets.
 -/
 import Terminus.Reactive.Types
+import Terminus.Reactive.Dynamic
 
 open Reactive Reactive.Host
 
@@ -65,8 +66,8 @@ def registerComponent (namePrefix : String) (isInput : Bool := false)
 
 /-! ## Type Aliases -/
 
-/-- A component's render function - samples its internal dynamics and produces an RNode. -/
-abbrev ComponentRender := IO RNode
+/-- A component's retained render tree as a Dynamic. -/
+abbrev ComponentRender := Dynamic Spider RNode
 
 /-! ## The WidgetM Monad
 
@@ -77,7 +78,7 @@ renders into the parent container automatically.
 
 /-- State for accumulating child render functions during widget building. -/
 structure WidgetMState where
-  /-- Array of child component render functions, accumulated in order. -/
+  /-- Array of child component dynamics, accumulated in order. -/
   children : Array ComponentRender := #[]
 deriving Inhabited
 
@@ -126,6 +127,11 @@ instance : TriggerEvent Spider WidgetM where
 def emit (render : ComponentRender) : WidgetM Unit := do
   modify fun s => { s with children := s.children.push render }
 
+/-- Emit a static node as a constant Dynamic. -/
+def emitStatic (node : RNode) : WidgetM Unit := do
+  let dyn ← Dynamic.pureM node
+  emit dyn
+
 /-- Run a WidgetM computation and extract both the result and collected child renders.
     Used by container combinators to gather children's render functions. -/
 def runWidgetChildren (m : WidgetM α) : WidgetM (α × Array ComponentRender) := do
@@ -140,14 +146,14 @@ def runWidgetChildren (m : WidgetM α) : WidgetM (α × Array ComponentRender) :
     This is used at the top level to get a single ComponentRender from WidgetM. -/
 def runWidget (m : WidgetM α) : ReactiveTermM (α × ComponentRender) := do
   let (result, state) ← m.run { children := #[] }
-  let render : ComponentRender := do
-    if state.children.isEmpty then
-      pure RNode.empty
-    else if h : state.children.size = 1 then
-      state.children[0]
+  let childrenList ← liftM (m := SpiderM) <| Reactive.Dynamic.sequence state.children.toList
+  let render ← liftM (m := SpiderM) <| childrenList.map' fun kids =>
+    if kids.isEmpty then
+      RNode.empty
+    else if h : kids.length = 1 then
+      kids.head!
     else
-      let nodes ← state.children.mapM id
-      pure (RNode.column 0 {} nodes)
+      RNode.column 0 {} kids.toArray
   pure (result, render)
 
 /-- Get the events from WidgetM context. -/

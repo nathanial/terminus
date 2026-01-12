@@ -90,28 +90,20 @@ def checkbox'' (name : String) (label : String) (initial : Bool := false)
         fireToggle newVal
       | _ => pure ()
 
-  -- Emit render function
-  emit do
-    let isChecked ← checkedRef.get
-    let currentFocus ← focusedInput.sample
-    let inputName := if name.isEmpty then widgetName else name
+  let inputName := if name.isEmpty then widgetName else name
+  let node ← focusedInput.zipWith' (fun currentFocus isChecked =>
     let isFocused := currentFocus == some inputName
-
-    -- Choose symbol
     let symbol := if isChecked then config.checkedSymbol else config.uncheckedSymbol
-
-    -- Determine style (focused > checked > default)
     let textStyle := if isFocused then
       config.focusedStyle
     else if isChecked then
       config.checkedStyle
     else
       config.style
-
-    -- Build display string
     let displayText := symbol ++ config.labelSeparator ++ label
-
-    pure (RNode.text displayText textStyle)
+    RNode.text displayText textStyle
+  ) checkedDyn
+  emit node
 
   pure {
     checked := checkedDyn
@@ -163,7 +155,7 @@ structure RadioState where
   selected : Option Nat := none
   /-- Scroll offset for visible window. -/
   scrollOffset : Nat := 0
-  deriving Repr, Inhabited
+  deriving Repr, Inhabited, BEq
 
 namespace RadioState
 
@@ -260,6 +252,8 @@ def radioGroup' (name : String) (options : Array String) (initial : Option Nat :
 
   let initialState : RadioState := { selected := clampedInitial, scrollOffset := 0 }
   let stateRef ← SpiderM.liftIO (IO.mkRef initialState)
+  let (stateEvent, fireState) ← newTriggerEvent (t := Spider) (a := RadioState)
+  let stateDyn ← holdDyn initialState stateEvent
 
   -- Create dynamics
   let selectedIndexDyn ← holdDyn clampedInitial indexEvent
@@ -307,6 +301,7 @@ def radioGroup' (name : String) (options : Array String) (initial : Option Nat :
       -- Update state and fire events if selection changed
       if newState.selected != state.selected then
         stateRef.set newState
+        fireState newState
         fireIndex newState.selected
         match newState.selected with
         | some idx =>
@@ -316,46 +311,42 @@ def radioGroup' (name : String) (options : Array String) (initial : Option Nat :
             fireLabel none
         | none => fireLabel none
 
-  -- Emit render function
-  emit do
-    let state ← stateRef.get
-    let currentFocus ← focusedInput.sample
-    let inputName := if config.focusName.isEmpty then
-      (if name.isEmpty then widgetName else name)
-    else
-      config.focusName
-    let isFocused := currentFocus == some inputName
+  let inputName := if config.focusName.isEmpty then
+    (if name.isEmpty then widgetName else name)
+  else
+    config.focusName
+  let node ← focusedInput.zipWith' (fun currentFocus state =>
+    Id.run do
+      let isFocused := currentFocus == some inputName
 
-    if options.isEmpty then
-      pure RNode.empty
-    else
-      -- Determine visible range
-      let startIdx := state.scrollOffset
-      let endIdx := min (startIdx + maxVis) options.size
+      if options.isEmpty then
+        return RNode.empty
+      else
+        let startIdx := state.scrollOffset
+        let endIdx := min (startIdx + maxVis) options.size
 
-      -- Build option nodes
-      let mut nodes : Array RNode := #[]
-      for i in [startIdx:endIdx] do
-        if h : i < options.size then
-          let opt := options[i]
-          let isSelected := state.selected == some i
+        let mut nodes : Array RNode := #[]
+        for i in [startIdx:endIdx] do
+          if h : i < options.size then
+            let opt := options[i]
+            let isSelected := state.selected == some i
 
-          -- Choose symbol
-          let symbol := if isSelected then config.selectedSymbol else config.unselectedSymbol
+            let symbol := if isSelected then config.selectedSymbol else config.unselectedSymbol
 
-          -- Determine style
-          let optStyle := if isSelected then
-            if isFocused then
-              Style.merge config.selectedStyle config.focusedStyle
+            let optStyle := if isSelected then
+              if isFocused then
+                Style.merge config.selectedStyle config.focusedStyle
+              else
+                config.selectedStyle
             else
-              config.selectedStyle
-          else
-            config.style
+              config.style
 
-          let displayText := symbol ++ config.labelSeparator ++ opt
-          nodes := nodes.push (RNode.text displayText optStyle)
+            let displayText := symbol ++ config.labelSeparator ++ opt
+            nodes := nodes.push (RNode.text displayText optStyle)
 
-      pure (RNode.column 0 {} nodes)
+        return RNode.column 0 {} nodes
+  ) stateDyn
+  emit node
 
   pure {
     selectedIndex := selectedIndexDyn
@@ -401,6 +392,8 @@ def dynRadioGroup' (name : String) (options : Reactive.Dynamic Spider (Array Str
 
   let initialState : RadioState := { selected := clampedInitial, scrollOffset := 0 }
   let stateRef ← SpiderM.liftIO (IO.mkRef initialState)
+  let (stateEvent, fireState) ← newTriggerEvent (t := Spider) (a := RadioState)
+  let stateDyn ← holdDyn initialState stateEvent
 
   -- Track last known label for preservation
   let lastLabelRef ← SpiderM.liftIO (IO.mkRef (none : Option String))
@@ -440,8 +433,14 @@ def dynRadioGroup' (name : String) (options : Reactive.Dynamic Spider (Array Str
     let newState : RadioState := { selected := newSelection, scrollOffset := state.scrollOffset }
     let newState := newState.clampSelection newOpts.size |>.adjustScroll maxVis
 
-    if newState.selected != state.selected then
+    let selectionChanged := newState.selected != state.selected
+    let scrollChanged := newState.scrollOffset != state.scrollOffset
+
+    if selectionChanged || scrollChanged then
       stateRef.set newState
+      fireState newState
+
+    if selectionChanged then
       fireIndex newState.selected
       match newState.selected with
       | some idx =>
@@ -487,8 +486,14 @@ def dynRadioGroup' (name : String) (options : Reactive.Dynamic Spider (Array Str
           pure state
         | _ => pure state
 
-      if newState.selected != state.selected then
+      let selectionChanged := newState.selected != state.selected
+      let scrollChanged := newState.scrollOffset != state.scrollOffset
+
+      if selectionChanged || scrollChanged then
         stateRef.set newState
+        fireState newState
+
+      if selectionChanged then
         fireIndex newState.selected
         match newState.selected with
         | some idx =>
@@ -504,43 +509,46 @@ def dynRadioGroup' (name : String) (options : Reactive.Dynamic Spider (Array Str
           fireLabel none
 
   -- Emit render function
-  emitDynamic do
-    let currentOpts ← options.sample
-    let state ← stateRef.get
-    let currentFocus ← focusedInput.sample
-    let inputName := if config.focusName.isEmpty then
-      (if name.isEmpty then widgetName else name)
-    else
-      config.focusName
-    let isFocused := currentFocus == some inputName
+  let inputName := if config.focusName.isEmpty then
+    (if name.isEmpty then widgetName else name)
+  else
+    config.focusName
+  let focusDyn ← focusedInput.map' (fun currentFocus =>
+    currentFocus == some inputName
+  )
+  let stateWithOpts ← stateDyn.zipWith' (fun state currentOpts => (state, currentOpts)) options
+  let node ← focusDyn.zipWith' (fun isFocused stateAndOpts =>
+    Id.run do
+      let (state, currentOpts) := stateAndOpts
+      if currentOpts.isEmpty then
+        return RNode.empty
+      else
+        let maxVis := config.maxVisible.getD currentOpts.size
+        let startIdx := state.scrollOffset
+        let endIdx := min (startIdx + maxVis) currentOpts.size
 
-    if currentOpts.isEmpty then
-      pure RNode.empty
-    else
-      let maxVis := config.maxVisible.getD currentOpts.size
-      let startIdx := state.scrollOffset
-      let endIdx := min (startIdx + maxVis) currentOpts.size
+        let mut nodes : Array RNode := #[]
+        for i in [startIdx:endIdx] do
+          if h : i < currentOpts.size then
+            let opt := currentOpts[i]
+            let isSelected := state.selected == some i
 
-      let mut nodes : Array RNode := #[]
-      for i in [startIdx:endIdx] do
-        if h : i < currentOpts.size then
-          let opt := currentOpts[i]
-          let isSelected := state.selected == some i
+            let symbol := if isSelected then config.selectedSymbol else config.unselectedSymbol
 
-          let symbol := if isSelected then config.selectedSymbol else config.unselectedSymbol
-
-          let optStyle := if isSelected then
-            if isFocused then
-              Style.merge config.selectedStyle config.focusedStyle
+            let optStyle := if isSelected then
+              if isFocused then
+                Style.merge config.selectedStyle config.focusedStyle
+              else
+                config.selectedStyle
             else
-              config.selectedStyle
-          else
-            config.style
+              config.style
 
-          let displayText := symbol ++ config.labelSeparator ++ opt
-          nodes := nodes.push (RNode.text displayText optStyle)
+            let displayText := symbol ++ config.labelSeparator ++ opt
+            nodes := nodes.push (RNode.text displayText optStyle)
 
-      pure (RNode.column 0 {} nodes)
+        return RNode.column 0 {} nodes
+  ) stateWithOpts
+  emit node
 
   pure {
     selectedIndex := selectedIndexDyn
@@ -560,7 +568,7 @@ def labeledRadioGroup' (title : String) (name : String) (options : Array String)
     (initial : Option Nat := none) (config : RadioConfig := {})
     (theme : Theme := .dark) : WidgetM RadioResult := do
   column' (gap := 0) {} do
-    emit (pure (RNode.text title theme.bodyStyle))
+    emitStatic (RNode.text title theme.bodyStyle)
     radioGroup' name options initial config
 
 end Terminus.Reactive

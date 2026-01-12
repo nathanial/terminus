@@ -86,19 +86,16 @@ def popup' (_name : String) (config : PopupConfig := {}) (content : WidgetM Unit
 
   -- Render content and wrap in block
   let (_, childRenders) ← runWidgetChildren content
-
-  emitDynamic do
-    let isVisible ← visibleRef.get
+  let nodesDyn ← Reactive.Dynamic.sequence childRenders.toList
+  let node ← visibleDyn.zipWith' (fun isVisible nodes =>
     if !isVisible then
-      pure RNode.empty
+      RNode.empty
     else
-      -- Render children
-      let nodes ← childRenders.mapM id
-      let inner := RNode.column 0 {} nodes
-
-      -- Wrap in block with optional title and opaque background
+      let inner := RNode.column 0 {} nodes.toArray
       let fillStyle : Style := { bg := .default }
-      pure (RNode.block config.title config.borderType config.borderStyle (some fillStyle) inner)
+      RNode.block config.title config.borderType config.borderStyle (some fillStyle) inner
+  ) nodesDyn
+  emit node
 
   pure {
     visible := visibleDyn
@@ -137,12 +134,12 @@ def popupWhen' (_name : String) (visible : Reactive.Dynamic Spider Bool)
   let (_, childRenders) ← runWidgetChildren content
 
   overlayWhen' visible {} do
-    emit do
-      let nodes ← childRenders.mapM id
-      let inner := RNode.column 0 {} nodes
-      -- Use opaque background for popup
+    let nodesDyn ← Reactive.Dynamic.sequence childRenders.toList
+    let node ← nodesDyn.map' fun nodes =>
+      let inner := RNode.column 0 {} nodes.toArray
       let fillStyle : Style := { bg := .default }
-      pure (RNode.block config.title config.borderType config.borderStyle (some fillStyle) inner)
+      RNode.block config.title config.borderType config.borderStyle (some fillStyle) inner
+    emit node
 
 /-- Create a simple message popup controlled by visibility Dynamic. -/
 def messagePopupWhen' (_name : String) (visible : Reactive.Dynamic Spider Bool)

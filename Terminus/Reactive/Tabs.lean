@@ -122,33 +122,34 @@ def tabs' (labels : Array String) (initial : Nat := 0)
         fireIndex newTab
         fireTabChange newTab
 
-  -- Emit render function
-  emit do
-    if labels.isEmpty then
-      pure (RNode.text "(no tabs)" config.style)
-    else
-      let currentTab ← tabRef.get
+  let node ← activeTabDyn.map' fun currentTab =>
+    Id.run do
+      if labels.isEmpty then
+        return RNode.text "(no tabs)" config.style
+      else
+        let tab := if currentTab >= labels.size then
+          if labels.isEmpty then 0 else labels.size - 1
+        else
+          currentTab
 
-      -- Build tab nodes
-      let mut nodes : Array RNode := #[]
+        let mut nodes : Array RNode := #[]
 
-      for h : i in [:labels.size] do
-        let label := labels[i]
-        let isActive := i == currentTab
+        for h : i in [:labels.size] do
+          let label := labels[i]
+          let isActive := i == tab
 
-        -- Add separator before tab (except first)
-        if i > 0 then
-          nodes := nodes.push (RNode.text config.separator config.separatorStyle)
+          if i > 0 then
+            nodes := nodes.push (RNode.text config.separator config.separatorStyle)
 
-        -- Build tab text
-        let highlightPfx := if isActive then config.highlightSymbol else ""
-        let numPfx := if config.showNumbers then s!"{i + 1}. " else ""
-        let tabText := highlightPfx ++ numPfx ++ label
-        let tabStyle := if isActive then config.activeStyle else config.style
+          let highlightPfx := if isActive then config.highlightSymbol else ""
+          let numPfx := if config.showNumbers then s!"{i + 1}. " else ""
+          let tabText := highlightPfx ++ numPfx ++ label
+          let tabStyle := if isActive then config.activeStyle else config.style
 
-        nodes := nodes.push (RNode.text tabText tabStyle)
+          nodes := nodes.push (RNode.text tabText tabStyle)
 
-      pure (RNode.row 0 {} nodes)
+        return RNode.row 0 {} nodes
+  emit node
 
   pure {
     activeTab := activeTabDyn
@@ -232,35 +233,35 @@ def dynTabs' (labels : Reactive.Dynamic Spider (Array String)) (initial : Nat :=
       tabRef.set newTab
       fireIndex newTab
 
-  -- Emit render function
-  emit do
-    let currentLabels ← labels.sample
-    if currentLabels.isEmpty then
-      pure (RNode.text "(no tabs)" config.style)
-    else
-      let currentTab ← tabRef.get
-      let tab := if currentTab >= currentLabels.size then
-        if currentLabels.isEmpty then 0 else currentLabels.size - 1
+  let node ← activeTabDyn.zipWith' (fun currentTab currentLabels =>
+    Id.run do
+      if currentLabels.isEmpty then
+        return RNode.text "(no tabs)" config.style
       else
-        currentTab
+        let tab := if currentTab >= currentLabels.size then
+          if currentLabels.isEmpty then 0 else currentLabels.size - 1
+        else
+          currentTab
 
-      let mut nodes : Array RNode := #[]
+        let mut nodes : Array RNode := #[]
 
-      for h : i in [:currentLabels.size] do
-        let label := currentLabels[i]
-        let isActive := i == tab
+        for h : i in [:currentLabels.size] do
+          let label := currentLabels[i]
+          let isActive := i == tab
 
-        if i > 0 then
-          nodes := nodes.push (RNode.text config.separator config.separatorStyle)
+          if i > 0 then
+            nodes := nodes.push (RNode.text config.separator config.separatorStyle)
 
-        let highlightPfx := if isActive then config.highlightSymbol else ""
-        let numPfx := if config.showNumbers then s!"{i + 1}. " else ""
-        let tabText := highlightPfx ++ numPfx ++ label
-        let tabStyle := if isActive then config.activeStyle else config.style
+          let highlightPfx := if isActive then config.highlightSymbol else ""
+          let numPfx := if config.showNumbers then s!"{i + 1}. " else ""
+          let tabText := highlightPfx ++ numPfx ++ label
+          let tabStyle := if isActive then config.activeStyle else config.style
 
-        nodes := nodes.push (RNode.text tabText tabStyle)
+          nodes := nodes.push (RNode.text tabText tabStyle)
 
-      pure (RNode.row 0 {} nodes)
+        return RNode.row 0 {} nodes
+  ) labels
+  emit node
 
   pure {
     activeTab := activeTabDyn

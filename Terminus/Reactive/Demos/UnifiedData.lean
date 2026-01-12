@@ -38,9 +38,10 @@ def dataContent (theme : Theme) (_events : TerminusEvents) : WidgetM Unit := do
 
           row' (gap := 1) {} do
             text' "Selected:" theme.captionStyle
-            emitDynamic do
-              let sel ← selectedDyn.sample
-              pure (RNode.text sel theme.bodyStyle)
+            let node ← selectedDyn.map' (fun sel =>
+              RNode.text sel theme.bodyStyle
+            )
+            emit node
 
       -- Table
       column' (gap := 1) {} do
@@ -62,12 +63,13 @@ def dataContent (theme : Theme) (_events : TerminusEvents) : WidgetM Unit := do
 
           row' (gap := 1) {} do
             text' "Row:" theme.captionStyle
-            emitDynamic do
-              let idx ← tableResult.selectedIndex.sample
+            let node ← tableResult.selectedIndex.map' (fun idx =>
               let display := match idx with
                 | some i => toString i
                 | none => "(none)"
-              pure (RNode.text display theme.primaryStyle)
+              RNode.text display theme.primaryStyle
+            )
+            emit node
 
       -- Calendar
       column' (gap := 1) {} do
@@ -84,9 +86,10 @@ def dataContent (theme : Theme) (_events : TerminusEvents) : WidgetM Unit := do
 
           row' (gap := 1) {} do
             text' "Date:" theme.captionStyle
-            emitDynamic do
-              let date ← dateDyn.sample
-              pure (RNode.text date theme.primaryStyle)
+            let node ← dateDyn.map' (fun date =>
+              RNode.text date theme.primaryStyle
+            )
+            emit node
 
     spacer' 0 1
 
@@ -99,9 +102,10 @@ def dataContent (theme : Theme) (_events : TerminusEvents) : WidgetM Unit := do
             for i in [1:9] do
               text' s!"Item {i}" theme.bodyStyle
 
-          emitDynamic do
-            let state ← scroll.scrollState.sample
-            pure (RNode.text s!"Offset: {state.offsetY}" theme.captionStyle)
+          let node ← scroll.scrollState.map' (fun state =>
+            RNode.text s!"Offset: {state.offsetY}" theme.captionStyle
+          )
+          emit node
 
         titledBlock' "Scrollbars" .rounded theme none do
           text' "Vertical:" theme.captionStyle
@@ -114,23 +118,24 @@ def dataContent (theme : Theme) (_events : TerminusEvents) : WidgetM Unit := do
       column' (gap := 1) {} do
         titledBlock' "Grid Widgets" .rounded theme none do
           text' "Static grid:" theme.captionStyle
-          grid' 3 2 (fun x y => do
-            pure { content := s!"{x}{y}", style := { fg := .ansi .cyan } }
+          grid' 3 2 (fun x y =>
+            { content := s!"{x}{y}", style := { fg := .ansi .cyan } }
           ) { borderType := .rounded }
 
           spacer' 0 1
 
           text' "Cursor grid (arrows):" theme.captionStyle
-          let cursor ← cursorGrid' 4 3 (fun _ _ isCursor => do
+          let cursor ← cursorGrid' 4 3 (fun _ _ isCursor =>
             if isCursor then
-              pure { content := "[]", style := { fg := .ansi .yellow } }
+              { content := "[]", style := { fg := .ansi .yellow } }
             else
-              pure { content := " .", style := { fg := .ansi .brightBlack } }
+              { content := " .", style := { fg := .ansi .brightBlack } }
           ) { focusName := "cursor-grid", borderType := .rounded }
 
-          emitDynamic do
-            let (cx, cy) ← cursor.cursorPos.sample
-            pure (RNode.text s!"Cursor: {cx},{cy}" theme.captionStyle)
+          let node ← cursor.cursorPos.map' (fun (cx, cy) =>
+            RNode.text s!"Cursor: {cx},{cy}" theme.captionStyle
+          )
+          emit node
 
           spacer' 0 1
 

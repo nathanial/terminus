@@ -27,7 +27,7 @@ test "checkbox'' renders correct symbol when unchecked" := do
       checkbox'' "test" "Accept terms" false {}
     ).run events
 
-    let node ← SpiderM.liftIO render
+    let node ← SpiderM.liftIO render.sample
     SpiderM.liftIO (ensure (rnodeContainsText node "[ ]") "expected unchecked symbol")
     SpiderM.liftIO (ensure (rnodeContainsText node "Accept terms") "expected label")
 
@@ -38,7 +38,7 @@ test "checkbox'' renders correct symbol when checked" := do
       checkbox'' "test" "Accept terms" true {}
     ).run events
 
-    let node ← SpiderM.liftIO render
+    let node ← SpiderM.liftIO render.sample
     SpiderM.liftIO (ensure (rnodeContainsText node "[x]") "expected checked symbol")
 
 test "checkbox'' respects custom symbols" := do
@@ -52,7 +52,7 @@ test "checkbox'' respects custom symbols" := do
       checkbox'' "test" "Custom" true config
     ).run events
 
-    let node ← SpiderM.liftIO render
+    let node ← SpiderM.liftIO render.sample
     SpiderM.liftIO (ensure (rnodeContainsText node "[*]") "expected custom checked symbol")
 
 test "checkbox'' initial state is reflected in dynamic" := do
@@ -158,7 +158,7 @@ test "radioGroup' renders all options" := do
       radioGroup' "fruit" options (some 0) {}
     ).run events
 
-    let node ← SpiderM.liftIO render
+    let node ← SpiderM.liftIO render.sample
     SpiderM.liftIO (ensure (rnodeContainsText node "Apple") "expected Apple")
     SpiderM.liftIO (ensure (rnodeContainsText node "Banana") "expected Banana")
     SpiderM.liftIO (ensure (rnodeContainsText node "Cherry") "expected Cherry")
@@ -171,7 +171,7 @@ test "radioGroup' renders correct symbols for selected/unselected" := do
       radioGroup' "test" options (some 1) {}
     ).run events
 
-    let node ← SpiderM.liftIO render
+    let node ← SpiderM.liftIO render.sample
     -- B should have selected symbol
     SpiderM.liftIO (ensure (rnodeContainsText node "(o) B") "expected selected B")
     -- A and C should have unselected symbol
@@ -215,7 +215,7 @@ test "radioGroup' handles empty options" := do
     let idx ← SpiderM.liftIO result.selectedIndex.sample
     SpiderM.liftIO (idx ≡ none)
 
-    let node ← SpiderM.liftIO render
+    let node ← SpiderM.liftIO render.sample
     -- Should render empty or not have any radio symbols
     SpiderM.liftIO (ensure (!rnodeContainsText node "(o)" && !rnodeContainsText node "( )") "expected empty render")
 

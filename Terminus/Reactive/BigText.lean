@@ -330,9 +330,7 @@ def renderBigTextLine (text : String) (config : BigTextConfig) : Array RNode := 
     ```
 -/
 def bigText' (text : String) (config : BigTextConfig := {}) : WidgetM Unit := do
-  emit do
-    let rows := renderBigTextLine text config
-    pure (RNode.column 0 {} rows)
+  emitStatic (RNode.column 0 {} (renderBigTextLine text config))
 
 /-- Create a dynamic big text widget.
 
@@ -344,10 +342,10 @@ def bigText' (text : String) (config : BigTextConfig := {}) : WidgetM Unit := do
 -/
 def dynBigText' (text : Reactive.Dynamic Spider String) (config : BigTextConfig := {})
     : WidgetM Unit := do
-  emitDynamic do
-    let t ← text.sample
-    let rows := renderBigTextLine t config
-    pure (RNode.column 0 {} rows)
+  let node ← text.map' (fun t =>
+    RNode.column 0 {} (renderBigTextLine t config)
+  )
+  emit node
 
 /-- Create a multi-line big text widget.
 
@@ -357,15 +355,14 @@ def dynBigText' (text : Reactive.Dynamic Spider String) (config : BigTextConfig 
     ```
 -/
 def bigTextMultiline' (text : String) (config : BigTextConfig := {}) : WidgetM Unit := do
-  emit do
-    let lines := text.splitOn "\n"
-    let mut allRows : Array RNode := #[]
-    for line in lines do
-      let lineRows := renderBigTextLine line config
-      allRows := allRows ++ lineRows
-      -- Add a blank row between lines
-      if line != lines.getLast! then
-        allRows := allRows.push (RNode.spacer 0 1)
-    pure (RNode.column 0 {} allRows)
+  let lines := text.splitOn "\n"
+  let mut allRows : Array RNode := #[]
+  for line in lines do
+    let lineRows := renderBigTextLine line config
+    allRows := allRows ++ lineRows
+    -- Add a blank row between lines
+    if line != lines.getLast! then
+      allRows := allRows.push (RNode.spacer 0 1)
+  emitStatic (RNode.column 0 {} allRows)
 
 end Terminus.Reactive

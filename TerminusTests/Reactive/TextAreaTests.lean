@@ -204,7 +204,7 @@ test "textArea' works in WidgetM" := do
     let (events, _) ← createInputs
     let (result, _render) ← (runWidget do
       let area ← textArea' "test" "Hello\nWorld" {}
-      emit (pure RNode.empty)
+      emitStatic RNode.empty
       pure area
     ).run events
 
@@ -216,7 +216,7 @@ test "textArea' cursor starts at 0,0" := do
     let (events, _) ← createInputs
     let (result, _render) ← (runWidget do
       let area ← textArea' "test" "Hello" {}
-      emit (pure RNode.empty)
+      emitStatic RNode.empty
       pure area
     ).run events
 
@@ -231,7 +231,7 @@ test "labeledTextArea' renders label" := do
       pure ()
     ).run events
 
-    let node ← SpiderM.liftIO render
+    let node ← SpiderM.liftIO render.sample
     SpiderM.liftIO (ensure (rnodeContainsText node "Notes") "should contain label")
 
 test "textDisplay' shows content" := do
@@ -243,7 +243,7 @@ test "textDisplay' shows content" := do
       textDisplay' contentDyn { showLineNumbers := true }
     ).run events
 
-    let node ← SpiderM.liftIO render
+    let node ← SpiderM.liftIO render.sample
     SpiderM.liftIO (ensure (rnodeContainsText node "Line 1") "should contain Line 1")
     SpiderM.liftIO (ensure (rnodeContainsText node "Line 2") "should contain Line 2")
 

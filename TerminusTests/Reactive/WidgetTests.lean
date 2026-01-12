@@ -24,10 +24,10 @@ test "emit adds render function to state" := do
   runSpider do
     let (events, _) ← createInputs
     let (_, render) ← (runWidget do
-      emit (pure (RNode.text "Test" {}))
+      emitStatic (RNode.text "Test" {})
     ).run events
 
-    let node ← SpiderM.liftIO render
+    let node ← SpiderM.liftIO render.sample
     match node with
     | .text content _ => SpiderM.liftIO (content ≡ "Test")
     | _ => SpiderM.liftIO (ensure false "expected text node")
@@ -36,11 +36,11 @@ test "multiple emit creates column of nodes" := do
   runSpider do
     let (events, _) ← createInputs
     let (_, render) ← (runWidget do
-      emit (pure (RNode.text "First" {}))
-      emit (pure (RNode.text "Second" {}))
+      emitStatic (RNode.text "First" {})
+      emitStatic (RNode.text "Second" {})
     ).run events
 
-    let node ← SpiderM.liftIO render
+    let node ← SpiderM.liftIO render.sample
     match node with
     | .column _ _ children =>
       SpiderM.liftIO (children.size ≡ 2)
@@ -53,7 +53,7 @@ test "text' emits text node" := do
       text' "Hello" { fg := .ansi .red }
     ).run events
 
-    let node ← SpiderM.liftIO render
+    let node ← SpiderM.liftIO render.sample
     match node with
     | .text content style =>
       SpiderM.liftIO (content ≡ "Hello")
@@ -73,7 +73,7 @@ test "column' collects children renders" := do
         text' "Line2" {}
     ).run events
 
-    let node ← SpiderM.liftIO render
+    let node ← SpiderM.liftIO render.sample
     match node with
     | .column gap _ children =>
       SpiderM.liftIO (gap ≡ 1)
@@ -89,7 +89,7 @@ test "row' collects children renders" := do
         text' "B" {}
     ).run events
 
-    let node ← SpiderM.liftIO render
+    let node ← SpiderM.liftIO render.sample
     match node with
     | .row gap _ children =>
       SpiderM.liftIO (gap ≡ 2)

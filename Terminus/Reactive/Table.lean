@@ -263,7 +263,10 @@ def table' (name : String) (columns : Array TableColumn') (rows : Array TableRow
   let focusedInput ← useFocusedInputW
 
   -- State
-  let stateRef ← SpiderM.liftIO (IO.mkRef (TableState.mk (if rows.isEmpty then none else some 0) 0))
+  let initialState := TableState.mk (if rows.isEmpty then none else some 0) 0
+  let stateRef ← SpiderM.liftIO (IO.mkRef initialState)
+  let (stateEvent, fireState) ← newTriggerEvent (t := Spider) (a := TableState)
+  let stateDyn ← holdDyn initialState stateEvent
 
   -- Events
   let (selectEvent, fireSelect) ← newTriggerEvent (t := Spider) (a := Nat × TableRow')
@@ -291,12 +294,14 @@ def table' (name : String) (columns : Array TableColumn') (rows : Array TableRow
     | .down | .char 'j' =>
       let newState := state.navigateNext rows.size config.maxHeight
       stateRef.set newState
+      fireState newState
       fireIndex newState.selectedIndex
       fireRow (newState.selectedIndex.bind fun i => rows[i]?)
 
     | .up | .char 'k' =>
       let newState := state.navigatePrev rows.size
       stateRef.set newState
+      fireState newState
       fireIndex newState.selectedIndex
       fireRow (newState.selectedIndex.bind fun i => rows[i]?)
 
@@ -310,48 +315,43 @@ def table' (name : String) (columns : Array TableColumn') (rows : Array TableRow
 
     | _ => pure ()
 
-  -- Render
-  emit do
-    let state ← stateRef.get
+  let node ← stateDyn.map' fun state =>
+    Id.run do
+      if columns.isEmpty then
+        return RNode.empty
+      else
+        let totalWidth := 80
+        let widths := columns.map (·.width)
+        let colWidths := computeColumnWidths widths columns.size totalWidth config.columnSpacing
 
-    if columns.isEmpty then
-      pure RNode.empty
-    else
-      -- Calculate column widths (assume reasonable total width)
-      let totalWidth := 80  -- Default assumption, could be made configurable
-      let widths := columns.map (·.width)
-      let colWidths := computeColumnWidths widths columns.size totalWidth config.columnSpacing
+        let mut nodes : Array RNode := #[]
 
-      let mut nodes : Array RNode := #[]
+        if config.showHeader then
+          let headerRow := TableRow'.new (columns.map (·.header))
+          nodes := nodes.push (renderTableRow headerRow colWidths config.headerStyle config.columnSpacing)
 
-      -- Render header if enabled
-      if config.showHeader then
-        let headerRow := TableRow'.new (columns.map (·.header))
-        nodes := nodes.push (renderTableRow headerRow colWidths config.headerStyle config.columnSpacing)
+        let visibleRows := match config.maxHeight with
+          | some max => min max rows.size
+          | none => rows.size
 
-      -- Determine visible range
-      let visibleRows := match config.maxHeight with
-        | some max => min max rows.size
-        | none => rows.size
+        let startIdx := state.scrollOffset
+        let endIdx := min (startIdx + visibleRows) rows.size
 
-      let startIdx := state.scrollOffset
-      let endIdx := min (startIdx + visibleRows) rows.size
+        for i in [startIdx : endIdx] do
+          match rows[i]? with
+          | some row =>
+            let isSelected := state.selectedIndex == some i
+            let isAlternate := config.useAlternateColors && i % 2 == 1
 
-      -- Render visible rows
-      for i in [startIdx : endIdx] do
-        match rows[i]? with
-        | some row =>
-          let isSelected := state.selectedIndex == some i
-          let isAlternate := config.useAlternateColors && i % 2 == 1
+            let rowStyle := if isSelected then config.selectedStyle
+                            else if isAlternate then config.alternateStyle
+                            else config.normalStyle
 
-          let rowStyle := if isSelected then config.selectedStyle
-                          else if isAlternate then config.alternateStyle
-                          else config.normalStyle
+            nodes := nodes.push (renderTableRow row colWidths rowStyle config.columnSpacing)
+          | none => pure ()
 
-          nodes := nodes.push (renderTableRow row colWidths rowStyle config.columnSpacing)
-        | none => pure ()
-
-      pure (RNode.column 0 {} nodes)
+        return RNode.column 0 {} nodes
+  emit node
 
   pure {
     selectedIndex := indexDyn
@@ -373,7 +373,10 @@ def dynTable' (name : String) (columns : Array TableColumn')
   let focusedInput ← useFocusedInputW
 
   -- State
-  let stateRef ← SpiderM.liftIO (IO.mkRef (TableState.mk none 0))
+  let initialState := TableState.mk none 0
+  let stateRef ← SpiderM.liftIO (IO.mkRef initialState)
+  let (stateEvent, fireState) ← newTriggerEvent (t := Spider) (a := TableState)
+  let stateDyn ← holdDyn initialState stateEvent
 
   -- Events
   let (selectEvent, fireSelect) ← newTriggerEvent (t := Spider) (a := Nat × TableRow')
@@ -389,6 +392,7 @@ def dynTable' (name : String) (columns : Array TableColumn')
     let state ← stateRef.get
     let clamped := state.clampSelection newRows.size
     stateRef.set clamped
+    fireState clamped
     fireIndex clamped.selectedIndex
     fireRow (clamped.selectedIndex.bind fun i => newRows[i]?)
 
@@ -409,12 +413,14 @@ def dynTable' (name : String) (columns : Array TableColumn')
     | .down | .char 'j' =>
       let newState := state.navigateNext currentRows.size config.maxHeight
       stateRef.set newState
+      fireState newState
       fireIndex newState.selectedIndex
       fireRow (newState.selectedIndex.bind fun i => currentRows[i]?)
 
     | .up | .char 'k' =>
       let newState := state.navigatePrev currentRows.size
       stateRef.set newState
+      fireState newState
       fireIndex newState.selectedIndex
       fireRow (newState.selectedIndex.bind fun i => currentRows[i]?)
 
@@ -428,45 +434,44 @@ def dynTable' (name : String) (columns : Array TableColumn')
 
     | _ => pure ()
 
-  -- Render
-  emitDynamic do
-    let state ← stateRef.get
-    let currentRows ← rows.sample
+  let node ← stateDyn.zipWith' (fun state currentRows =>
+    Id.run do
+      if columns.isEmpty then
+        return RNode.empty
+      else
+        let totalWidth := 80
+        let widths := columns.map (·.width)
+        let colWidths := computeColumnWidths widths columns.size totalWidth config.columnSpacing
 
-    if columns.isEmpty then
-      pure RNode.empty
-    else
-      let totalWidth := 80
-      let widths := columns.map (·.width)
-      let colWidths := computeColumnWidths widths columns.size totalWidth config.columnSpacing
+        let mut nodes : Array RNode := #[]
 
-      let mut nodes : Array RNode := #[]
+        if config.showHeader then
+          let headerRow := TableRow'.new (columns.map (·.header))
+          nodes := nodes.push (renderTableRow headerRow colWidths config.headerStyle config.columnSpacing)
 
-      if config.showHeader then
-        let headerRow := TableRow'.new (columns.map (·.header))
-        nodes := nodes.push (renderTableRow headerRow colWidths config.headerStyle config.columnSpacing)
+        let visibleRows := match config.maxHeight with
+          | some max => min max currentRows.size
+          | none => currentRows.size
 
-      let visibleRows := match config.maxHeight with
-        | some max => min max currentRows.size
-        | none => currentRows.size
+        let startIdx := state.scrollOffset
+        let endIdx := min (startIdx + visibleRows) currentRows.size
 
-      let startIdx := state.scrollOffset
-      let endIdx := min (startIdx + visibleRows) currentRows.size
+        for i in [startIdx : endIdx] do
+          match currentRows[i]? with
+          | some row =>
+            let isSelected := state.selectedIndex == some i
+            let isAlternate := config.useAlternateColors && i % 2 == 1
 
-      for i in [startIdx : endIdx] do
-        match currentRows[i]? with
-        | some row =>
-          let isSelected := state.selectedIndex == some i
-          let isAlternate := config.useAlternateColors && i % 2 == 1
+            let rowStyle := if isSelected then config.selectedStyle
+                            else if isAlternate then config.alternateStyle
+                            else config.normalStyle
 
-          let rowStyle := if isSelected then config.selectedStyle
-                          else if isAlternate then config.alternateStyle
-                          else config.normalStyle
+            nodes := nodes.push (renderTableRow row colWidths rowStyle config.columnSpacing)
+          | none => pure ()
 
-          nodes := nodes.push (renderTableRow row colWidths rowStyle config.columnSpacing)
-        | none => pure ()
-
-      pure (RNode.column 0 {} nodes)
+        return RNode.column 0 {} nodes
+  ) rows
+  emit node
 
   pure {
     selectedIndex := indexDyn
