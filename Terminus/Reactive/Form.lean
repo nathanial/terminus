@@ -246,28 +246,17 @@ def checkbox' (name : String) (label : String) (initial : Bool := false)
   -- Get focused key events
   let keyEvents ← useFocusedKeyEventsW inputName
 
-  -- Create events
-  let (changeEvent, fireChange) ← newTriggerEvent (t := Spider) (a := Bool)
-  let (checkedEvent, fireChecked) ← newTriggerEvent (t := Spider) (a := Bool)
+  -- Filter to toggle events (space/enter)
+  let toggleEvents ← Event.filterM (fun kd =>
+    match kd.event.code with
+    | .space | .enter => true
+    | _ => false) keyEvents
 
-  -- State
-  let checkedRef ← SpiderM.liftIO (IO.mkRef initial)
-  let checkedDyn ← holdDyn initial checkedEvent
+  -- Fold toggle events to track checked state
+  let checkedDyn ← foldDyn (fun _ checked => !checked) initial toggleEvents
 
   -- Focus for rendering
   let focusedInput ← useFocusedInputW
-
-  -- Key handling
-  let _unsub ← SpiderM.liftIO <| keyEvents.subscribe fun kd => do
-      let ke := kd.event
-      match ke.code with
-      | .space | .enter =>
-        let current ← checkedRef.get
-        let newVal := !current
-        checkedRef.set newVal
-        fireChecked newVal
-        fireChange newVal
-      | _ => pure ()
 
   -- Render
   let focusDyn ← focusedInput.map' (fun currentFocus =>
@@ -282,7 +271,7 @@ def checkbox' (name : String) (label : String) (initial : Bool := false)
 
   pure {
     checked := checkedDyn
-    onChange := changeEvent
+    onChange := checkedDyn.updated
   }
 
 /-! ## Form Widget -/
@@ -473,16 +462,15 @@ def cancelButton' (label : String := "Cancel") (style : Style := { fg := .ansi .
   -- Get focused key events
   let keyEvents ← useFocusedKeyEventsW widgetName
 
-  let (clickEvent, fireClick) ← newTriggerEvent (t := Spider) (a := Unit)
+  -- Filter to cancel keys (Enter/Space/Escape) and convert to Unit event
+  let cancelKeyEvents ← Event.filterM (fun kd =>
+    match kd.event.code with
+    | .enter | .space | .escape => true
+    | _ => false) keyEvents
+  let clickEvent ← Event.voidM cancelKeyEvents
 
   -- Focus for rendering
   let focusedInput ← useFocusedInputW
-
-  let _unsub ← SpiderM.liftIO <| keyEvents.subscribe fun kd => do
-    let ke := kd.event
-    match ke.code with
-    | .enter | .space | .escape => fireClick ()
-    | _ => pure ()
 
   let focusDyn ← focusedInput.map' (fun currentFocus =>
     currentFocus == some widgetName

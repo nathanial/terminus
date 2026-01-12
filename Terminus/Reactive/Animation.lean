@@ -215,13 +215,8 @@ def useInterpolation (durationMs : Nat) (fromVal toVal : Float)
   let anim ← useAnimation config trigger
 
   -- Map progress to interpolated value
-  let (valueEvent, fireValue) ← Reactive.newTriggerEvent (t := Spider) (a := Float)
-  let valueDyn ← Reactive.holdDyn fromVal valueEvent
-
-  -- Subscribe to progress changes
-  let _unsub ← SpiderM.liftIO <| anim.progress.updated.subscribe fun p => do
-    let interpolated := fromVal + (toVal - fromVal) * p
-    fireValue interpolated
+  let interpolatedEvent ← Event.mapM (fun p => fromVal + (toVal - fromVal) * p) anim.progress.updated
+  let valueDyn ← Reactive.holdDyn fromVal interpolatedEvent
 
   pure {
     value := valueDyn
@@ -310,14 +305,10 @@ def usePulse (intervalMs : Nat) : ReactiveTermM (Reactive.Dynamic Spider Bool) :
 def useCycle (periodMs : Nat) : ReactiveTermM (Reactive.Dynamic Spider Float) := do
   let tickEvents ← useTick
 
-  let (cycleEvent, fireCycle) ← Reactive.newTriggerEvent (t := Spider) (a := Float)
+  let cycleEvent ← Event.mapM (fun td =>
+    if periodMs == 0 then 0.0
+    else Float.ofNat (td.elapsedMs % periodMs) / Float.ofNat periodMs) tickEvents
   let cycleDyn ← Reactive.holdDyn 0.0 cycleEvent
-
-  let _unsub ← SpiderM.liftIO <| tickEvents.subscribe fun td => do
-    if periodMs == 0 then fireCycle 0.0
-    else
-      let progress := Float.ofNat (td.elapsedMs % periodMs) / Float.ofNat periodMs
-      fireCycle progress
 
   pure cycleDyn
 
