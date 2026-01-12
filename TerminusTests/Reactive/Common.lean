@@ -98,34 +98,13 @@ partial def rnodeContainsText (node : RNode) (needle : String) : Bool :=
 
 /-- Capture the latest value from an event as a Dynamic.
     Returns a Dynamic that holds `none` initially, then `some value` after each event fires.
-    Use this in SpiderM to track what events were fired, then sample in IO to check.
-
-    Example:
-    ```
-    let (result, lastChange) ← runSpider do
-      let tabs ← tabs' ...
-      let lastChange ← captureLatest tabs.onTabChange
-      pure (tabs, lastChange)
-    inputs.fireKey ...
-    let changed ← lastChange.sample
-    changed ≡ some 1
-    ```
--/
+    Use this in SpiderM to track what events were fired, then read the Dynamic in IO to check. -/
 def captureLatest (e : Reactive.Event Spider a) : SpiderM (Reactive.Dynamic Spider (Option a)) := do
   let mapped ← Reactive.Host.Event.mapM some e
   Reactive.holdDyn none mapped
 
 /-- Capture all values from an event as a Dynamic list.
-    Returns a Dynamic that accumulates all fired values in order.
-
-    Example:
-    ```
-    let allChanges ← captureAll tabs.onTabChange
-    -- fire multiple events
-    let changes ← allChanges.sample
-    changes ≡ [1, 2, 0]
-    ```
--/
+    Returns a Dynamic that accumulates all fired values in order. -/
 def captureAll (e : Reactive.Event Spider a) : SpiderM (Reactive.Dynamic Spider (List a)) :=
   Reactive.foldDyn (fun v acc => acc ++ [v]) [] e
 
