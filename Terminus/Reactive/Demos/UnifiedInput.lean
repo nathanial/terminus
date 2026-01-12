@@ -23,12 +23,7 @@ def inputContent (theme : Theme) (_events : TerminusEvents) : WidgetM Unit := do
           }
           row' (gap := 1) {} do
             text' "You typed:" theme.captionStyle
-            emitDynamic do
-              let val ← input.value.sample
-              if val.isEmpty then
-                pure (RNode.text "(empty)" { fg := .ansi .brightBlack })
-              else
-                pure (RNode.text val theme.primaryStyle)
+            dynText' input.value theme.primaryStyle
 
       -- Checkbox
       column' (gap := 1) {} do
