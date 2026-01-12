@@ -140,7 +140,8 @@ partial def runReactiveLoop [Monad m] [TerminalEffect m] [MonadLift IO m]
     else
       let signal ← deps.nextSignal
       match signal with
-      | .shutdown => pure ()
+      | .shutdown =>
+        pure ()
       | .input ev =>
         match ev with
         | .key ke =>
@@ -160,6 +161,7 @@ partial def runReactiveLoop [Monad m] [TerminalEffect m] [MonadLift IO m]
           liftM (m := IO) <| termRef.set newTerm
           renderFrame
         | .none => pure ()
+        loop
       | .tick =>
         let now ← deps.nowMs
         let elapsed := now - startTime
@@ -167,10 +169,10 @@ partial def runReactiveLoop [Monad m] [TerminalEffect m] [MonadLift IO m]
         liftM (m := IO) <| frameRef.set (frame + 1)
         if frame % 60 == 0 then
           deps.log s!"Frame {frame}, elapsed {elapsed}ms"
+        loop
       | .render =>
         renderFrame
-
-      loop
+        loop
 
   loop
 
