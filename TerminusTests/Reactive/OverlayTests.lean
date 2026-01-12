@@ -248,79 +248,68 @@ test "modal visibility updates via event trigger (like demo)" := do
 
 test "confirmDialog' emits confirmed event on Y key" := do
   let env ← SpiderEnv.new
-  let (confirmResult, inputs, _visible, _setVisible) ← (do
+  let (confirmedDyn, inputs) ← (do
     let (events, inputs) ← createInputs
-    let (visEvent, setVis) ← Reactive.newTriggerEvent (t := Spider) (a := Bool)
+    let (visEvent, _setVis) ← Reactive.newTriggerEvent (t := Spider) (a := Bool)
     let visible ← Reactive.holdDyn true visEvent
     let (result, _render) ← (runWidget do
       confirmDialog' "Are you sure?" visible Theme.dark
     ).run events
-    pure (result, inputs, visible, setVis)
+    let confirmedDyn ← captureFired result.confirmed
+    pure (confirmedDyn, inputs)
   ).run env
 
   env.postBuildTrigger ()
 
-  -- Track if confirmed was fired
-  let confirmedRef ← IO.mkRef false
-  let _unsub ← confirmResult.confirmed.subscribe fun () =>
-    confirmedRef.set true
-
   -- Press 'y'
   inputs.fireKey { event := KeyEvent.char 'y', focusedWidget := none }
 
-  let wasConfirmed ← confirmedRef.get
+  let wasConfirmed ← confirmedDyn.sample
   wasConfirmed ≡ true
 
   env.currentScope.dispose
 
 test "confirmDialog' emits cancelled event on Escape" := do
   let env ← SpiderEnv.new
-  let (confirmResult, inputs, _visible, _setVisible) ← (do
+  let (cancelledDyn, inputs) ← (do
     let (events, inputs) ← createInputs
-    let (visEvent, setVis) ← Reactive.newTriggerEvent (t := Spider) (a := Bool)
+    let (visEvent, _setVis) ← Reactive.newTriggerEvent (t := Spider) (a := Bool)
     let visible ← Reactive.holdDyn true visEvent
     let (result, _render) ← (runWidget do
       confirmDialog' "Are you sure?" visible Theme.dark
     ).run events
-    pure (result, inputs, visible, setVis)
+    let cancelledDyn ← captureFired result.cancelled
+    pure (cancelledDyn, inputs)
   ).run env
 
   env.postBuildTrigger ()
 
-  -- Track if cancelled was fired
-  let cancelledRef ← IO.mkRef false
-  let _unsub ← confirmResult.cancelled.subscribe fun () =>
-    cancelledRef.set true
-
   -- Press Escape
   inputs.fireKey { event := KeyEvent.escape, focusedWidget := none }
 
-  let wasCancelled ← cancelledRef.get
+  let wasCancelled ← cancelledDyn.sample
   wasCancelled ≡ true
 
   env.currentScope.dispose
 
 test "messageDialog' emits dismiss on Enter" := do
   let env ← SpiderEnv.new
-  let (dismissEvent, inputs, _visible) ← (do
+  let (dismissedDyn, inputs) ← (do
     let (events, inputs) ← createInputs
     let (visEvent, _setVis) ← Reactive.newTriggerEvent (t := Spider) (a := Bool)
     let visible ← Reactive.holdDyn true visEvent
     let (result, _render) ← (runWidget do
       messageDialog' "Operation complete" visible Theme.dark
     ).run events
-    pure (result, inputs, visible)
+    let dismissedDyn ← captureFired result
+    pure (dismissedDyn, inputs)
   ).run env
 
   env.postBuildTrigger ()
 
-  let dismissedRef ← IO.mkRef false
-  let _unsub ← dismissEvent.subscribe fun () =>
-    dismissedRef.set true
-
   inputs.fireKey { event := KeyEvent.enter, focusedWidget := none }
 
-  let wasDismissed ← dismissedRef.get
+  let wasDismissed ← dismissedDyn.sample
   wasDismissed ≡ true
 
   env.currentScope.dispose

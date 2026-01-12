@@ -263,7 +263,7 @@ test "cursorGrid' end moves to end of row" := do
 
 test "cursorGrid' fires onSelect on enter" := do
   let env ← SpiderEnv.new
-  let (gridResult, inputs) ← (do
+  let (lastSelect, inputs) ← (do
     let (events, inputs) ← createInputs
     SpiderM.liftIO <| events.registry.fireFocus (some "grid_0")
     let (result, _render) ← (runWidget do
@@ -271,21 +271,18 @@ test "cursorGrid' fires onSelect on enter" := do
         { content := "  ", style := {} }
       ) { focusName := "grid_0" }
     ).run events
-    pure (result, inputs)
+    let lastSelect ← captureLatest result.onSelect
+    pure (lastSelect, inputs)
   ).run env
 
   env.postBuildTrigger ()
-
-  let selectedRef ← IO.mkRef (none : Option (Nat × Nat))
-  let _unsub ← gridResult.onSelect.subscribe fun pos =>
-    selectedRef.set (some pos)
 
   -- Move to position and select
   inputs.fireKey { event := KeyEvent.right, focusedWidget := some "grid_0" }
   inputs.fireKey { event := KeyEvent.down, focusedWidget := some "grid_0" }
   inputs.fireKey { event := KeyEvent.enter, focusedWidget := some "grid_0" }
 
-  let selected ← selectedRef.get
+  let selected ← lastSelect.sample
   match selected with
   | some (1, 1) => pure ()
   | _ => ensure false "should have selected (1, 1)"
@@ -294,7 +291,7 @@ test "cursorGrid' fires onSelect on enter" := do
 
 test "cursorGrid' fires onCursorMove" := do
   let env ← SpiderEnv.new
-  let (gridResult, inputs) ← (do
+  let (lastMove, inputs) ← (do
     let (events, inputs) ← createInputs
     SpiderM.liftIO <| events.registry.fireFocus (some "grid_0")
     let (result, _render) ← (runWidget do
@@ -302,19 +299,16 @@ test "cursorGrid' fires onCursorMove" := do
         { content := "  ", style := {} }
       ) { focusName := "grid_0" }
     ).run events
-    pure (result, inputs)
+    let lastMove ← captureLatest result.onCursorMove
+    pure (lastMove, inputs)
   ).run env
 
   env.postBuildTrigger ()
 
-  let moveRef ← IO.mkRef (none : Option (Nat × Nat))
-  let _unsub ← gridResult.onCursorMove.subscribe fun pos =>
-    moveRef.set (some pos)
-
   -- Move cursor
   inputs.fireKey { event := KeyEvent.right, focusedWidget := some "grid_0" }
 
-  let moved ← moveRef.get
+  let moved ← lastMove.sample
   match moved with
   | some (1, 0) => pure ()
   | _ => ensure false "should have moved to (1, 0)"

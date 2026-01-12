@@ -212,26 +212,23 @@ test "tree' j/k keys work for navigation" := do
 
 test "tree' left collapses expanded branch" := do
   let env ← SpiderEnv.new
-  let (treeResult, inputs) ← (do
+  let (lastToggle, inputs) ← (do
     let (events, inputs) ← createInputs
     SpiderM.liftIO <| events.registry.fireFocus (some "tree_0")
     let root := TreeNode.branch "Root" #[TreeNode.leaf "Child"]
     let (result, _render) ← (runWidget do
       tree' root { focusName := "tree_0" }
     ).run events
-    pure (result, inputs)
+    let lastToggle ← captureLatest result.onToggle
+    pure (lastToggle, inputs)
   ).run env
 
   env.postBuildTrigger ()
 
-  let toggledRef ← IO.mkRef (none : Option (Array Nat))
-  let _unsub ← treeResult.onToggle.subscribe fun path =>
-    toggledRef.set (some path)
-
   -- Press left to collapse Root
   inputs.fireKey { event := KeyEvent.left, focusedWidget := some "tree_0" }
 
-  let toggled ← toggledRef.get
+  let toggled ← lastToggle.sample
   match toggled with
   | some path => ensure (path == #[0]) "should toggle root path"
   | none => ensure false "should have fired onToggle"
@@ -240,7 +237,7 @@ test "tree' left collapses expanded branch" := do
 
 test "tree' right expands collapsed branch" := do
   let env ← SpiderEnv.new
-  let (treeResult, inputs) ← (do
+  let (lastToggle, inputs) ← (do
     let (events, inputs) ← createInputs
     SpiderM.liftIO <| events.registry.fireFocus (some "tree_0")
     -- Start with collapsed root
@@ -248,19 +245,16 @@ test "tree' right expands collapsed branch" := do
     let (result, _render) ← (runWidget do
       tree' root { focusName := "tree_0" }
     ).run events
-    pure (result, inputs)
+    let lastToggle ← captureLatest result.onToggle
+    pure (lastToggle, inputs)
   ).run env
 
   env.postBuildTrigger ()
 
-  let toggledRef ← IO.mkRef (none : Option (Array Nat))
-  let _unsub ← treeResult.onToggle.subscribe fun path =>
-    toggledRef.set (some path)
-
   -- Press right to expand
   inputs.fireKey { event := KeyEvent.right, focusedWidget := some "tree_0" }
 
-  let toggled ← toggledRef.get
+  let toggled ← lastToggle.sample
   match toggled with
   | some _ => pure ()
   | none => ensure false "should have fired onToggle to expand"
@@ -269,28 +263,25 @@ test "tree' right expands collapsed branch" := do
 
 test "tree' enter on leaf fires onSelect" := do
   let env ← SpiderEnv.new
-  let (treeResult, inputs) ← (do
+  let (lastSelect, inputs) ← (do
     let (events, inputs) ← createInputs
     SpiderM.liftIO <| events.registry.fireFocus (some "tree_0")
     let root := TreeNode.branch "Root" #[TreeNode.leaf "Leaf"]
     let (result, _render) ← (runWidget do
       tree' root { focusName := "tree_0" }
     ).run events
-    pure (result, inputs)
+    let lastSelect ← captureLatest result.onSelect
+    pure (lastSelect, inputs)
   ).run env
 
   env.postBuildTrigger ()
-
-  let selectedRef ← IO.mkRef (none : Option String)
-  let _unsub ← treeResult.onSelect.subscribe fun val =>
-    selectedRef.set (some val)
 
   -- Move to leaf
   inputs.fireKey { event := KeyEvent.down, focusedWidget := some "tree_0" }
   -- Press enter
   inputs.fireKey { event := KeyEvent.enter, focusedWidget := some "tree_0" }
 
-  let selected ← selectedRef.get
+  let selected ← lastSelect.sample
   match selected with
   | some "Leaf" => pure ()
   | _ => ensure false "should have selected Leaf"

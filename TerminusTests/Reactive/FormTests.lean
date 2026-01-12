@@ -136,24 +136,21 @@ test "optionSelector' end jumps to last" := do
 
 test "optionSelector' fires onChange" := do
   let env ← SpiderEnv.new
-  let (result, inputs) ← (do
+  let (lastChange, inputs) ← (do
     let (events, inputs) ← createInputs
     SpiderM.liftIO <| events.registry.fireFocus (some "opt")
     let (res, _render) ← (runWidget do
       optionSelector' "opt" #["A", "B", "C"] 0 {}
     ).run events
-    pure (res, inputs)
+    let lastChange ← captureLatest res.onChange
+    pure (lastChange, inputs)
   ).run env
 
   env.postBuildTrigger ()
 
-  let changeRef ← IO.mkRef (none : Option Nat)
-  let _unsub ← result.onChange.subscribe fun idx =>
-    changeRef.set (some idx)
-
   inputs.fireKey { event := KeyEvent.right, focusedWidget := some "opt" }
 
-  let changed ← changeRef.get
+  let changed ← lastChange.sample
   ensure (changed == some 1) "onChange should fire with new index"
 
   env.currentScope.dispose
@@ -229,24 +226,21 @@ test "checkbox' toggles on enter" := do
 
 test "checkbox' fires onChange" := do
   let env ← SpiderEnv.new
-  let (result, inputs) ← (do
+  let (lastChange, inputs) ← (do
     let (events, inputs) ← createInputs
     SpiderM.liftIO <| events.registry.fireFocus (some "cb")
     let (res, _render) ← (runWidget do
       checkbox' "cb" "Notify" false {}
     ).run events
-    pure (res, inputs)
+    let lastChange ← captureLatest res.onChange
+    pure (lastChange, inputs)
   ).run env
 
   env.postBuildTrigger ()
 
-  let changeRef ← IO.mkRef (none : Option Bool)
-  let _unsub ← result.onChange.subscribe fun val =>
-    changeRef.set (some val)
-
   inputs.fireKey { event := { code := .space }, focusedWidget := some "cb" }
 
-  let changed ← changeRef.get
+  let changed ← lastChange.sample
   ensure (changed == some true) "onChange should fire with new value"
 
   env.currentScope.dispose

@@ -190,24 +190,21 @@ test "tabs' end key jumps to last tab" := do
 
 test "tabs' fires onTabChange event" := do
   let env ← SpiderEnv.new
-  let (tabsResult, inputs) ← (do
+  let (lastChange, inputs) ← (do
     let (events, inputs) ← createInputs
     SpiderM.liftIO <| events.registry.fireFocus (some "tabs_0")
     let (result, _render) ← (runWidget do
       tabs' #["A", "B", "C"] 0 { focusName := "tabs_0" }
     ).run events
-    pure (result, inputs)
+    let lastChange ← captureLatest result.onTabChange
+    pure (lastChange, inputs)
   ).run env
 
   env.postBuildTrigger ()
 
-  let changedRef ← IO.mkRef (none : Option Nat)
-  let _unsub ← tabsResult.onTabChange.subscribe fun idx =>
-    changedRef.set (some idx)
-
   inputs.fireKey { event := KeyEvent.right, focusedWidget := some "tabs_0" }
 
-  let changed ← changedRef.get
+  let changed ← lastChange.sample
   changed ≡ some 1
 
   env.currentScope.dispose
