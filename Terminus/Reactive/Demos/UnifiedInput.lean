@@ -35,9 +35,8 @@ def inputContent (theme : Theme) (_events : TerminusEvents) : WidgetM Unit := do
 
           row' (gap := 1) {} do
             text' "Agree:" theme.captionStyle
-            emitDynamic do
-              let checked ← cb1.checked.sample
-              pure (RNode.text (if checked then "Yes" else "No") theme.primaryStyle)
+            let checkedStr ← Dynamic.map' cb1.checked fun c => if c then "Yes" else "No"
+            dynText' checkedStr theme.primaryStyle
 
       -- Radio group
       column' (gap := 1) {} do
@@ -48,9 +47,8 @@ def inputContent (theme : Theme) (_events : TerminusEvents) : WidgetM Unit := do
 
           row' (gap := 1) {} do
             text' "Selected:" theme.captionStyle
-            emitDynamic do
-              let label ← radio.selectedLabel.sample
-              pure (RNode.text (label.getD "(none)") theme.primaryStyle)
+            let labelStr ← Dynamic.map' radio.selectedLabel (·.getD "(none)")
+            dynText' labelStr theme.primaryStyle
 
     row' (gap := 2) {} do
       -- Selectable list
@@ -65,9 +63,8 @@ def inputContent (theme : Theme) (_events : TerminusEvents) : WidgetM Unit := do
 
           row' (gap := 1) {} do
             text' "Fruit:" theme.captionStyle
-            emitDynamic do
-              let item ← list.selectedItem.sample
-              pure (RNode.text (item.getD "(none)") theme.primaryStyle)
+            let itemStr ← Dynamic.map' list.selectedItem (·.getD "(none)")
+            dynText' itemStr theme.primaryStyle
 
       -- Text Area
       column' (gap := 1) {} do
@@ -80,9 +77,8 @@ def inputContent (theme : Theme) (_events : TerminusEvents) : WidgetM Unit := do
 
           row' (gap := 1) {} do
             text' "Cursor:" theme.captionStyle
-            emitDynamic do
-              let (line, col) ← editor.cursorPos.sample
-              pure (RNode.text s!"Ln {line + 1}, Col {col + 1}" theme.primaryStyle)
+            let cursorStr ← Dynamic.map' editor.cursorPos fun (line, col) => s!"Ln {line + 1}, Col {col + 1}"
+            dynText' cursorStr theme.primaryStyle
 
     row' (gap := 2) {} do
       -- List variants
@@ -98,9 +94,8 @@ def inputContent (theme : Theme) (_events : TerminusEvents) : WidgetM Unit := do
 
           row' (gap := 1) {} do
             text' "Picked:" theme.captionStyle
-            emitDynamic do
-              let item ← colorList.selectedItem.sample
-              pure (RNode.text (item.getD "(none)") theme.primaryStyle)
+            let colorStr ← Dynamic.map' colorList.selectedItem (·.getD "(none)")
+            dynText' colorStr theme.primaryStyle
 
           spacer' 0 1
 
@@ -114,9 +109,8 @@ def inputContent (theme : Theme) (_events : TerminusEvents) : WidgetM Unit := do
 
           row' (gap := 1) {} do
             text' "Chosen:" theme.captionStyle
-            emitDynamic do
-              let item ← numbered.selectedItem.sample
-              pure (RNode.text (item.getD "(none)") theme.primaryStyle)
+            let numStr ← Dynamic.map' numbered.selectedItem (·.getD "(none)")
+            dynText' numStr theme.primaryStyle
 
       -- Form
       column' (gap := 1) {} do
