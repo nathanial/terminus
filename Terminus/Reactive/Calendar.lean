@@ -246,14 +246,10 @@ def calendar' (name : String) (year : Nat) (month : Nat) (initialDay : Option Na
 
   -- Events
   let (selectEvent, fireSelect) ← newTriggerEvent (t := Spider) (a := CalendarDate)
-  let (monthChangeEvent, fireMonthChange) ← newTriggerEvent (t := Spider) (a := Nat × Nat)
-  let (dateEvent, fireDate) ← newTriggerEvent (t := Spider) (a := CalendarDate)
-  let (currentMonthEvent, fireCurrentMonth) ← newTriggerEvent (t := Spider) (a := Nat × Nat)
 
-  -- Initial dynamics
-  let initialDate := CalendarDate.new year normalizedMonth initialSelected
-  let dateDyn ← holdDyn initialDate dateEvent
-  let monthDyn ← holdDyn (year, normalizedMonth) currentMonthEvent
+  -- Derived dynamics
+  let selectedDate ← stateDyn.map' CalendarState.toDate
+  let currentMonth ← stateDyn.map' fun s => (s.year, s.month)
 
   -- Subscribe to key events
   let events ← getEventsW
@@ -266,60 +262,29 @@ def calendar' (name : String) (year : Nat) (month : Nat) (initialDay : Option Na
     if !config.globalKeys && !isFocused then return
 
     let state ← stateRef.get
-    let oldMonth := (state.year, state.month)
+
+    let updateState (newState : CalendarState) : IO Unit := do
+      stateRef.set newState
+      fireState newState
 
     match kd.event.code with
     | .left | .char 'h' =>
-      let newState := state.prevDay
-      stateRef.set newState
-      fireState newState
-      fireDate newState.toDate
-      if (newState.year, newState.month) != oldMonth then
-        fireCurrentMonth (newState.year, newState.month)
-        fireMonthChange (newState.year, newState.month)
+      updateState state.prevDay
 
     | .right | .char 'l' =>
-      let newState := state.nextDay
-      stateRef.set newState
-      fireState newState
-      fireDate newState.toDate
-      if (newState.year, newState.month) != oldMonth then
-        fireCurrentMonth (newState.year, newState.month)
-        fireMonthChange (newState.year, newState.month)
+      updateState state.nextDay
 
     | .up | .char 'k' =>
-      let newState := state.prevWeek
-      stateRef.set newState
-      fireState newState
-      fireDate newState.toDate
-      if (newState.year, newState.month) != oldMonth then
-        fireCurrentMonth (newState.year, newState.month)
-        fireMonthChange (newState.year, newState.month)
+      updateState state.prevWeek
 
     | .down | .char 'j' =>
-      let newState := state.nextWeek
-      stateRef.set newState
-      fireState newState
-      fireDate newState.toDate
-      if (newState.year, newState.month) != oldMonth then
-        fireCurrentMonth (newState.year, newState.month)
-        fireMonthChange (newState.year, newState.month)
+      updateState state.nextWeek
 
     | .pageUp =>
-      let newState := state.prevMonthState
-      stateRef.set newState
-      fireState newState
-      fireDate newState.toDate
-      fireCurrentMonth (newState.year, newState.month)
-      fireMonthChange (newState.year, newState.month)
+      updateState state.prevMonthState
 
     | .pageDown =>
-      let newState := state.nextMonthState
-      stateRef.set newState
-      fireState newState
-      fireDate newState.toDate
-      fireCurrentMonth (newState.year, newState.month)
-      fireMonthChange (newState.year, newState.month)
+      updateState state.nextMonthState
 
     | .enter =>
       fireSelect state.toDate
@@ -380,10 +345,10 @@ def calendar' (name : String) (year : Nat) (month : Nat) (initialDay : Option Na
   emit node
 
   pure {
-    selectedDate := dateDyn
-    currentMonth := monthDyn
+    selectedDate := selectedDate
+    currentMonth := currentMonth
     onSelect := selectEvent
-    onMonthChange := monthChangeEvent
+    onMonthChange := currentMonth.updated
   }
 
 /-! ## Convenience Functions -/
