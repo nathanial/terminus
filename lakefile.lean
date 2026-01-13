@@ -6,7 +6,7 @@ package «terminus» where
 
 require crucible from git "https://github.com/nathanial/crucible" @ "v0.0.7"
 require raster from git "https://github.com/nathanial/raster" @ "v0.0.2"
-require reactive from git "https://github.com/nathanial/reactive" @ "v0.0.8"
+require reactive from git "https://github.com/nathanial/reactive" @ "v0.1.1"
 require chronicle from git "https://github.com/nathanial/chronicle" @ "v0.0.2"
 
 lean_lib «Terminus» where
