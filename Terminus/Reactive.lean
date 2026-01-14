@@ -35,9 +35,11 @@
   - **Components**: `text'`, `heading1'`, `caption'`, `dynText'`
   - **Containers**: `row'`, `column'`, `block'`, `titledPanel'`
   - **Input**: `textInput'`, `labeledTextInput'`, `autocomplete'`, `dynAutocomplete'`
+  - **Controls**: `button'`, `switch'`, `stepper'`, `slider'`, `rangeSlider'`, `passwordInput'`
   - **List**: `selectableList'`, `dynSelectableList'`, `numberedList'`
   - **VirtualList**: `virtualList'`, `dynVirtualList'` (optimized for large datasets)
   - **Tabs**: `tabs'`, `numberedTabs'`, `dynTabs'`
+  - **Breadcrumb**: `breadcrumb'`, `breadcrumbDyn'` (navigation path trail)
   - **Tree**: `tree'`, `forest'`, `TreeNode`
   - **Overlay**: `overlay'`, `modal'`, `confirmDialog'`, `messageDialog'`
   - **ScrollView**: `scrollView'`, `vscrollView'`, `hscrollView'`
@@ -47,6 +49,7 @@
   - **TextArea**: `textArea'`, `labeledTextArea'`, `textDisplay'`
   - **Form**: `form'`, `optionSelector'`, `checkbox'`, `submitButton'`
   - **Async**: `useAsync`, `useAsyncOnce`, `useStream`, `useDebounceAsync`
+  - **Badge**: `badge'`, `countBadge'`, `statusDot'`, `withBadge'`
   - **Layout**: `horizontalSplit'`, `verticalSplit'`, `sidebarLayout'`
   - **SplitPane**: `splitPane'`, `horizontalSplitPane'`, `verticalSplitPane'`
   - **Render**: `render`, `renderToBuffer`, `computeLayout`, `ClipContext`
@@ -94,3 +97,11 @@ import Terminus.Reactive.BigText
 import Terminus.Reactive.SplitPane
 import Terminus.Reactive.Autocomplete
 import Terminus.Reactive.Toast
+import Terminus.Reactive.Tooltip
+import Terminus.Reactive.Badge
+import Terminus.Reactive.Card
+import Terminus.Reactive.TagInput
+import Terminus.Reactive.RangeSlider
+import Terminus.Reactive.Breadcrumb
+import Terminus.Reactive.Dropdown
+import Terminus.Reactive.Accordion

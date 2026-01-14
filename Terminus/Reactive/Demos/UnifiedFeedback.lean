@@ -134,3 +134,30 @@ def feedbackContent (theme : Theme) : WidgetM Unit := do
             let count ← toastCount.sample
             toastMgr.show s!"Error #{count}!" .error
           ) toastErrorKeys)
+
+      -- Badge demo
+      column' (gap := 1) {} do
+        titledBlock' "Badges" .rounded theme none do
+          text' "Status indicators and counts" theme.captionStyle
+          column' (gap := 1) {} do
+            row' (gap := 2) {} do
+              text' "Count:" theme.captionStyle
+              badge' (.count 5) {}
+              badge' (.count 150) {}  -- Shows 99+
+
+            row' (gap := 2) {} do
+              text' "Labels:" theme.captionStyle
+              badge' (.label "NEW") { style := { fg := .ansi .white, bg := .ansi .green } }
+              badge' (.label "BETA") { style := { fg := .ansi .black, bg := .ansi .yellow } }
+
+            row' (gap := 2) {} do
+              text' "Status:" theme.captionStyle
+              statusDot' (.ansi .green)
+              text' "Online" theme.bodyStyle
+              statusDot' (.ansi .red)
+              text' "Offline" theme.bodyStyle
+
+            row' (gap := 2) {} do
+              text' "With content:" theme.captionStyle
+              withBadge' (.count 3) {} do
+                text' "Messages" theme.bodyStyle

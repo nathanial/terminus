@@ -217,3 +217,49 @@ def inputContent (theme : Theme) (_events : TerminusEvents) : WidgetM Unit := do
             text' "Selected:" theme.captionStyle
             let selStr ← Dynamic.map' ac.selectedItem (·.getD "(none)")
             dynText' selStr theme.primaryStyle
+
+    -- New Widgets Row: Dropdown, TagInput, RangeSlider
+    row' (gap := 2) {} do
+      -- Dropdown
+      column' (gap := 1) {} do
+        titledBlock' "Dropdown" .rounded theme none do
+          text' "Space to open, arrows to nav" theme.captionStyle
+          let options := #["Option A", "Option B", "Option C", "Option D", "Option E"]
+          let dropdown ← selectDropdown' "demo-dropdown" options {
+            placeholder := "Select..."
+            width := 15
+            maxVisible := 4
+          }
+          row' (gap := 1) {} do
+            text' "Selected:" theme.captionStyle
+            let selStr ← Dynamic.map' dropdown.selectedItem (·.getD "(none)")
+            dynText' selStr theme.primaryStyle
+
+      -- TagInput
+      column' (gap := 1) {} do
+        titledBlock' "TagInput" .rounded theme none do
+          text' "Enter to add, Backspace to remove" theme.captionStyle
+          let tags ← tagInput' "demo-tags" #["lean", "tui"] {
+            placeholder := "Add tag..."
+            width := 20
+            maxTags := some 5
+          }
+          row' (gap := 1) {} do
+            text' "Tags:" theme.captionStyle
+            let tagStr ← Dynamic.map' tags.tags (fun arr => toString arr.size)
+            dynText' tagStr theme.primaryStyle
+
+      -- RangeSlider
+      column' (gap := 1) {} do
+        titledBlock' "RangeSlider" .rounded theme none do
+          text' "Tab to switch handles, ←/→ to adjust" theme.captionStyle
+          let range ← rangeSlider' "demo-range" 0.2 0.8 {
+            width := 15
+            showValues := true
+          }
+          row' (gap := 1) {} do
+            text' "Range:" theme.captionStyle
+            let rangeStr ← range.minValue.zipWith' (fun minV maxV =>
+              s!"{(minV * 100).toUInt32}%-{(maxV * 100).toUInt32}%"
+            ) range.maxValue
+            dynText' rangeStr theme.primaryStyle

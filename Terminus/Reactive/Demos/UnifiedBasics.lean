@@ -129,3 +129,34 @@ def basicsContent (theme : Theme) : WidgetM Unit := do
         titledBlock' "Clear" .rounded theme none do
           text' "Clears a styled region:" theme.captionStyle
           clear' { width := 14, height := 3, fillChar := '.', style := { fg := .ansi .cyan } }
+
+    spacer' 0 1
+
+    -- Cards row
+    row' (gap := 2) {} do
+      -- Simple Card
+      column' (gap := 1) {} do
+        simpleCard' "Simple Card" {} (do
+          text' "Card body content" theme.bodyStyle
+          text' "with multiple lines" theme.bodyStyle)
+
+      -- Card with footer
+      column' (gap := 1) {} do
+        card' (some "Card + Footer") {}
+          (text' "Main content area" theme.bodyStyle)
+          (some (row' (gap := 2) {} do
+            text' "[OK]" { fg := .ansi .green }
+            text' "[Cancel]" { fg := .ansi .red }))
+
+      -- Info/Warning/Error cards
+      column' (gap := 1) {} do
+        infoCard' "Info" 'i' {} (do
+          text' "Informational" theme.bodyStyle)
+
+      column' (gap := 1) {} do
+        warningCard' "Warning" theme (do
+          text' "Warning msg" { fg := .ansi .yellow })
+
+      column' (gap := 1) {} do
+        errorCard' "Error" theme (do
+          text' "Error msg" { fg := .ansi .red })

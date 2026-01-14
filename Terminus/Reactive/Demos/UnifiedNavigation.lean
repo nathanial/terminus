@@ -82,3 +82,52 @@ def navigationContent (theme : Theme) (_events : TerminusEvents) : WidgetM Unit 
             let ratioStr ← Dynamic.map' splitResult.ratio fun r =>
               s!"{(r * 100).toUInt32}%"
             dynText' ratioStr theme.primaryStyle
+
+    spacer' 0 1
+
+    -- New widgets: Breadcrumb, Tooltip, Accordion
+    row' (gap := 2) {} do
+      -- Breadcrumb
+      column' (gap := 1) {} do
+        titledBlock' "Breadcrumb" .rounded theme none do
+          text' "←/→ nav, Enter to select" theme.captionStyle
+          let path := #["Home", "Products", "Electronics", "Phones"]
+          let bc ← breadcrumb' "demo-breadcrumb" path {
+            separator := " > "
+          }
+          row' (gap := 1) {} do
+            text' "Focused:" theme.captionStyle
+            let focusStr ← Dynamic.map' bc.focusedIndex (fun idx =>
+              match idx with
+              | some i => path[i]?.getD "(none)"
+              | none => "(none)"
+            )
+            dynText' focusStr theme.primaryStyle
+
+      -- Tooltip
+      column' (gap := 1) {} do
+        titledBlock' "Tooltip" .rounded theme none do
+          text' "Focus items to see tooltips" theme.captionStyle
+          column' (gap := 1) {} do
+            tooltip' "tip1" "This is helpful information" {} do
+              text' "[?] Hover me 1" { fg := .ansi .cyan }
+            tooltip' "tip2" "Another useful tip" { position := .right, hintPrefix := "-> " } do
+              text' "[?] Hover me 2" { fg := .ansi .green }
+
+      -- Accordion
+      column' (gap := 1) {} do
+        titledBlock' "Accordion" .rounded theme none do
+          text' "Enter to toggle, ↑/↓ nav" theme.captionStyle
+          let sections : Array AccordionSection := #[
+            { title := "Section 1", content := text' "Content for section 1" theme.bodyStyle, initiallyOpen := true },
+            { title := "Section 2", content := text' "Content for section 2" theme.bodyStyle, initiallyOpen := false },
+            { title := "Section 3", content := text' "Content for section 3" theme.bodyStyle, initiallyOpen := false }
+          ]
+          let acc ← accordion' sections { allowMultiple := true, gap := 0 }
+          row' (gap := 1) {} do
+            text' "Open:" theme.captionStyle
+            let openStr ← Dynamic.map' acc.openSections (fun arr =>
+              let count := arr.toList.filter id |>.length
+              toString count
+            )
+            dynText' openStr theme.primaryStyle
