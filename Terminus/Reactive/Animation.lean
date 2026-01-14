@@ -215,7 +215,9 @@ def useInterpolation (durationMs : Nat) (fromVal toVal : Float)
   let anim ← useAnimation config trigger
 
   -- Map progress to interpolated value
-  let interpolatedEvent ← Event.mapM (fun p => fromVal + (toVal - fromVal) * p) anim.progress.updated
+  let progressEvent := anim.progress.updated
+  let interpFn : Float → Float := fun prog => fromVal + (toVal - fromVal) * prog
+  let interpolatedEvent ← Event.mapM interpFn progressEvent
   let valueDyn ← Reactive.holdDyn fromVal interpolatedEvent
 
   pure {

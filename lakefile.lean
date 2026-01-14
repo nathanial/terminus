@@ -5,7 +5,7 @@ package «terminus» where
   -- precompileModules := true  -- disabled to test TerminusTests build
 
 require crucible from git "https://github.com/nathanial/crucible" @ "v0.0.7"
-require raster from git "https://github.com/nathanial/raster" @ "v0.0.2"
+require raster from git "https://github.com/nathanial/raster" @ "v0.0.3"
 require reactive from git "https://github.com/nathanial/reactive" @ "v0.1.1"
 require chronicle from git "https://github.com/nathanial/chronicle" @ "v0.0.2"
 
