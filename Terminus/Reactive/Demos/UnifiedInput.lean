@@ -138,3 +138,67 @@ def inputContent (theme : Theme) (_events : TerminusEvents) : WidgetM Unit := do
             RNode.text s!"Status: {status} ({validity})" theme.captionStyle
           ) statusDyn
           emit node
+
+    -- New Controls Row
+    row' (gap := 2) {} do
+      -- Slider
+      column' (gap := 1) {} do
+        titledBlock' "Slider" .rounded theme none do
+          text' "Use ←/→ keys, Shift for 10x" theme.captionStyle
+          let slider ← slider' "volume" 0.5 {
+            width := 15
+            showValue := true
+          }
+          row' (gap := 1) {} do
+            text' "Value:" theme.captionStyle
+            let pctStr ← Dynamic.map' slider.value fun v => s!"{(v * 100).toUInt32}%"
+            dynText' pctStr theme.primaryStyle
+
+      -- Switch
+      column' (gap := 1) {} do
+        titledBlock' "Switch" .rounded theme none do
+          text' "Space/Enter to toggle" theme.captionStyle
+          let sw ← switch' "darkMode" false {}
+          row' (gap := 1) {} do
+            text' "Dark Mode:" theme.captionStyle
+            let modeStr ← Dynamic.map' sw.isOn fun on => if on then "Enabled" else "Disabled"
+            dynText' modeStr theme.primaryStyle
+
+      -- Stepper
+      column' (gap := 1) {} do
+        titledBlock' "Stepper" .rounded theme none do
+          text' "Use ↑/↓ or +/- keys" theme.captionStyle
+          let stepper ← stepper' "quantity" 5 {
+            min := 0
+            max := 99
+            step := 1
+          }
+          row' (gap := 1) {} do
+            text' "Qty:" theme.captionStyle
+            let qtyStr ← Dynamic.map' stepper.value toString
+            dynText' qtyStr theme.primaryStyle
+
+    row' (gap := 2) {} do
+      -- Password Input
+      column' (gap := 1) {} do
+        titledBlock' "Password Input" .rounded theme none do
+          text' "Tab to toggle reveal" theme.captionStyle
+          let pwd ← passwordInput' "password" {
+            width := 15
+            placeholder := "Password"
+          }
+          row' (gap := 1) {} do
+            text' "Length:" theme.captionStyle
+            let lenStr ← Dynamic.map' pwd.value fun v => toString v.length
+            dynText' lenStr theme.primaryStyle
+
+      -- Button
+      column' (gap := 1) {} do
+        titledBlock' "Button" .rounded theme none do
+          text' "Space/Enter to click" theme.captionStyle
+          let btn ← button' "action" "Click Me" {}
+          let clickCount ← Reactive.foldDyn (fun _ n => n + 1) 0 btn.onClick
+          row' (gap := 1) {} do
+            text' "Clicks:" theme.captionStyle
+            let countStr ← Dynamic.map' clickCount toString
+            dynText' countStr theme.primaryStyle

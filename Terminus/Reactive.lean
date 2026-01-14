@@ -66,6 +66,7 @@ import Terminus.Reactive.Grid
 import Terminus.Reactive.Animation
 import Terminus.Reactive.TextArea
 import Terminus.Reactive.Form
+import Terminus.Reactive.Controls
 import Terminus.Reactive.Async
 import Terminus.Reactive.Layout
 import Terminus.Reactive.App
