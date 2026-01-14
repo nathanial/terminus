@@ -34,8 +34,9 @@
   - **Hooks**: `useKeyEvent`, `useMouseEvent`, `useResize`
   - **Components**: `text'`, `heading1'`, `caption'`, `dynText'`
   - **Containers**: `row'`, `column'`, `block'`, `titledPanel'`
-  - **Input**: `textInput'`, `labeledTextInput'`
+  - **Input**: `textInput'`, `labeledTextInput'`, `autocomplete'`, `dynAutocomplete'`
   - **List**: `selectableList'`, `dynSelectableList'`, `numberedList'`
+  - **VirtualList**: `virtualList'`, `dynVirtualList'` (optimized for large datasets)
   - **Tabs**: `tabs'`, `numberedTabs'`, `dynTabs'`
   - **Tree**: `tree'`, `forest'`, `TreeNode`
   - **Overlay**: `overlay'`, `modal'`, `confirmDialog'`, `messageDialog'`
@@ -47,6 +48,7 @@
   - **Form**: `form'`, `optionSelector'`, `checkbox'`, `submitButton'`
   - **Async**: `useAsync`, `useAsyncOnce`, `useStream`, `useDebounceAsync`
   - **Layout**: `horizontalSplit'`, `verticalSplit'`, `sidebarLayout'`
+  - **SplitPane**: `splitPane'`, `horizontalSplitPane'`, `verticalSplitPane'`
   - **Render**: `render`, `renderToBuffer`, `computeLayout`, `ClipContext`
   - **App**: `runReactiveApp`, `runSimpleApp`
 -/
@@ -58,6 +60,7 @@ import Terminus.Reactive.Containers
 import Terminus.Reactive.Hooks
 import Terminus.Reactive.Input
 import Terminus.Reactive.List
+import Terminus.Reactive.VirtualList
 import Terminus.Reactive.Tabs
 import Terminus.Reactive.Tree
 import Terminus.Reactive.Overlay
@@ -88,3 +91,6 @@ import Terminus.Reactive.Charts
 import Terminus.Reactive.Canvas
 import Terminus.Reactive.Image
 import Terminus.Reactive.BigText
+import Terminus.Reactive.SplitPane
+import Terminus.Reactive.Autocomplete
+import Terminus.Reactive.Toast

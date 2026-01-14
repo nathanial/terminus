@@ -163,3 +163,23 @@ def dataContent (theme : Theme) (_events : TerminusEvents) : WidgetM Unit := do
               maxVisibleCols := some 3
               focusName := "data-grid"
             }
+
+      -- VirtualList
+      column' (gap := 1) {} do
+        titledBlock' "VirtualList" .rounded theme none do
+          text' "↑/↓ nav, PgUp/PgDn scroll (1000 items)" theme.captionStyle
+          -- Generate 1000 items
+          let items := (List.range 1000).toArray.map fun i => s!"Item #{i + 1}"
+          let vlist ← virtualList' "vlist" items {
+            visibleRows := 6
+            scrollIndicator := true
+          }
+          row' (gap := 1) {} do
+            text' "Selected:" theme.captionStyle
+            let selStr ← Dynamic.map' vlist.selectedItem (·.getD "(none)")
+            dynText' selStr theme.primaryStyle
+          row' (gap := 1) {} do
+            text' "Range:" theme.captionStyle
+            let rangeStr ← Dynamic.map' vlist.visibleRange fun (start, endIdx) =>
+              s!"{start}-{endIdx}"
+            dynText' rangeStr theme.captionStyle

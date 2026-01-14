@@ -202,3 +202,18 @@ def inputContent (theme : Theme) (_events : TerminusEvents) : WidgetM Unit := do
             text' "Clicks:" theme.captionStyle
             let countStr ← Dynamic.map' clickCount toString
             dynText' countStr theme.primaryStyle
+
+      -- Autocomplete
+      column' (gap := 1) {} do
+        titledBlock' "Autocomplete" .rounded theme none do
+          text' "Type to filter, ↑/↓ nav, Enter select" theme.captionStyle
+          let commands := #["build", "test", "run", "clean", "help", "version", "init", "update"]
+          let ac ← autocomplete' "command" commands {
+            placeholder := "Type command..."
+            width := 18
+            maxSuggestions := 4
+          }
+          row' (gap := 1) {} do
+            text' "Selected:" theme.captionStyle
+            let selStr ← Dynamic.map' ac.selectedItem (·.getD "(none)")
+            dynText' selStr theme.primaryStyle

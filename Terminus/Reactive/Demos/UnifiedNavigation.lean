@@ -59,3 +59,26 @@ def navigationContent (theme : Theme) (_events : TerminusEvents) : WidgetM Unit 
               RNode.text (selected.getD "(none)") theme.primaryStyle
             )
             emit node
+
+    spacer' 0 1
+
+    row' (gap := 2) {} do
+      -- SplitPane demo
+      column' (gap := 1) {} do
+        titledBlock' "Resizable SplitPane" .rounded theme none do
+          text' "Focus then ←/→ to resize" theme.captionStyle
+          let (splitResult, _, _) ← resizableSplitPane' "demo-split"
+            { initialRatio := 0.4, minRatio := 0.2, maxRatio := 0.8 }
+            (do
+              column' (gap := 0) {} do
+                text' "Left" { fg := .ansi .cyan }
+                text' "Panel" { fg := .ansi .cyan })
+            (do
+              column' (gap := 0) {} do
+                text' "Right" { fg := .ansi .green }
+                text' "Panel" { fg := .ansi .green })
+          row' (gap := 1) {} do
+            text' "Ratio:" theme.captionStyle
+            let ratioStr ← Dynamic.map' splitResult.ratio fun r =>
+              s!"{(r * 100).toUInt32}%"
+            dynText' ratioStr theme.primaryStyle

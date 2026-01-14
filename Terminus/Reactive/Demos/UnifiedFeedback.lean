@@ -100,3 +100,37 @@ def feedbackContent (theme : Theme) : WidgetM Unit := do
 
     -- Sections
     feedbackLoggingSection theme unfocusedKeys
+
+    row' (gap := 2) {} do
+      -- Toast demo
+      column' (gap := 1) {} do
+        titledBlock' "Toast Notifications" .rounded theme none do
+          text' "T: show toast | I: info | S: success | X: error" theme.captionStyle
+
+          -- Create toast manager
+          let toastMgr ← toastContainer' { duration := 2000, maxToasts := 3 }
+
+          -- Wire key events to show toasts
+          let toastInfoKeys ← Event.filterM (fun (kd : KeyData) =>
+            kd.event.code == .char 't' || kd.event.code == .char 'T') unfocusedKeys
+          let toastSuccessKeys ← Event.filterM (fun (kd : KeyData) =>
+            kd.event.code == .char 's' || kd.event.code == .char 'S') unfocusedKeys
+          let toastErrorKeys ← Event.filterM (fun (kd : KeyData) =>
+            kd.event.code == .char 'x' || kd.event.code == .char 'X') unfocusedKeys
+
+          let toastCount ← Reactive.foldDyn (fun _ n => n + 1) 0 (← Event.voidM (← Event.leftmostM [toastInfoKeys, toastSuccessKeys, toastErrorKeys]))
+
+          performEvent_ (← Event.mapM (fun _ => do
+            let count ← toastCount.sample
+            toastMgr.show s!"Info toast #{count}" .info
+          ) toastInfoKeys)
+
+          performEvent_ (← Event.mapM (fun _ => do
+            let count ← toastCount.sample
+            toastMgr.show s!"Success #{count}!" .success
+          ) toastSuccessKeys)
+
+          performEvent_ (← Event.mapM (fun _ => do
+            let count ← toastCount.sample
+            toastMgr.show s!"Error #{count}!" .error
+          ) toastErrorKeys)
