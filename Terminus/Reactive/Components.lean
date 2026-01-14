@@ -173,6 +173,11 @@ This is similar to Reflex's `dyn` combinator.
     builder is re-run with the new value, rebuilding the subtree with fresh
     reactive subscriptions.
 
+    Each build runs in its own child scope. When the dynamic updates, the previous
+    build's scope is cleared (cleaning up all subscriptions from that build) and
+    reused for the rebuild. This prevents subscription leaks that would occur if
+    we created a new child scope on each rebuild.
+
     Example (dependent content):
     ```
     let selection ← dropdown options theme 0
@@ -184,35 +189,47 @@ def dynWidget (dynValue : Dynamic Spider a) (builder : a → WidgetM b)
     : WidgetM (Dynamic Spider b) := do
   let events ← getEventsW  -- Capture TerminusEvents context
 
-  -- Initial build (Dynamic.sample is IO, so lift it)
-  let initialValue ← SpiderM.liftIO dynValue.sample
-  let ((initialResult, initialRender), initialScope) ← StateT.lift do
+  -- All scope and initial build logic in one SpiderM block to access env.currentScope
+  let (initialResult, initialRender, childScopeRef) ← (⟨fun env => do
+    -- Create child scope for builder subscriptions (enables cleanup on rebuild)
+    let initialChildScope ← env.currentScope.child
+    let scopeRef : IO.Ref Reactive.SubscriptionScope ← IO.mkRef initialChildScope
+
+    -- Initial build in child scope
+    let initialValue ← dynValue.sample
     let widgetM := runWidget (builder initialValue)
     let spiderM := widgetM.run events
-    SpiderM.withScope spiderM
+    let (result, render) ← spiderM.run { env with currentScope := initialChildScope }
 
-  let scopeRef : IO.Ref Reactive.SubscriptionScope ← SpiderM.liftIO (IO.mkRef initialScope)
+    pure (result, render, scopeRef)
+  ⟩ : SpiderM (b × ComponentRender × IO.Ref Reactive.SubscriptionScope))
 
+  -- Result tracking via trigger event
   let (resultTrigger, fireResult) ← newTriggerEvent
   let resultDyn ← holdDyn initialResult resultTrigger
 
+  -- Render tracking via Dynamic.switch (terminus uses Dynamic Spider RNode)
   let (renderTrigger, fireRender) ← newTriggerEvent
   let renderDynDyn ← holdDyn initialRender renderTrigger
   let switchedRender ← Reactive.Dynamic.switch renderDynDyn
 
+  -- Subscribe to rebuilds when dynValue changes
   let subscribeAction : SpiderM Unit := ⟨fun env => do
     let unsub ← Reactive.Event.subscribe dynValue.updated fun newValue => do
-      let oldScope ← scopeRef.get
-      oldScope.dispose
-      let childScope ← env.currentScope.child
+      -- Clear the child scope's subscriptions (but keep the scope alive for reuse).
+      -- Using clear instead of dispose+child prevents leaking entries in the parent
+      -- scope's subscriptions array, which would grow unboundedly for animated widgets.
+      let childScope ← childScopeRef.get
+      childScope.clear
+
+      -- Run the builder with the new value, reusing the same child scope
       let widgetM := runWidget (builder newValue)
       let spiderM := widgetM.run events
       let (result, render) ← spiderM.run { env with currentScope := childScope }
-      scopeRef.set childScope
       fireResult result
       fireRender render
     env.currentScope.register unsub⟩
-  subscribeAction
+  subscribeAction  -- Lift SpiderM to WidgetM via MonadLift
 
   emit switchedRender
 
