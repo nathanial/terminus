@@ -160,3 +160,39 @@ def basicsContent (theme : Theme) : WidgetM Unit := do
       column' (gap := 1) {} do
         errorCard' "Error" theme (do
           text' "Error msg" { fg := .ansi .red })
+
+    spacer' 0 1
+
+    -- StatusBar demos
+    column' (gap := 1) {} do
+      titledBlock' "StatusBar" .rounded theme none do
+        text' "Status bars with sections" theme.captionStyle
+
+        -- Simple status bar
+        text' "Simple:" theme.captionStyle
+        simpleStatusBar' "NORMAL" "main.lean | Ln 42, Col 8" {}
+
+        spacer' 0 1
+
+        -- Full status bar with sections
+        text' "With sections:" theme.captionStyle
+        let sections : Array StatusBarSection := #[
+          modeSection "INSERT" { bg := .ansi .green, fg := .ansi .black },
+          fileSection "demo.lean" true,
+          positionSection 10 25,
+          encodingSection "UTF-8",
+          languageSection "Lean 4"
+        ]
+        statusBar' sections vimStatusBarConfig
+
+        spacer' 0 1
+
+        -- VS Code style
+        text' "VS Code style:" theme.captionStyle
+        let vsSections : Array StatusBarSection := #[
+          { content := "main", style := { fg := .ansi .cyan } },
+          { content := "Ln 1, Col 1", style := {} },
+          { content := "Spaces: 2", style := {}, align := .right },
+          { content := "Lean", style := {}, align := .right }
+        ]
+        statusBar' vsSections vscodeStatusBarConfig

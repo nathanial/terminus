@@ -105,3 +105,6 @@ import Terminus.Reactive.RangeSlider
 import Terminus.Reactive.Breadcrumb
 import Terminus.Reactive.Dropdown
 import Terminus.Reactive.Accordion
+import Terminus.Reactive.CommandPalette
+import Terminus.Reactive.MenuBar
+import Terminus.Reactive.StatusBar

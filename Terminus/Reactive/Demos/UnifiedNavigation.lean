@@ -131,3 +131,62 @@ def navigationContent (theme : Theme) (_events : TerminusEvents) : WidgetM Unit 
               toString count
             )
             dynText' openStr theme.primaryStyle
+
+    spacer' 0 1
+
+    -- MenuBar and CommandPalette
+    row' (gap := 2) {} do
+      -- MenuBar
+      column' (gap := 1) {} do
+        titledBlock' "MenuBar" .rounded theme none do
+          text' "←/→ nav, Enter opens, Esc closes" theme.captionStyle
+          let menus : Array MenuBarItem := #[
+            { label := "File", items := #[
+              .item "New" (some "Ctrl+N"),
+              .item "Open" (some "Ctrl+O"),
+              .separator,
+              .item "Exit"
+            ]},
+            { label := "Edit", items := #[
+              .item "Cut" (some "Ctrl+X"),
+              .item "Copy" (some "Ctrl+C"),
+              .item "Paste" (some "Ctrl+V")
+            ]},
+            { label := "Help", items := #[
+              .item "About"
+            ]}
+          ]
+          let mb ← menuBar' "demo-menubar" menus {}
+          let lastLabel ← Reactive.holdDyn "(none)" mb.onSelectLabel
+          row' (gap := 1) {} do
+            text' "Selected:" theme.captionStyle
+            dynText' lastLabel theme.primaryStyle
+
+      -- CommandPalette trigger
+      column' (gap := 1) {} do
+        titledBlock' "CommandPalette" .rounded theme none do
+          text' "Press 'P' to open palette" theme.captionStyle
+          let commands : Array Command := #[
+            { name := "Build Project", shortcut := some "Ctrl+B" },
+            { name := "Run Tests", shortcut := some "Ctrl+T" },
+            { name := "Format Code", shortcut := some "Ctrl+Shift+F" },
+            { name := "Git Commit" },
+            { name := "Git Push" },
+            { name := "Open Settings" }
+          ]
+          let palette ← commandPalette' "demo-palette" commands {}
+
+          -- Wire 'P' key to open palette
+          let keyEvents ← useKeyEventW
+          let pKeys ← Event.filterM (fun (kd : KeyData) =>
+            kd.event.code == .char 'p' || kd.event.code == .char 'P') keyEvents
+          performEvent_ (← Event.mapM (fun _ => palette.openPalette) pKeys)
+
+          row' (gap := 1) {} do
+            text' "Last:" theme.captionStyle
+            let cmdStr ← Dynamic.map' palette.selectedCommand (fun cmd =>
+              match cmd with
+              | some c => c.name
+              | none => "(none)"
+            )
+            dynText' cmdStr theme.primaryStyle
