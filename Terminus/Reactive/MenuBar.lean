@@ -332,9 +332,8 @@ def menuBar' (name : String) (menus : Array MenuBarItem) (config : MenuBarConfig
   let widgetName ← registerComponentW "menuBar" (isInput := true) (nameOverride := name)
   let inputName := if name.isEmpty then widgetName else name
 
-  -- State management
+  -- State management using idiomatic FRP patterns
   let initialState : MenuBarState := {}
-  let stateRef ← SpiderM.liftIO (IO.mkRef initialState)
   let (stateEvent, fireState) ← newTriggerEvent (t := Spider) (a := MenuBarState)
   let stateDyn ← holdDyn initialState stateEvent
 
@@ -349,14 +348,16 @@ def menuBar' (name : String) (menus : Array MenuBarItem) (config : MenuBarConfig
   -- Get key events filtered by focus
   let keyEvents ← useFocusedKeyEventsW inputName config.globalKeys
 
+  -- Attach current state to key events using FRP pattern
+  let keyEventsWithState ← Event.attachWithM
+    (fun state kd => (state, kd)) stateDyn.current keyEvents
+
   let updateState : MenuBarState -> IO Unit := fun newState => do
-    stateRef.set newState
     fireState newState
     fireActiveMenu newState.openMenu
 
-  -- Subscribe to key events
-  let _unsub ← SpiderM.liftIO <| keyEvents.subscribe fun kd => do
-    let state ← stateRef.get
+  -- Subscribe to key events with state attached
+  let _unsub ← SpiderM.liftIO <| keyEventsWithState.subscribe fun (state, kd) => do
     let ke := kd.event
 
     if state.isOpen then

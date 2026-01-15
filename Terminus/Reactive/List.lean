@@ -125,7 +125,7 @@ end ListState
     -- Use list.onSelect to handle Enter key
     ```
 -/
-def selectableList' [ToString α] (items : Array α) (initial : Nat := 0)
+def selectableList' [ToString α] [BEq α] (items : Array α) (initial : Nat := 0)
     (config : ListConfig := {}) : WidgetM (ListResult α) := do
   -- Register as focusable component
   let widgetName ← registerComponentW "selectableList" (isInput := true)
@@ -137,70 +137,54 @@ def selectableList' [ToString α] (items : Array α) (initial : Nat := 0)
   -- Get focused key events
   let keyEvents ← useFocusedKeyEventsW listName config.globalKeys
 
-  -- Create trigger events
-  let (selectEvent, fireSelect) ← newTriggerEvent (t := Spider) (a := α)
-  let (selectionChangeEvent, fireSelectionChange) ← newTriggerEvent (t := Spider) (a := Nat)
-  let (indexEvent, fireIndex) ← newTriggerEvent (t := Spider) (a := Nat)
-  let (itemEvent, fireItem) ← newTriggerEvent (t := Spider) (a := Option α)
-
-  -- Track internal state
-  let initialSelected := if initial < items.size then initial else 0
+  -- Constants for state transitions
   let maxVis := config.maxVisible.getD items.size
+  let itemCount := items.size
+  let wrap := config.wrapAround
+
+  -- Initial state
+  let initialSelected := if initial < items.size then initial else 0
   let initialState : ListState :=
     ({ selected := initialSelected, scrollOffset := 0 } : ListState).adjustScroll maxVis
-  let stateRef ← SpiderM.liftIO (IO.mkRef initialState)
-  let (stateEvent, fireState) ← newTriggerEvent (t := Spider) (a := ListState)
-  let stateDyn ← holdDyn initialState stateEvent
 
-  -- Create dynamics
-  let selectedIndexDyn ← holdDyn initialSelected indexEvent
-  let initialItem := if h : initialSelected < items.size then some items[initialSelected] else none
-  let selectedItemDyn ← holdDyn initialItem itemEvent
+  -- Map key events to state transformation functions
+  let stateOps ← Event.mapMaybeM (fun (kd : KeyData) =>
+    match kd.event.code with
+    | .up => some fun (s : ListState) => s.moveUp itemCount wrap |>.adjustScroll maxVis
+    | .down => some fun (s : ListState) => s.moveDown itemCount wrap |>.adjustScroll maxVis
+    | .char 'k' => some fun (s : ListState) => s.moveUp itemCount wrap |>.adjustScroll maxVis
+    | .char 'j' => some fun (s : ListState) => s.moveDown itemCount wrap |>.adjustScroll maxVis
+    | .home => some fun (s : ListState) => s.moveToFirst.adjustScroll maxVis
+    | .end => some fun (s : ListState) => s.moveToLast itemCount |>.adjustScroll maxVis
+    | _ => none) keyEvents
 
-  -- Subscribe to key events
-  let _unsub ← SpiderM.liftIO <| keyEvents.subscribe fun kd => do
-    if items.isEmpty then pure ()
-    else
-      let state ← stateRef.get
-      let ke := kd.event
+  -- Fold state operations - no subscribe needed!
+  let stateDyn ← foldDyn id initialState stateOps
 
-      let maxVis := config.maxVisible.getD items.size
+  -- Derive selectedIndex from state
+  let selectedIndexDyn ← stateDyn.map' (·.selected)
 
-      -- Handle navigation keys
-      let newState ← match ke.code with
-        | .up => pure (state.moveUp items.size config.wrapAround |>.adjustScroll maxVis)
-        | .down => pure (state.moveDown items.size config.wrapAround |>.adjustScroll maxVis)
-        | .char 'k' => pure (state.moveUp items.size config.wrapAround |>.adjustScroll maxVis)
-        | .char 'j' => pure (state.moveDown items.size config.wrapAround |>.adjustScroll maxVis)
-        | .home => pure (state.moveToFirst.adjustScroll maxVis)
-        | .end => pure (state.moveToLast items.size |>.adjustScroll maxVis)
-        | .enter =>
-          if h : state.selected < items.size then
-            fireSelect items[state.selected]
-          pure state
-        | .space =>
-          if h : state.selected < items.size then
-            fireSelect items[state.selected]
-          pure state
-        | _ => pure state
+  -- Derive selectedItem from state
+  let selectedItemDyn ← stateDyn.map' fun (s : ListState) =>
+    if h : s.selected < items.size then some items[s.selected] else none
 
-      -- Update state and fire events if selection changed
-      if newState.selected != state.selected then
-        stateRef.set newState
-        fireState newState
-        fireIndex newState.selected
-        fireSelectionChange newState.selected
-        -- Call external scroll callback if provided
-        match config.scrollToY with
-        | some scrollFn => scrollFn newState.selected
-        | none => pure ()
-        if h : newState.selected < items.size then
-          fireItem (some items[newState.selected])
-        else
-          fireItem none
-      else if newState.scrollOffset != state.scrollOffset then
-        stateRef.set newState
-        fireState newState
+  -- For selection events on Enter/Space
+  let enterSpaceEvents ← Event.filterM (fun (kd : KeyData) =>
+    kd.event.code == .enter || kd.event.code == .space) keyEvents
+
+  -- Attach current state to Enter/Space events to get selected item
+  let selectEvent ← Event.mapMaybeM (fun (s : ListState) =>
+    if h : s.selected < items.size then some items[s.selected] else none)
+    (← Event.attachWithM (fun (s : ListState) _ => s) stateDyn.current enterSpaceEvents)
+
+  -- Selection change event derived from state updates
+  let selectionChangeEvent ← Event.mapM (·.selected) stateDyn.updated
+
+  -- Handle scrollToY callback if provided (side effect on selection change)
+  match config.scrollToY with
+  | some scrollFn =>
+    let _unsub ← SpiderM.liftIO <| selectionChangeEvent.subscribe scrollFn
+  | none => pure ()
 
   let node ← stateDyn.map' fun state =>
     Id.run do
@@ -242,8 +226,8 @@ def selectableList' [ToString α] (items : Array α) (initial : Nat := 0)
 /-- Create a selectable list with a dynamic item array.
     The list updates when items change, preserving selection where possible.
 
-    This implementation uses FRP-idiomatic state management via holdDyn and
-    attachWithM, avoiding imperative subscribe patterns with IO.mkRef. -/
+    This implementation uses FRP-idiomatic state management via foldDyn,
+    avoiding imperative subscribe patterns with IO.mkRef. -/
 def dynSelectableList' [ToString α] [BEq α] (items : Reactive.Dynamic Spider (Array α)) (initial : Nat := 0)
     (config : ListConfig := {}) : WidgetM (ListResult α) := do
   -- Register as focusable component
@@ -256,75 +240,44 @@ def dynSelectableList' [ToString α] [BEq α] (items : Reactive.Dynamic Spider (
   -- Get focused key events
   let keyEvents ← useFocusedKeyEventsW listName config.globalKeys
 
-  -- Create trigger events for selection and item actions
-  let (selectEvent, fireSelect) ← newTriggerEvent (t := Spider) (a := α)
-  let (selectionChangeEvent, fireSelectionChange) ← newTriggerEvent (t := Spider) (a := Nat)
+  -- Initial state
+  let initialState : ListState := { selected := initial, scrollOffset := 0 }
 
-  -- Get initial items to determine initial state
-  let initialItems ← SpiderM.liftIO items.sample
-  let initialSelected := if initial < initialItems.size then initial else 0
-  let initialState : ListState := { selected := initialSelected, scrollOffset := 0 }
-
-  -- Create a trigger event for state updates
-  let (stateUpdateEvent, fireStateUpdate) ← newTriggerEvent (t := Spider) (a := ListState)
-
-  -- Build stateDyn from the state update events
-  let stateDyn ← holdDyn initialState stateUpdateEvent
-
-  -- Attach items to key events to compute new state
+  -- Attach items to key events
   let keyEventsWithItems ← Event.attachWithM (fun (currentItems : Array α) (kd : KeyData) =>
     (currentItems, kd)) items.current keyEvents
 
-  -- Attach current state to key events to compute state transitions
-  let keyEventsWithState ← Event.attachWithM
-    (fun (state : ListState) (itemsAndKey : Array α × KeyData) => (state, itemsAndKey))
-    stateDyn.current keyEventsWithItems
-
-  -- Subscribe to key events to compute and fire new state
-  let _keyUnsub ← SpiderM.liftIO <| keyEventsWithState.subscribe fun (state, (currentItems, kd)) => do
-    if currentItems.isEmpty then pure ()
+  -- Map key events to state operations (depends on current items)
+  let keyStateOps ← Event.mapMaybeM (fun ((currentItems, kd) : Array α × KeyData) =>
+    if currentItems.isEmpty then none
     else
       let maxVis := config.maxVisible.getD currentItems.size
-      let ke := kd.event
-      let newState := match ke.code with
-        | .up => state.moveUp currentItems.size config.wrapAround |>.adjustScroll maxVis
-        | .down => state.moveDown currentItems.size config.wrapAround |>.adjustScroll maxVis
-        | .char 'k' => state.moveUp currentItems.size config.wrapAround |>.adjustScroll maxVis
-        | .char 'j' => state.moveDown currentItems.size config.wrapAround |>.adjustScroll maxVis
-        | .home => state.moveToFirst.adjustScroll maxVis
-        | .end => state.moveToLast currentItems.size |>.adjustScroll maxVis
-        | .enter => state
-        | .space => state
-        | _ => state
+      let itemCount := currentItems.size
+      let wrap := config.wrapAround
+      match kd.event.code with
+      | .up => some fun (s : ListState) => s.moveUp itemCount wrap |>.adjustScroll maxVis
+      | .down => some fun (s : ListState) => s.moveDown itemCount wrap |>.adjustScroll maxVis
+      | .char 'k' => some fun (s : ListState) => s.moveUp itemCount wrap |>.adjustScroll maxVis
+      | .char 'j' => some fun (s : ListState) => s.moveDown itemCount wrap |>.adjustScroll maxVis
+      | .home => some fun (s : ListState) => s.moveToFirst.adjustScroll maxVis
+      | .end => some fun (s : ListState) => s.moveToLast itemCount |>.adjustScroll maxVis
+      | _ => none) keyEventsWithItems
 
-      -- Handle enter/space selection
-      match ke.code with
-      | .enter | .space =>
-        if h : state.selected < currentItems.size then
-          fireSelect currentItems[state.selected]
-      | _ => pure ()
+  -- Map item changes to state operations (clamp selection if needed)
+  let itemChangeOps ← Event.mapM (fun (newItems : Array α) =>
+    fun (s : ListState) =>
+      let maxVis := config.maxVisible.getD newItems.size
+      if s.selected >= newItems.size then
+        let newSelected := if newItems.isEmpty then 0 else newItems.size - 1
+        { s with selected := newSelected }.adjustScroll maxVis
+      else
+        s.adjustScroll maxVis) items.updated
 
-      if newState.selected != state.selected then
-        fireStateUpdate newState
-        fireSelectionChange newState.selected
-        match config.scrollToY with
-        | some scrollFn => scrollFn newState.selected
-        | none => pure ()
-      else if newState.scrollOffset != state.scrollOffset then
-        fireStateUpdate newState
+  -- Merge key operations and item change operations
+  let allStateOps ← Event.mergeM keyStateOps itemChangeOps
 
-  -- Attach current state to item changes to clamp selection
-  let itemChangesWithState ← Event.attachWithM
-    (fun (state : ListState) (newItems : Array α) => (state, newItems))
-    stateDyn.current items.updated
-
-  -- Subscribe to item changes to adjust selection
-  let _itemUnsub ← SpiderM.liftIO <| itemChangesWithState.subscribe fun (state, newItems) => do
-    let maxVis := config.maxVisible.getD newItems.size
-    if state.selected >= newItems.size then
-      let newSelected := if newItems.isEmpty then 0 else newItems.size - 1
-      let newState := { state with selected := newSelected }.adjustScroll maxVis
-      fireStateUpdate newState
+  -- Fold all state operations
+  let stateDyn ← foldDyn id initialState allStateOps
 
   -- Derive selectedIndex from state
   let selectedIndexDyn ← stateDyn.map' (·.selected)
@@ -334,6 +287,26 @@ def dynSelectableList' [ToString α] [BEq α] (items : Reactive.Dynamic Spider (
     if h : state.selected < currentItems.size then some currentItems[state.selected]
     else none
   ) items
+
+  -- For selection events on Enter/Space
+  let enterSpaceEvents ← Event.filterM (fun ((_, kd) : Array α × KeyData) =>
+    kd.event.code == .enter || kd.event.code == .space) keyEventsWithItems
+
+  -- Attach current state to Enter/Space events and extract selected item
+  let selectEvent ← Event.mapMaybeM (fun ((currentItems, _), state) =>
+    if h : state.selected < currentItems.size then some currentItems[state.selected]
+    else none)
+    (← Event.attachWithM (fun (s : ListState) (data : Array α × KeyData) => (data, s))
+      stateDyn.current enterSpaceEvents)
+
+  -- Selection change event derived from state updates
+  let selectionChangeEvent ← Event.mapM (·.selected) stateDyn.updated
+
+  -- Handle scrollToY callback if provided (side effect on selection change)
+  match config.scrollToY with
+  | some scrollFn =>
+    let _unsub ← SpiderM.liftIO <| selectionChangeEvent.subscribe scrollFn
+  | none => pure ()
 
   -- Render the list
   let node ← stateDyn.zipWith' (fun state currentItems =>
@@ -385,7 +358,7 @@ def stringList' (items : Array String) (initial : Nat := 0)
   selectableList' items initial config
 
 /-- Create a numbered list (1. Item, 2. Item, ...). -/
-def numberedList' [ToString α] (items : Array α) (initial : Nat := 0)
+def numberedList' [ToString α] [BEq α] (items : Array α) (initial : Nat := 0)
     (config : ListConfig := {}) : WidgetM (ListResult α) := do
   -- Register as focusable component
   let widgetName ← registerComponentW "numberedList" (isInput := true)
@@ -397,73 +370,65 @@ def numberedList' [ToString α] (items : Array α) (initial : Nat := 0)
   -- Get focused key events
   let keyEvents ← useFocusedKeyEventsW listName config.globalKeys
 
-  -- Create trigger events
-  let (selectEvent, fireSelect) ← newTriggerEvent (t := Spider) (a := α)
-  let (selectionChangeEvent, fireSelectionChange) ← newTriggerEvent (t := Spider) (a := Nat)
-  let (indexEvent, fireIndex) ← newTriggerEvent (t := Spider) (a := Nat)
-  let (itemEvent, fireItem) ← newTriggerEvent (t := Spider) (a := Option α)
+  -- Constants
+  let itemCount := items.size
 
-  -- Track internal state
+  -- Initial state (just the selected index for numbered list)
   let initialSelected := if initial < items.size then initial else 0
-  let stateRef ← SpiderM.liftIO (IO.mkRef initialSelected)
-  let (stateEvent, fireState) ← newTriggerEvent (t := Spider) (a := Nat)
-  let stateDyn ← holdDyn initialSelected stateEvent
 
-  -- Create dynamics
-  let selectedIndexDyn ← holdDyn initialSelected indexEvent
-  let initialItem := if h : initialSelected < items.size then some items[initialSelected] else none
-  let selectedItemDyn ← holdDyn initialItem itemEvent
-
-  -- Subscribe to key events for number shortcuts (1-9)
-  let _unsub ← SpiderM.liftIO <| keyEvents.subscribe fun kd => do
-    if items.isEmpty then pure ()
+  -- Map key events to state operations (including number shortcuts 1-9)
+  let stateOps ← Event.mapMaybeM (fun (kd : KeyData) =>
+    if items.isEmpty then none
     else
-      let state ← stateRef.get
-      let ke := kd.event
-
-      match ke.code with
+      match kd.event.code with
       | .char c =>
         if c >= '1' && c <= '9' then
           let idx := c.toNat - '1'.toNat
-          if h : idx < items.size then
-            stateRef.set idx
-            fireIndex idx
-            fireSelectionChange idx
-            match config.scrollToY with
-            | some scrollFn => scrollFn idx
-            | none => pure ()
-            fireItem (some items[idx])
-            fireSelect items[idx]
-      | .up =>
-        if state > 0 then
-          let newIdx := state - 1
-          stateRef.set newIdx
-          fireState newIdx
-          fireIndex newIdx
-          fireSelectionChange newIdx
-          match config.scrollToY with
-          | some scrollFn => scrollFn newIdx
-          | none => pure ()
-          if h : newIdx < items.size then
-            fireItem (some items[newIdx])
-      | .down =>
-        if state < items.size - 1 then
-          let newIdx := state + 1
-          stateRef.set newIdx
-          fireState newIdx
-          fireIndex newIdx
-          fireSelectionChange newIdx
-          match config.scrollToY with
-          | some scrollFn => scrollFn newIdx
-          | none => pure ()
-          if h : newIdx < items.size then
-            fireItem (some items[newIdx])
-      | .enter =>
-        if h : state < items.size then
-          fireSelect items[state]
-      | _ => pure ()
+          if idx < itemCount then some fun (_ : Nat) => idx
+          else none
+        else none
+      | .up => some fun (state : Nat) => if state > 0 then state - 1 else state
+      | .down => some fun (state : Nat) => if state < itemCount - 1 then state + 1 else state
+      | _ => none) keyEvents
 
-  let node ← stateDyn.map' fun selected =>
+  -- Fold state operations
+  let selectedIndexDyn ← foldDyn id initialSelected stateOps
+
+  -- Derive selectedItem from state
+  let selectedItemDyn ← selectedIndexDyn.map' fun (idx : Nat) =>
+    if h : idx < items.size then some items[idx] else none
+
+  -- For selection events on Enter
+  let enterEvents ← Event.filterM (fun (kd : KeyData) => kd.event.code == .enter) keyEvents
+
+  -- Attach current state to Enter events to get selected item
+  let selectEventFromEnter ← Event.mapMaybeM (fun (idx : Nat) =>
+    if h : idx < items.size then some items[idx] else none)
+    (← Event.attachWithM (fun (idx : Nat) _ => idx) selectedIndexDyn.current enterEvents)
+
+  -- Number keys (1-9) also trigger selection immediately
+  let numberSelectEvents ← Event.mapMaybeM (fun (kd : KeyData) =>
+    match kd.event.code with
+    | .char c =>
+      if c >= '1' && c <= '9' then
+        let idx := c.toNat - '1'.toNat
+        if h : idx < items.size then some items[idx] else none
+      else none
+    | _ => none) keyEvents
+
+  -- Merge enter selection and number selection
+  let selectEvent ← Event.mergeM selectEventFromEnter numberSelectEvents
+
+  -- Selection change event derived from state updates
+  let selectionChangeEvent := selectedIndexDyn.updated
+
+  -- Handle scrollToY callback if provided (side effect on selection change)
+  match config.scrollToY with
+  | some scrollFn =>
+    let _unsub ← SpiderM.liftIO <| selectionChangeEvent.subscribe scrollFn
+  | none => pure ()
+
+  let node ← selectedIndexDyn.map' fun selected =>
     Id.run do
       if items.isEmpty then
         return RNode.text "(empty)" config.style

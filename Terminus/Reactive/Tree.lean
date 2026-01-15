@@ -124,7 +124,7 @@ structure TreeState where
   selectedIndex : Nat := 0
   /-- Scroll offset (first visible item). -/
   scrollOffset : Nat := 0
-  deriving Repr, Inhabited
+  deriving Repr, Inhabited, BEq
 
 namespace TreeState
 
@@ -161,6 +161,14 @@ def adjustScroll (s : TreeState) (maxVisible : Nat) : TreeState :=
 
 end TreeState
 
+/-- Combined state for tree widget: navigation state + tree structure. -/
+structure FullTreeState (α : Type) where
+  /-- Navigation state (selection, scroll). -/
+  nav : TreeState := {}
+  /-- Tree roots (structure with expand/collapse state). -/
+  roots : Array (TreeNode α) := #[]
+  deriving Inhabited
+
 /-! ## Tree Helpers -/
 
 /-- Flatten a tree into visible lines. -/
@@ -196,6 +204,38 @@ def flattenForest [Inhabited α] (roots : Array (TreeNode α)) : Array (FlatLine
     let isLast := i == roots.size - 1
     result := result ++ flattenTree root 0 #[i] isLast
   result
+
+-- Simple BEq for change detection (compares value and expanded, not children structure)
+instance [BEq α] : BEq (TreeNode α) where
+  beq a b := a.value == b.value && a.expanded == b.expanded && a.children.size == b.children.size
+
+instance [BEq α] : BEq (FullTreeState α) where
+  beq a b := a.nav == b.nav && a.roots == b.roots
+
+namespace FullTreeState
+
+/-- Get the flattened view of the tree. -/
+def flatten [Inhabited α] (s : FullTreeState α) : Array (FlatLine α) :=
+  flattenForest s.roots
+
+/-- Get the currently selected line (if any). -/
+def currentLine [Inhabited α] (s : FullTreeState α) : Option (FlatLine α) :=
+  let flat := s.flatten
+  flat[s.nav.selectedIndex]?
+
+/-- Get the path to the currently selected node. -/
+def selectedPath [Inhabited α] (s : FullTreeState α) : Array Nat :=
+  match s.currentLine with
+  | some line => line.path
+  | none => #[]
+
+/-- Get the currently selected node value. -/
+def selectedNode [Inhabited α] (s : FullTreeState α) : Option α :=
+  match s.currentLine with
+  | some line => some line.value
+  | none => none
+
+end FullTreeState
 
 private def renderTreeView [Inhabited α] [ToString α]
     (roots : Array (TreeNode α)) (state : TreeState) (config : TreeConfig) : RNode :=
@@ -312,6 +352,105 @@ where
 
 /-! ## Tree Widget -/
 
+/-- Represents a key action that may result in state change and/or events. -/
+inductive TreeAction (α : Type) where
+  /-- Move selection up. -/
+  | moveUp
+  /-- Move selection down. -/
+  | moveDown
+  /-- Move to first item. -/
+  | moveToFirst
+  /-- Move to last item. -/
+  | moveToLast
+  /-- Handle left arrow (collapse or move to parent). -/
+  | left
+  /-- Handle right arrow (expand or move to child). -/
+  | right
+  /-- Handle enter/space (select leaf or toggle branch). -/
+  | activate
+
+/-- Result of applying an action to tree state. -/
+structure TreeActionResult (α : Type) where
+  /-- The new state. -/
+  state : FullTreeState α
+  /-- Whether a toggle occurred (for toggle event). -/
+  toggled : Option (Array Nat) := none
+  /-- Whether a leaf was selected (for select event). -/
+  selected : Option α := none
+
+/-- Apply a tree action to the state. -/
+def applyTreeAction [Inhabited α] (action : TreeAction α) (s : FullTreeState α)
+    (maxVis : Nat) : TreeActionResult α := Id.run do
+  let flat := s.flatten
+  if flat.isEmpty then return { state := s }
+
+  let itemCount := flat.size
+  let currentLine := flat[s.nav.selectedIndex]?
+
+  match action with
+  | .moveUp =>
+    let newNav := s.nav.moveUp itemCount |>.adjustScroll maxVis
+    return { state := { s with nav := newNav } }
+
+  | .moveDown =>
+    let newNav := s.nav.moveDown itemCount |>.adjustScroll maxVis
+    return { state := { s with nav := newNav } }
+
+  | .moveToFirst =>
+    let newNav := s.nav.moveToFirst.adjustScroll maxVis
+    return { state := { s with nav := newNav } }
+
+  | .moveToLast =>
+    let newNav := s.nav.moveToLast itemCount |>.adjustScroll maxVis
+    return { state := { s with nav := newNav } }
+
+  | .left =>
+    match currentLine with
+    | none => return { state := s }
+    | some line =>
+      if !line.isLeaf && line.isExpanded then
+        -- Collapse the branch
+        let newRoots := collapseAtPath s.roots line.path
+        return { state := { s with roots := newRoots }, toggled := some line.path }
+      else if line.path.size > 1 then
+        -- Move to parent
+        let parentPath := line.path.pop
+        match flat.findIdx? (fun l => l.path == parentPath) with
+        | some parentIdx =>
+          let newNav := { s.nav with selectedIndex := parentIdx }.adjustScroll maxVis
+          return { state := { s with nav := newNav } }
+        | none => return { state := s }
+      else
+        return { state := s }
+
+  | .right =>
+    match currentLine with
+    | none => return { state := s }
+    | some line =>
+      if !line.isLeaf then
+        if !line.isExpanded then
+          -- Expand the branch
+          let newRoots := expandAtPath s.roots line.path
+          return { state := { s with roots := newRoots }, toggled := some line.path }
+        else
+          -- Move to first child (next item in flat list)
+          let newNav := s.nav.moveDown itemCount |>.adjustScroll maxVis
+          return { state := { s with nav := newNav } }
+      else
+        return { state := s }
+
+  | .activate =>
+    match currentLine with
+    | none => return { state := s }
+    | some line =>
+      if line.isLeaf then
+        -- Select the leaf
+        return { state := s, selected := some line.value }
+      else
+        -- Toggle the branch
+        let newRoots := toggleAtPath s.roots line.path
+        return { state := { s with roots := newRoots }, toggled := some line.path }
+
 /-- Create a tree widget.
 
     The widget handles:
@@ -335,7 +474,7 @@ where
     -- Use tree.onToggle for expand/collapse
     ```
 -/
-def tree' [Inhabited α] [ToString α] (root : TreeNode α) (config : TreeConfig := {})
+def tree' [Inhabited α] [ToString α] [BEq α] (root : TreeNode α) (config : TreeConfig := {})
     : WidgetM (TreeResult α) := do
   -- Register as focusable component
   let widgetName ← registerComponentW "tree" (isInput := true)
@@ -347,143 +486,53 @@ def tree' [Inhabited α] [ToString α] (root : TreeNode α) (config : TreeConfig
   -- Get focused key events
   let keyEvents ← useFocusedKeyEventsW treeName config.globalKeys
 
-  -- Create trigger events
-  let (selectEvent, fireSelect) ← newTriggerEvent (t := Spider) (a := α)
-  let (toggleEvent, fireToggle) ← newTriggerEvent (t := Spider) (a := Array Nat)
-  let (pathEvent, firePath) ← newTriggerEvent (t := Spider) (a := Array Nat)
-  let (nodeEvent, fireNode) ← newTriggerEvent (t := Spider) (a := Option α)
+  -- Initial state
+  let initialState : FullTreeState α := { nav := { selectedIndex := 0, scrollOffset := 0 }, roots := #[root] }
 
-  -- Track state
-  let initialState := TreeState.mk 0 0
-  let initialRoots := #[root]
-  let stateRef ← SpiderM.liftIO (IO.mkRef initialState)
-  let rootsRef ← SpiderM.liftIO (IO.mkRef initialRoots)
-  let (stateEvent, fireState) ← newTriggerEvent (t := Spider) (a := TreeState)
-  let stateDyn ← holdDyn initialState stateEvent
-  let (rootsEvent, fireRoots) ← newTriggerEvent (t := Spider) (a := Array (TreeNode α))
-  let rootsDyn ← holdDyn initialRoots rootsEvent
+  -- Map key events to tree actions
+  let actionEvents ← Event.mapMaybeM (fun (kd : KeyData) =>
+    match kd.event.code with
+    | .up | .char 'k' => some (TreeAction.moveUp : TreeAction α)
+    | .down | .char 'j' => some (TreeAction.moveDown : TreeAction α)
+    | .home => some (TreeAction.moveToFirst : TreeAction α)
+    | .end => some (TreeAction.moveToLast : TreeAction α)
+    | .left => some (TreeAction.left : TreeAction α)
+    | .right => some (TreeAction.right : TreeAction α)
+    | .enter | .space => some (TreeAction.activate : TreeAction α)
+    | _ => none) keyEvents
 
-  -- Initial flattening
-  let initialFlat := flattenTree root 0 #[0] true
-  let initialPath := if initialFlat.isEmpty then #[] else initialFlat[0]!.path
-  let initialNode := if initialFlat.isEmpty then none else some initialFlat[0]!.value
+  -- Fold actions into state AND result (so we can extract events from the result)
+  let stateWithResultDyn ← foldDyn (fun (action : TreeAction α) (pair : FullTreeState α × Option (TreeActionResult α)) =>
+    let s := pair.1
+    let maxVis := config.maxVisible.getD (s.flatten.size)
+    let result := applyTreeAction action s maxVis
+    (result.state, some result)
+  ) (initialState, none) actionEvents
 
-  -- Create dynamics
-  let selectedPathDyn ← holdDyn initialPath pathEvent
-  let selectedNodeDyn ← holdDyn initialNode nodeEvent
+  -- Get just the state
+  let stateDyn ← stateWithResultDyn.map' (·.1)
 
-  let updateState : TreeState → IO Unit := fun newState => do
-    stateRef.set newState
-    fireState newState
+  -- Extract results from the update event (result is computed at fold time, not after)
+  let actionResults ← Event.mapMaybeM (fun (pair : FullTreeState α × Option (TreeActionResult α)) =>
+    pair.2) stateWithResultDyn.updated
 
-  let updateRoots : Array (TreeNode α) → IO Unit := fun newRoots => do
-    rootsRef.set newRoots
-    fireRoots newRoots
+  -- Extract toggle events
+  let toggleEvent ← Event.mapMaybeM (fun (result : TreeActionResult α) =>
+    result.toggled) actionResults
 
-  -- Subscribe to key events
-  let _unsub ← SpiderM.liftIO <| keyEvents.subscribe fun kd => do
-    let roots ← rootsRef.get
-    let flat := flattenForest roots
+  -- Extract select events (leaf selection)
+  let selectEvent ← Event.mapMaybeM (fun (result : TreeActionResult α) =>
+    result.selected) actionResults
 
-    if flat.isEmpty then pure ()
-    else
-      let state ← stateRef.get
-      let ke := kd.event
-      let maxVis := config.maxVisible.getD flat.size
-      let currentLine := flat[state.selectedIndex]?
+  -- Derive selected path from state
+  let selectedPathDyn ← stateDyn.map' (fun (s : FullTreeState α) => s.selectedPath)
 
-      match ke.code with
-      | .up | .char 'k' =>
-        let newState := state.moveUp flat.size |>.adjustScroll maxVis
-        if newState.selectedIndex != state.selectedIndex then
-          updateState newState
-          if h : newState.selectedIndex < flat.size then
-            let line := flat[newState.selectedIndex]
-            firePath line.path
-            fireNode (some line.value)
-      | .down | .char 'j' =>
-        let newState := state.moveDown flat.size |>.adjustScroll maxVis
-        if newState.selectedIndex != state.selectedIndex then
-          updateState newState
-          if h : newState.selectedIndex < flat.size then
-            let line := flat[newState.selectedIndex]
-            firePath line.path
-            fireNode (some line.value)
-      | .home =>
-        let newState := state.moveToFirst.adjustScroll maxVis
-        if newState.selectedIndex != state.selectedIndex then
-          updateState newState
-          if h : 0 < flat.size then
-            let line := flat[0]
-            firePath line.path
-            fireNode (some line.value)
-      | .end =>
-        let newState := state.moveToLast flat.size |>.adjustScroll maxVis
-        if newState.selectedIndex != state.selectedIndex then
-          updateState newState
-          if h : newState.selectedIndex < flat.size then
-            let line := flat[newState.selectedIndex]
-            firePath line.path
-            fireNode (some line.value)
-      | .left =>
-        -- Collapse current branch or move to parent
-        match currentLine with
-        | none => pure ()
-        | some line =>
-          if !line.isLeaf && line.isExpanded then
-            -- Collapse
-            let newRoots := collapseAtPath roots line.path
-            updateRoots newRoots
-            fireToggle line.path
-          else if line.path.size > 1 then
-            -- Move to parent (find parent's index in flat list)
-            let parentPath := line.path.pop
-            match flat.findIdx? (fun l => l.path == parentPath) with
-            | some parentIdx =>
-              let newState := { state with selectedIndex := parentIdx }.adjustScroll maxVis
-              updateState newState
-              if h : parentIdx < flat.size then
-                let parentLine := flat[parentIdx]
-                firePath parentLine.path
-                fireNode (some parentLine.value)
-            | none => pure ()
-      | .right =>
-        -- Expand current branch or move to first child
-        match currentLine with
-        | none => pure ()
-        | some line =>
-          if !line.isLeaf then
-            if !line.isExpanded then
-              -- Expand
-              let newRoots := expandAtPath roots line.path
-              updateRoots newRoots
-              fireToggle line.path
-            else
-              -- Move to first child (next item in flat list)
-              let newState := state.moveDown flat.size |>.adjustScroll maxVis
-              if newState.selectedIndex != state.selectedIndex then
-                updateState newState
-                if h : newState.selectedIndex < flat.size then
-                  let childLine := flat[newState.selectedIndex]
-                  firePath childLine.path
-                  fireNode (some childLine.value)
-      | .enter | .space =>
-        match currentLine with
-        | none => pure ()
-        | some line =>
-          if line.isLeaf then
-            fireSelect line.value
-          else
-            -- Toggle branch
-            let newRoots := toggleAtPath roots line.path
-            updateRoots newRoots
-            fireToggle line.path
-      | _ => pure ()
+  -- Derive selected node from state
+  let selectedNodeDyn ← stateDyn.map' (fun (s : FullTreeState α) => s.selectedNode)
 
   -- Emit render function
-  let node ← stateDyn.zipWith' (fun state currentRoots =>
-    renderTreeView currentRoots state config
-  ) rootsDyn
+  let node ← stateDyn.map' fun (s : FullTreeState α) =>
+    renderTreeView s.roots s.nav config
   emit node
 
   pure {
@@ -494,7 +543,7 @@ def tree' [Inhabited α] [ToString α] (root : TreeNode α) (config : TreeConfig
   }
 
 /-- Create a tree from multiple root nodes. -/
-def forest' [Inhabited α] [ToString α] (roots : Array (TreeNode α)) (config : TreeConfig := {})
+def forest' [Inhabited α] [ToString α] [BEq α] (roots : Array (TreeNode α)) (config : TreeConfig := {})
     : WidgetM (TreeResult α) := do
   let widgetName ← registerComponentW "forest" (isInput := true)
     (nameOverride := config.focusName)
@@ -505,128 +554,53 @@ def forest' [Inhabited α] [ToString α] (roots : Array (TreeNode α)) (config :
   -- Get focused key events
   let keyEvents ← useFocusedKeyEventsW treeName config.globalKeys
 
-  let (selectEvent, fireSelect) ← newTriggerEvent (t := Spider) (a := α)
-  let (toggleEvent, fireToggle) ← newTriggerEvent (t := Spider) (a := Array Nat)
-  let (pathEvent, firePath) ← newTriggerEvent (t := Spider) (a := Array Nat)
-  let (nodeEvent, fireNode) ← newTriggerEvent (t := Spider) (a := Option α)
+  -- Initial state
+  let initialState : FullTreeState α := { nav := { selectedIndex := 0, scrollOffset := 0 }, roots := roots }
 
-  let initialState := TreeState.mk 0 0
-  let initialRoots := roots
-  let stateRef ← SpiderM.liftIO (IO.mkRef initialState)
-  let rootsRef ← SpiderM.liftIO (IO.mkRef initialRoots)
-  let (stateEvent, fireState) ← newTriggerEvent (t := Spider) (a := TreeState)
-  let stateDyn ← holdDyn initialState stateEvent
-  let (rootsEvent, fireRoots) ← newTriggerEvent (t := Spider) (a := Array (TreeNode α))
-  let rootsDyn ← holdDyn initialRoots rootsEvent
+  -- Map key events to tree actions
+  let actionEvents ← Event.mapMaybeM (fun (kd : KeyData) =>
+    match kd.event.code with
+    | .up | .char 'k' => some (TreeAction.moveUp : TreeAction α)
+    | .down | .char 'j' => some (TreeAction.moveDown : TreeAction α)
+    | .home => some (TreeAction.moveToFirst : TreeAction α)
+    | .end => some (TreeAction.moveToLast : TreeAction α)
+    | .left => some (TreeAction.left : TreeAction α)
+    | .right => some (TreeAction.right : TreeAction α)
+    | .enter | .space => some (TreeAction.activate : TreeAction α)
+    | _ => none) keyEvents
 
-  let initialFlat := flattenForest roots
-  let initialPath := if initialFlat.isEmpty then #[] else initialFlat[0]!.path
-  let initialNode := if initialFlat.isEmpty then none else some initialFlat[0]!.value
+  -- Fold actions into state AND result (so we can extract events from the result)
+  let stateWithResultDyn ← foldDyn (fun (action : TreeAction α) (pair : FullTreeState α × Option (TreeActionResult α)) =>
+    let s := pair.1
+    let maxVis := config.maxVisible.getD (s.flatten.size)
+    let result := applyTreeAction action s maxVis
+    (result.state, some result)
+  ) (initialState, none) actionEvents
 
-  let selectedPathDyn ← holdDyn initialPath pathEvent
-  let selectedNodeDyn ← holdDyn initialNode nodeEvent
+  -- Get just the state
+  let stateDyn ← stateWithResultDyn.map' (·.1)
 
-  let updateState : TreeState → IO Unit := fun newState => do
-    stateRef.set newState
-    fireState newState
+  -- Extract results from the update event (result is computed at fold time, not after)
+  let actionResults ← Event.mapMaybeM (fun (pair : FullTreeState α × Option (TreeActionResult α)) =>
+    pair.2) stateWithResultDyn.updated
 
-  let updateRoots : Array (TreeNode α) → IO Unit := fun newRoots => do
-    rootsRef.set newRoots
-    fireRoots newRoots
+  -- Extract toggle events
+  let toggleEvent ← Event.mapMaybeM (fun (result : TreeActionResult α) =>
+    result.toggled) actionResults
 
-  let _unsub ← SpiderM.liftIO <| keyEvents.subscribe fun kd => do
-    let currentRoots ← rootsRef.get
-    let flat := flattenForest currentRoots
+  -- Extract select events (leaf selection)
+  let selectEvent ← Event.mapMaybeM (fun (result : TreeActionResult α) =>
+    result.selected) actionResults
 
-    if flat.isEmpty then pure ()
-    else
-      let state ← stateRef.get
-      let ke := kd.event
-      let maxVis := config.maxVisible.getD flat.size
-      let currentLine := flat[state.selectedIndex]?
+  -- Derive selected path from state
+  let selectedPathDyn ← stateDyn.map' (fun (s : FullTreeState α) => s.selectedPath)
 
-      match ke.code with
-      | .up | .char 'k' =>
-        let newState := state.moveUp flat.size |>.adjustScroll maxVis
-        if newState.selectedIndex != state.selectedIndex then
-          updateState newState
-          if h : newState.selectedIndex < flat.size then
-            let line := flat[newState.selectedIndex]
-            firePath line.path
-            fireNode (some line.value)
-      | .down | .char 'j' =>
-        let newState := state.moveDown flat.size |>.adjustScroll maxVis
-        if newState.selectedIndex != state.selectedIndex then
-          updateState newState
-          if h : newState.selectedIndex < flat.size then
-            let line := flat[newState.selectedIndex]
-            firePath line.path
-            fireNode (some line.value)
-      | .home =>
-        let newState := state.moveToFirst.adjustScroll maxVis
-        updateState newState
-        if h : 0 < flat.size then
-          let line := flat[0]
-          firePath line.path
-          fireNode (some line.value)
-      | .end =>
-        let newState := state.moveToLast flat.size |>.adjustScroll maxVis
-        updateState newState
-        if h : newState.selectedIndex < flat.size then
-          let line := flat[newState.selectedIndex]
-          firePath line.path
-          fireNode (some line.value)
-      | .left =>
-        match currentLine with
-        | none => pure ()
-        | some line =>
-          if !line.isLeaf && line.isExpanded then
-            let newRoots := collapseAtPath currentRoots line.path
-            updateRoots newRoots
-            fireToggle line.path
-          else if line.path.size > 1 then
-            let parentPath := line.path.pop
-            match flat.findIdx? (fun l => l.path == parentPath) with
-            | some parentIdx =>
-              let newState := { state with selectedIndex := parentIdx }.adjustScroll maxVis
-              updateState newState
-              if h : parentIdx < flat.size then
-                let parentLine := flat[parentIdx]
-                firePath parentLine.path
-                fireNode (some parentLine.value)
-            | none => pure ()
-      | .right =>
-        match currentLine with
-        | none => pure ()
-        | some line =>
-          if !line.isLeaf then
-            if !line.isExpanded then
-              let newRoots := expandAtPath currentRoots line.path
-              updateRoots newRoots
-              fireToggle line.path
-            else
-              let newState := state.moveDown flat.size |>.adjustScroll maxVis
-              if newState.selectedIndex != state.selectedIndex then
-                updateState newState
-                if h : newState.selectedIndex < flat.size then
-                  let childLine := flat[newState.selectedIndex]
-                  firePath childLine.path
-                  fireNode (some childLine.value)
-      | .enter | .space =>
-        match currentLine with
-        | none => pure ()
-        | some line =>
-          if line.isLeaf then
-            fireSelect line.value
-          else
-            let newRoots := toggleAtPath currentRoots line.path
-            updateRoots newRoots
-            fireToggle line.path
-      | _ => pure ()
+  -- Derive selected node from state
+  let selectedNodeDyn ← stateDyn.map' (fun (s : FullTreeState α) => s.selectedNode)
 
-  let node ← stateDyn.zipWith' (fun state currentRoots =>
-    renderTreeView currentRoots state config
-  ) rootsDyn
+  -- Emit render function
+  let node ← stateDyn.map' fun (s : FullTreeState α) =>
+    renderTreeView s.roots s.nav config
   emit node
 
   pure {

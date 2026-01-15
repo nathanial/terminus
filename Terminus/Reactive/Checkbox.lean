@@ -63,31 +63,24 @@ def checkbox'' (name : String) (label : String) (initial : Bool := false)
   -- Compute input name for focus handling
   let inputName := if name.isEmpty then widgetName else name
 
-  -- Create trigger events
-  let (toggleEvent, fireToggle) ← newTriggerEvent (t := Spider) (a := Bool)
-
-  -- Create dynamic for checked state
-  let checkedDyn ← holdDyn initial toggleEvent
-
-  -- Internal state ref for render sampling
-  let checkedRef ← SpiderM.liftIO (IO.mkRef initial)
-
   -- Get focus state (for rendering)
   let focusedInput ← useFocusedInputW
 
   -- Get key events filtered by focus
   let keyEvents ← useFocusedKeyEventsW inputName
 
-  -- Subscribe to key events (already filtered by focus)
-  let _unsub ← SpiderM.liftIO <| keyEvents.subscribe fun kd => do
-    let ke := kd.event
-    match ke.code with
-    | .space | .enter =>
-      let current ← checkedRef.get
-      let newVal := !current
-      checkedRef.set newVal
-      fireToggle newVal
-    | _ => pure ()
+  -- Map key events to state transformation functions (toggle on space/enter)
+  let stateOps ← Event.mapMaybeM (fun kd =>
+    match kd.event.code with
+    | .enter | .space => some fun (checked : Bool) => !checked
+    | _ => none) keyEvents
+
+  -- Fold state operations - no subscribe needed!
+  let checkedDyn ← foldDyn (fun op state => op state) initial stateOps
+
+  -- Derive toggle event from state updates
+  let toggleEvent ← Event.mapM id checkedDyn.updated
+
   let node ← focusedInput.zipWith' (fun currentFocus isChecked =>
     let isFocused := currentFocus == some inputName
     let symbol := if isChecked then config.checkedSymbol else config.uncheckedSymbol
@@ -241,27 +234,12 @@ def radioGroup' (name : String) (options : Array String) (initial : Option Nat :
   else
     config.focusName
 
-  -- Create trigger events
-  let (selectEvent, fireSelect) ← newTriggerEvent (t := Spider) (a := Nat)
-  let (indexEvent, fireIndex) ← newTriggerEvent (t := Spider) (a := Option Nat)
-  let (labelEvent, fireLabel) ← newTriggerEvent (t := Spider) (a := Option String)
-
   -- Initialize state with clamped initial selection
   let clampedInitial := match initial with
     | none => none
     | some idx => if idx < options.size then some idx else none
 
   let initialState : RadioState := { selected := clampedInitial, scrollOffset := 0 }
-  let stateRef ← SpiderM.liftIO (IO.mkRef initialState)
-  let (stateEvent, fireState) ← newTriggerEvent (t := Spider) (a := RadioState)
-  let stateDyn ← holdDyn initialState stateEvent
-
-  -- Create dynamics
-  let selectedIndexDyn ← holdDyn clampedInitial indexEvent
-  let initialLabel := match clampedInitial with
-    | none => none
-    | some idx => if h : idx < options.size then some options[idx] else none
-  let selectedLabelDyn ← holdDyn initialLabel labelEvent
 
   -- Get focus state (for rendering)
   let focusedInput ← useFocusedInputW
@@ -272,46 +250,41 @@ def radioGroup' (name : String) (options : Array String) (initial : Option Nat :
   -- Get key events filtered by focus
   let keyEvents ← useFocusedKeyEventsW inputName config.globalKeys
 
-  -- Subscribe to key events (already filtered by focus)
-  let _unsub ← SpiderM.liftIO <| keyEvents.subscribe fun kd => do
-    if options.size > 0 then
-      let state ← stateRef.get
-      let ke := kd.event
+  -- Map key events to state transformation functions
+  let stateOps ← Event.mapMaybeM (fun kd =>
+    match kd.event.code with
+    | .up | .char 'k' =>
+      some fun (state : RadioState) => state.moveUp options.size config.wrapAround |>.adjustScroll maxVis
+    | .down | .char 'j' =>
+      some fun (state : RadioState) => state.moveDown options.size config.wrapAround |>.adjustScroll maxVis
+    | .home =>
+      some fun (state : RadioState) => state.moveToFirst.adjustScroll maxVis
+    | .end =>
+      some fun (state : RadioState) => state.moveToLast options.size |>.adjustScroll maxVis
+    | _ => none) keyEvents
 
-      let newState ← match ke.code with
-        | .up | .char 'k' =>
-          pure (state.moveUp options.size config.wrapAround |>.adjustScroll maxVis)
-        | .down | .char 'j' =>
-          pure (state.moveDown options.size config.wrapAround |>.adjustScroll maxVis)
-        | .home =>
-          pure (state.moveToFirst.adjustScroll maxVis)
-        | .end =>
-          pure (state.moveToLast options.size |>.adjustScroll maxVis)
-        | .enter | .space =>
-          -- Fire select event on confirmation
-          match state.selected with
-          | some idx => fireSelect idx
-          | none => pure ()
-          pure state
-        | _ => pure state
+  -- Fold state operations - no subscribe needed!
+  let stateDyn ← foldDyn (fun op state => op state) initialState stateOps
 
-      -- Update state and fire events if selection changed
-      if newState.selected != state.selected then
-        stateRef.set newState
-        fireState newState
-        fireIndex newState.selected
-        match newState.selected with
-        | some idx =>
-          if h : idx < options.size then
-            fireLabel (some options[idx])
-          else
-            fireLabel none
-        | none => fireLabel none
+  -- Derive selectedIndex from state
+  let selectedIndexDyn ← stateDyn.map' (·.selected)
 
-  let inputName := if config.focusName.isEmpty then
-    (if name.isEmpty then widgetName else name)
-  else
-    config.focusName
+  -- Derive selectedLabel from state
+  let initialLabel := match clampedInitial with
+    | none => none
+    | some idx => if h : idx < options.size then some options[idx] else none
+  let selectedLabelDyn ← stateDyn.map' fun state =>
+    match state.selected with
+    | some idx => if h : idx < options.size then some options[idx] else none
+    | none => none
+
+  -- Enter/space key event for selection confirmation
+  let confirmE ← Event.filterM (fun kd => kd.event.code == .enter || kd.event.code == .space) keyEvents
+
+  -- Derive select event (attach current state's selected index when Enter/Space is pressed)
+  let selectEvent ← Event.mapMaybeM (fun (state, _) => state.selected)
+    (← Event.attachWithM (fun (s : RadioState) (kd : KeyData) => (s, kd)) stateDyn.current confirmE)
+
   let node ← focusedInput.zipWith' (fun currentFocus state =>
     Id.run do
       let isFocused := currentFocus == some inputName
@@ -366,8 +339,8 @@ private structure DynRadioState where
     - Selection is preserved by label when possible
     - Empty options result in no selection
 
-    This implementation uses FRP-idiomatic state management via holdDyn and
-    attachWithM, avoiding imperative subscribe patterns with IO.mkRef.
+    This implementation uses pure FRP-idiomatic state management via foldDyn,
+    eliminating all subscribe and sample patterns.
 
     Example:
     ```
@@ -381,23 +354,6 @@ def dynRadioGroup' (name : String) (options : Reactive.Dynamic Spider (Array Str
   let focusOverride := if config.focusName.isEmpty then name else config.focusName
   let widgetName ← registerComponentW "dynRadioGroup" (isInput := true) (nameOverride := focusOverride)
 
-  -- Create trigger event for external selection notification
-  let (selectEvent, fireSelect) ← newTriggerEvent (t := Spider) (a := Nat)
-
-  -- Get initial options
-  let initialOpts ← options.sample
-
-  -- Initialize state with clamped initial selection
-  let clampedInitial := match initial with
-    | none => none
-    | some idx => if idx < initialOpts.size then some idx else none
-
-  let initialRadioState : RadioState := { selected := clampedInitial, scrollOffset := 0 }
-  let initialLabel := match clampedInitial with
-    | none => none
-    | some idx => if h : idx < initialOpts.size then some initialOpts[idx] else none
-  let initialState : DynRadioState := { radioState := initialRadioState, lastLabel := initialLabel }
-
   -- Get focus state
   let focusedInput ← useFocusedInputW
 
@@ -410,83 +366,74 @@ def dynRadioGroup' (name : String) (options : Reactive.Dynamic Spider (Array Str
   -- Get key events filtered by focus
   let keyEvents ← useFocusedKeyEventsW inputName config.globalKeys
 
-  -- Create a trigger event for state updates
-  let (stateUpdateEvent, fireStateUpdate) ← newTriggerEvent (t := Spider) (a := DynRadioState)
-
-  -- Build state dynamic from the state update events
-  let dynRadioStateDyn ← holdDyn initialState stateUpdateEvent
-
-  -- Attach options to key events
-  let keyEventsWithOpts ← Event.attachWithM (fun (currentOpts : Array String) (kd : KeyData) =>
+  -- Create state operations from key events (attached with current options)
+  let keyOpsWithOpts ← Event.attachWithM (fun (currentOpts : Array String) (kd : KeyData) =>
     (currentOpts, kd)) options.current keyEvents
 
-  -- Attach current state to key events
-  let keyEventsWithState ← Event.attachWithM
-    (fun (state : DynRadioState) (optsAndKey : Array String × KeyData) => (state, optsAndKey))
-    dynRadioStateDyn.current keyEventsWithOpts
-
-  -- Subscribe to key events to compute and fire new state
-  let _keyUnsub ← SpiderM.liftIO <| keyEventsWithState.subscribe fun (state, (currentOpts, kd)) => do
-    if currentOpts.isEmpty then pure ()
+  let keyStateOps ← Event.mapMaybeM (fun (currentOpts, kd) =>
+    if currentOpts.isEmpty then none
     else
       let maxVis := config.maxVisible.getD currentOpts.size
-      let ke := kd.event
-      let radioState := state.radioState
-      let newRadioState := match ke.code with
-        | .up | .char 'k' =>
-          radioState.moveUp currentOpts.size config.wrapAround |>.adjustScroll maxVis
-        | .down | .char 'j' =>
-          radioState.moveDown currentOpts.size config.wrapAround |>.adjustScroll maxVis
-        | .home =>
-          radioState.moveToFirst.adjustScroll maxVis
-        | .end =>
-          radioState.moveToLast currentOpts.size |>.adjustScroll maxVis
-        | .enter | .space => radioState
-        | _ => radioState
+      match kd.event.code with
+      | .up | .char 'k' =>
+        some fun (state : DynRadioState) =>
+          let newRadio := state.radioState.moveUp currentOpts.size config.wrapAround |>.adjustScroll maxVis
+          let newLabel := match newRadio.selected with
+            | some idx => if h : idx < currentOpts.size then some currentOpts[idx] else none
+            | none => none
+          { radioState := newRadio, lastLabel := newLabel }
+      | .down | .char 'j' =>
+        some fun (state : DynRadioState) =>
+          let newRadio := state.radioState.moveDown currentOpts.size config.wrapAround |>.adjustScroll maxVis
+          let newLabel := match newRadio.selected with
+            | some idx => if h : idx < currentOpts.size then some currentOpts[idx] else none
+            | none => none
+          { radioState := newRadio, lastLabel := newLabel }
+      | .home =>
+        some fun (state : DynRadioState) =>
+          let newRadio := state.radioState.moveToFirst.adjustScroll maxVis
+          let newLabel := match newRadio.selected with
+            | some idx => if h : idx < currentOpts.size then some currentOpts[idx] else none
+            | none => none
+          { radioState := newRadio, lastLabel := newLabel }
+      | .end =>
+        some fun (state : DynRadioState) =>
+          let newRadio := state.radioState.moveToLast currentOpts.size |>.adjustScroll maxVis
+          let newLabel := match newRadio.selected with
+            | some idx => if h : idx < currentOpts.size then some currentOpts[idx] else none
+            | none => none
+          { radioState := newRadio, lastLabel := newLabel }
+      | _ => none) keyOpsWithOpts
 
-      -- Handle enter/space to fire select
-      match ke.code with
-      | .enter | .space =>
-        match radioState.selected with
-        | some idx => fireSelect idx
-        | none => pure ()
-      | _ => pure ()
-
-      if newRadioState != radioState then
-        let newLabel := match newRadioState.selected with
-          | some idx =>
-            if h : idx < currentOpts.size then some currentOpts[idx] else none
-          | none => none
-        fireStateUpdate { radioState := newRadioState, lastLabel := newLabel }
-
-  -- Attach current state to options changes
-  let optionChangesWithState ← Event.attachWithM
-    (fun (state : DynRadioState) (newOpts : Array String) => (state, newOpts))
-    dynRadioStateDyn.current options.updated
-
-  -- Subscribe to options changes to adjust selection
-  let _optUnsub ← SpiderM.liftIO <| optionChangesWithState.subscribe fun (state, newOpts) => do
-    let maxVis := config.maxVisible.getD newOpts.size
-
-    -- Try to preserve selection by label
-    let newSelection : Option Nat := match state.lastLabel with
-      | some label =>
-        match newOpts.findIdx? (· == label) with
-        | some idx => some idx
+  -- Create state operations from options changes
+  let optStateOps ← Event.mapM (fun newOpts =>
+    fun (state : DynRadioState) =>
+      let maxVis := config.maxVisible.getD newOpts.size
+      -- Try to preserve selection by label
+      let newSelection : Option Nat := match state.lastLabel with
+        | some label =>
+          match newOpts.findIdx? (· == label) with
+          | some idx => some idx
+          | none => state.radioState.clampSelection newOpts.size |>.selected
         | none => state.radioState.clampSelection newOpts.size |>.selected
-      | none => state.radioState.clampSelection newOpts.size |>.selected
+      let newRadioState : RadioState := { selected := newSelection, scrollOffset := state.radioState.scrollOffset }
+      let newRadioState := newRadioState.clampSelection newOpts.size |>.adjustScroll maxVis
+      let newLabel := match newRadioState.selected with
+        | some idx => if h : idx < newOpts.size then some newOpts[idx] else none
+        | none => none
+      { radioState := newRadioState, lastLabel := newLabel }
+  ) options.updated
 
-    let newRadioState : RadioState := { selected := newSelection, scrollOffset := state.radioState.scrollOffset }
-    let newRadioState := newRadioState.clampSelection newOpts.size |>.adjustScroll maxVis
+  -- Merge key operations and options change operations
+  let allStateOps ← Event.mergeM keyStateOps optStateOps
 
-    let newLabel := match newRadioState.selected with
-      | some idx =>
-        if h : idx < newOpts.size then some newOpts[idx] else none
-      | none => none
+  -- Initialize state with the provided initial index
+  -- The label will be computed lazily when we first get options
+  let initialRadioState : RadioState := { selected := initial, scrollOffset := 0 }
+  let initialState : DynRadioState := { radioState := initialRadioState, lastLabel := none }
 
-    let newState := { radioState := newRadioState, lastLabel := newLabel }
-    if newState != state then
-      fireStateUpdate newState
+  -- Fold all state operations - no subscribe needed!
+  let dynRadioStateDyn ← foldDyn (fun op state => op state) initialState allStateOps
 
   -- Extract radioState from DynRadioState
   let stateDyn ← dynRadioStateDyn.map' (·.radioState)
@@ -501,6 +448,13 @@ def dynRadioGroup' (name : String) (options : Reactive.Dynamic Spider (Array Str
       if h : idx < currentOpts.size then some currentOpts[idx] else none
     | none => none
   ) options
+
+  -- Enter/space key event for selection confirmation
+  let confirmE ← Event.filterM (fun kd => kd.event.code == .enter || kd.event.code == .space) keyEvents
+
+  -- Derive select event (attach current state's selected index when Enter/Space is pressed)
+  let selectEvent ← Event.mapMaybeM (fun (state, _) => state.radioState.selected)
+    (← Event.attachWithM (fun (s : DynRadioState) (kd : KeyData) => (s, kd)) dynRadioStateDyn.current confirmE)
 
   -- Emit render function
   let focusDyn ← focusedInput.map' (fun currentFocus =>

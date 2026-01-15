@@ -104,80 +104,55 @@ def rangeSlider' (name : String) (initialMin : Float := 0.25) (initialMax : Floa
   -- Get focused key events
   let keyEvents ← useFocusedKeyEventsW inputName
 
-  -- Create events and state
-  let (stateEvent, fireState) ← newTriggerEvent (t := Spider) (a := RangeSliderState)
-  let (changeEvent, fireChange) ← newTriggerEvent (t := Spider) (a := Float × Float)
-
   let initialState : RangeSliderState := {
     minVal := clampedMin
     maxVal := clampedMax
     activeIsMax := false  -- Start with min handle active
   }
-  let stateRef ← SpiderM.liftIO (IO.mkRef initialState)
-  let stateDyn ← holdDyn initialState stateEvent
+
+  -- Map key events to state transformation functions
+  let stateOps ← Event.mapMaybeM (fun kd =>
+    let ke := kd.event
+    let step := if ke.modifiers.shift then config.largeStep else config.step
+    match ke.code with
+    | .tab =>
+      some fun (state : RangeSliderState) => { state with activeIsMax := !state.activeIsMax }
+    | .left | .char 'h' =>
+      some fun (state : RangeSliderState) =>
+        if state.activeIsMax then
+          let newMax := max state.minVal (state.maxVal - step)
+          { state with maxVal := newMax }
+        else
+          let newMin := max config.minValue (state.minVal - step)
+          { state with minVal := newMin }
+    | .right | .char 'l' =>
+      some fun (state : RangeSliderState) =>
+        if state.activeIsMax then
+          let newMax := min config.maxValue (state.maxVal + step)
+          { state with maxVal := newMax }
+        else
+          let newMin := min state.maxVal (state.minVal + step)
+          { state with minVal := newMin }
+    | .home =>
+      some fun (state : RangeSliderState) =>
+        if state.activeIsMax then { state with maxVal := state.minVal }
+        else { state with minVal := config.minValue }
+    | .end =>
+      some fun (state : RangeSliderState) =>
+        if state.activeIsMax then { state with maxVal := config.maxValue }
+        else { state with minVal := state.maxVal }
+    | _ => none) keyEvents
+
+  -- Fold state operations
+  let stateDyn ← foldDyn (fun op state => op state) initialState stateOps
 
   -- Derived dynamics
   let minValDyn ← stateDyn.map' (·.minVal)
   let maxValDyn ← stateDyn.map' (·.maxVal)
   let activeHandleDyn ← stateDyn.map' (·.activeIsMax)
 
-  -- Key handling
-  let _unsub ← SpiderM.liftIO <| keyEvents.subscribe fun kd => do
-    let state ← stateRef.get
-    let ke := kd.event
-    let step := if ke.modifiers.shift then config.largeStep else config.step
-
-    let newState ← match ke.code with
-      | .tab =>
-        -- Switch between handles
-        pure { state with activeIsMax := !state.activeIsMax }
-      | .left | .char 'h' =>
-        -- Move active handle left
-        if state.activeIsMax then
-          -- Moving max handle left, but cannot go below min handle
-          let newMax := max state.minVal (state.maxVal - step)
-          pure { state with maxVal := newMax }
-        else
-          -- Moving min handle left
-          let newMin := max config.minValue (state.minVal - step)
-          pure { state with minVal := newMin }
-      | .right | .char 'l' =>
-        -- Move active handle right
-        if state.activeIsMax then
-          -- Moving max handle right
-          let newMax := min config.maxValue (state.maxVal + step)
-          pure { state with maxVal := newMax }
-        else
-          -- Moving min handle right, but cannot exceed max handle
-          let newMin := min state.maxVal (state.minVal + step)
-          pure { state with minVal := newMin }
-      | .home =>
-        -- Move active handle to its minimum bound
-        if state.activeIsMax then
-          -- Max handle's minimum is the min handle's position
-          pure { state with maxVal := state.minVal }
-        else
-          -- Min handle's minimum is the config min
-          pure { state with minVal := config.minValue }
-      | .end =>
-        -- Move active handle to its maximum bound
-        if state.activeIsMax then
-          -- Max handle's maximum is the config max
-          pure { state with maxVal := config.maxValue }
-        else
-          -- Min handle's maximum is the max handle's position
-          pure { state with minVal := state.maxVal }
-      | _ => pure state
-
-    -- Check if values changed
-    let valuesChanged := newState.minVal != state.minVal || newState.maxVal != state.maxVal
-    let handleChanged := newState.activeIsMax != state.activeIsMax
-
-    if valuesChanged || handleChanged then
-      stateRef.set newState
-      fireState newState
-      if valuesChanged then
-        fireChange (newState.minVal, newState.maxVal)
+  -- Derive onChange event from state updates (only when values change)
+  let changeEvent ← Event.mapM (fun state => (state.minVal, state.maxVal)) stateDyn.updated
 
   -- Focus for rendering
   let focusedInput ← useFocusedInputW

@@ -134,46 +134,35 @@ def resizableSplitPane' (name : String) (config : SplitPaneConfig := {})
   -- Clamp initial ratio
   let clampedInitial := max config.minRatio (min config.maxRatio config.initialRatio)
 
-  -- Create state
-  let (ratioEvent, fireRatio) ← newTriggerEvent (t := Spider) (a := Float)
-  let ratioRef ← SpiderM.liftIO (IO.mkRef clampedInitial)
-  let ratioDyn ← holdDyn clampedInitial ratioEvent
-
-  -- Handle keyboard input for resizing
-  if config.resizable then
+  -- Build ratio state using declarative FRP
+  let ratioDyn ← if config.resizable then
     let keyEvents ← useFocusedKeyEventsW inputName
-    let _unsub ← SpiderM.liftIO <| keyEvents.subscribe fun kd => do
-      let current ← ratioRef.get
+
+    -- Map key events to ratio transformation functions
+    let ratioOps ← Event.mapMaybeM (fun kd => do
       let ke := kd.event
       let step := if ke.modifiers.shift then config.largeStep else config.step
+      match config.orientation with
+      | .horizontal =>
+        match ke.code with
+        | .left | .char 'h' => some fun r => max config.minRatio (r - step)
+        | .right | .char 'l' => some fun r => min config.maxRatio (r + step)
+        | .home => some fun _ => config.minRatio
+        | .end => some fun _ => config.maxRatio
+        | _ => none
+      | .vertical =>
+        match ke.code with
+        | .up | .char 'k' => some fun r => max config.minRatio (r - step)
+        | .down | .char 'j' => some fun r => min config.maxRatio (r + step)
+        | .home => some fun _ => config.minRatio
+        | .end => some fun _ => config.maxRatio
+        | _ => none) keyEvents
 
-      let newRatio ← match config.orientation with
-        | .horizontal =>
-          match ke.code with
-          | .left | .char 'h' =>
-            pure (max config.minRatio (current - step))
-          | .right | .char 'l' =>
-            pure (min config.maxRatio (current + step))
-          | .home =>
-            pure config.minRatio
-          | .end =>
-            pure config.maxRatio
-          | _ => pure current
-        | .vertical =>
-          match ke.code with
-          | .up | .char 'k' =>
-            pure (max config.minRatio (current - step))
-          | .down | .char 'j' =>
-            pure (min config.maxRatio (current + step))
-          | .home =>
-            pure config.minRatio
-          | .end =>
-            pure config.maxRatio
-          | _ => pure current
-
-      if newRatio != current then
-        ratioRef.set newRatio
-        fireRatio newRatio
+    -- Fold ratio operations into state
+    foldDyn (fun op r => op r) clampedInitial ratioOps
+  else
+    -- Not resizable, just a constant
+    Dynamic.pureM clampedInitial
 
   -- Run first pane and collect its children
   let (firstResult, firstChildren) ← runWidgetChildren first
@@ -213,7 +202,7 @@ def resizableSplitPane' (name : String) (config : SplitPaneConfig := {})
 
   pure ({
     ratio := ratioDyn
-    onChange := ratioEvent
+    onChange := ratioDyn.updated
   }, firstResult, secondResult)
 
 /-- Convenience wrapper for splitPane' when you only need the result.

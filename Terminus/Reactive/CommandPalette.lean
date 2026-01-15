@@ -232,6 +232,15 @@ def toggle (s : CommandPaletteState) : CommandPaletteState :=
 
 end CommandPaletteState
 
+/-! ## Control Operations -/
+
+/-- Control operations that can be triggered externally. -/
+inductive ControlOp
+  | open
+  | close
+  | toggle
+  deriving Repr, Inhabited, BEq
+
 /-! ## Render Helpers -/
 
 /-- Build the search input line with cursor. -/
@@ -406,15 +415,69 @@ def commandPalette' (name : String) (commands : Array Command)
   -- Register as focusable input component
   let widgetName ← registerComponentW "command-palette" (isInput := true) (nameOverride := name)
 
-  -- Create trigger events for select/close
-  let (selectEvent, fireSelect) ← newTriggerEvent (t := Spider) (a := Command)
-  let (closeEvent, fireClose) ← newTriggerEvent (t := Spider) (a := Unit)
+  -- Get events context for focus management
+  let events ← getEventsW
 
-  -- Track internal state
+  -- Compute input name for focus handling
+  let inputName := if name.isEmpty then widgetName else name
+
+  -- Create trigger events for external control operations
+  let (controlEvent, fireControl) ← newTriggerEvent (t := Spider) (a := ControlOp)
+
+  -- Initial state
   let initialState : CommandPaletteState := {}
-  let stateRef ← SpiderM.liftIO (IO.mkRef initialState)
-  let (stateEvent, fireState) ← newTriggerEvent (t := Spider) (a := CommandPaletteState)
-  let stateDyn ← holdDyn initialState stateEvent
+
+  -- Create a preliminary isOpen dynamic for gating key events
+  -- We'll use a ref to track open state for visibility gating
+  let isOpenRef ← SpiderM.liftIO <| IO.mkRef false
+
+  -- Create visibility behavior from ref
+  let isOpenBehavior := Behavior.fromSample isOpenRef.get
+
+  -- Get visibility-gated key events (only respond when open)
+  let keyEvents ← Event.gateM isOpenBehavior events.keyEvent
+
+  -- Map key events to state transformation functions
+  -- Note: For up/down we need result count, so we use a closure over commands/config
+  let keyStateOps ← Event.mapMaybeM (fun (kd : KeyData) =>
+    match kd.event.code with
+    | .char c =>
+      if c.val >= 32 then
+        some fun (state : CommandPaletteState) => state.insertChar c
+      else
+        none
+    | .backspace => some fun (state : CommandPaletteState) => state.backspace
+    | .delete => some fun (state : CommandPaletteState) => state.delete
+    | .left => some fun (state : CommandPaletteState) => state.moveLeft
+    | .right => some fun (state : CommandPaletteState) => state.moveRight
+    | .home => some fun (state : CommandPaletteState) => state.moveHome
+    | .end => some fun (state : CommandPaletteState) => state.moveEnd
+    | .up => some fun (state : CommandPaletteState) =>
+      let filtered := filterCommands state.query commands config.fuzzyMatch config.maxVisible
+      state.moveUp filtered.size
+    | .down => some fun (state : CommandPaletteState) =>
+      let filtered := filterCommands state.query commands config.fuzzyMatch config.maxVisible
+      state.moveDown filtered.size
+    | .escape => some fun (state : CommandPaletteState) => state.setClosed
+    | .enter => some fun (state : CommandPaletteState) => state.setClosed
+    | _ => none) keyEvents
+
+  -- Map control events to state transformation functions
+  let controlStateOps ← Event.mapM (fun (op : ControlOp) =>
+    match op with
+    | .open => fun (state : CommandPaletteState) => state.setOpen
+    | .close => fun (state : CommandPaletteState) => state.setClosed
+    | .toggle => fun (state : CommandPaletteState) => state.toggle) controlEvent
+
+  -- Merge all state operations
+  let allStateOps ← Event.mergeM keyStateOps controlStateOps
+
+  -- Fold state operations over initial state
+  let stateDyn ← foldDyn id initialState allStateOps
+
+  -- Update the isOpen ref whenever state changes (for visibility gating)
+  let _unsub ← SpiderM.liftIO <| stateDyn.updated.subscribe fun state => do
+    isOpenRef.set state.isOpen
 
   -- Create dynamics for isOpen and selectedCommand
   let isOpenDyn ← stateDyn.map' (·.isOpen)
@@ -425,85 +488,34 @@ def commandPalette' (name : String) (commands : Array Command)
     else
       none
 
-  -- Get events context for focus management
-  let events ← getEventsW
+  -- Filter for enter key events (for selection)
+  let enterEvents ← Event.filterM (fun kd => kd.event.code == .enter) keyEvents
 
-  -- Compute input name for focus handling
-  let inputName := if name.isEmpty then widgetName else name
+  -- Attach current state to enter events to get the selected command
+  let selectEvent ← Event.mapMaybeM (fun (state : CommandPaletteState) =>
+    let filtered := filterCommands state.query commands config.fuzzyMatch config.maxVisible
+    if h : state.selectedIndex < filtered.size then
+      some filtered[state.selectedIndex]
+    else
+      none) (← Event.attachWithM (fun (state : CommandPaletteState) _ => state) stateDyn.current enterEvents)
+
+  -- Filter for escape and enter events (for close)
+  let escapeEvents ← Event.filterM (fun kd => kd.event.code == .escape) keyEvents
+  let closeFromEscape ← Event.mapM (fun _ => ()) escapeEvents
+  let closeFromEnter ← Event.mapM (fun _ => ()) enterEvents
+  let closeEvent ← Event.mergeM closeFromEscape closeFromEnter
+
+  -- Handle focus changes when opening/closing
+  let _unsub2 ← SpiderM.liftIO <| stateDyn.updated.subscribe fun state => do
+    if state.isOpen then
+      events.registry.fireFocus (some inputName)
+    else
+      events.registry.fireFocus none
 
   -- Control functions
-  let doOpenPalette : IO Unit := do
-    let state ← stateRef.get
-    let newState := state.setOpen
-    stateRef.set newState
-    fireState newState
-    events.registry.fireFocus (some inputName)
-
-  let doClosePalette : IO Unit := do
-    let state ← stateRef.get
-    let newState := state.setClosed
-    stateRef.set newState
-    fireState newState
-    events.registry.fireFocus none
-    fireClose ()
-
-  let doTogglePalette : IO Unit := do
-    let state ← stateRef.get
-    if state.isOpen then
-      doClosePalette
-    else
-      doOpenPalette
-
-  -- Get visibility-gated key events (only respond when open)
-  let keyEvents ← useVisibilityGatedKeyEventsW isOpenDyn
-
-  -- Subscribe to key events
-  let _unsub ← SpiderM.liftIO <| keyEvents.subscribe fun kd => do
-    let state ← stateRef.get
-    let ke := kd.event
-
-    -- Get current filtered commands for navigation bounds
-    let filteredCommands := filterCommands state.query commands config.fuzzyMatch config.maxVisible
-    let resultCount := filteredCommands.size
-
-    -- Handle key
-    let (newState, shouldSelect, shouldClose) ← match ke.code with
-      | .char c =>
-        if c.val >= 32 then
-          pure (state.insertChar c, false, false)
-        else
-          pure (state, false, false)
-      | .backspace => pure (state.backspace, false, false)
-      | .delete => pure (state.delete, false, false)
-      | .left => pure (state.moveLeft, false, false)
-      | .right => pure (state.moveRight, false, false)
-      | .home => pure (state.moveHome, false, false)
-      | .end => pure (state.moveEnd, false, false)
-      | .up => pure (state.moveUp resultCount, false, false)
-      | .down => pure (state.moveDown resultCount, false, false)
-      | .enter =>
-        -- Select current command
-        if h : state.selectedIndex < filteredCommands.size then
-          pure (state.setClosed, true, true)
-        else
-          pure (state, false, false)
-      | .escape => pure (state.setClosed, false, true)
-      | _ => pure (state, false, false)
-
-    -- Update state and fire events
-    if newState != state then
-      stateRef.set newState
-      fireState newState
-
-    -- Fire select event with the command that was selected (before state changed)
-    if shouldSelect then
-      let filteredAtSelect := filterCommands state.query commands config.fuzzyMatch config.maxVisible
-      if h : state.selectedIndex < filteredAtSelect.size then
-        fireSelect filteredAtSelect[state.selectedIndex]
-
-    if shouldClose then
-      events.registry.fireFocus none
-      fireClose ()
+  let doOpenPalette : IO Unit := fireControl .open
+  let doClosePalette : IO Unit := fireControl .close
+  let doTogglePalette : IO Unit := fireControl .toggle
 
   -- Build render node
   let node ← stateDyn.map' fun state =>
@@ -534,15 +546,72 @@ def dynCommandPalette' (name : String) (commands : Dynamic Spider (Array Command
   -- Register as focusable input component
   let widgetName ← registerComponentW "command-palette" (isInput := true) (nameOverride := name)
 
-  -- Create trigger events for select/close
-  let (selectEvent, fireSelect) ← newTriggerEvent (t := Spider) (a := Command)
-  let (closeEvent, fireClose) ← newTriggerEvent (t := Spider) (a := Unit)
+  -- Get events context for focus management
+  let events ← getEventsW
 
-  -- Track internal state
+  -- Compute input name for focus handling
+  let inputName := if name.isEmpty then widgetName else name
+
+  -- Create trigger events for external control operations
+  let (controlEvent, fireControl) ← newTriggerEvent (t := Spider) (a := ControlOp)
+
+  -- Initial state
   let initialState : CommandPaletteState := {}
-  let stateRef ← SpiderM.liftIO (IO.mkRef initialState)
-  let (stateEvent, fireState) ← newTriggerEvent (t := Spider) (a := CommandPaletteState)
-  let stateDyn ← holdDyn initialState stateEvent
+
+  -- Create a ref to track open state for visibility gating
+  let isOpenRef ← SpiderM.liftIO <| IO.mkRef false
+
+  -- Create visibility behavior from ref
+  let isOpenBehavior := Behavior.fromSample isOpenRef.get
+
+  -- Get visibility-gated key events (only respond when open)
+  let keyEvents ← Event.gateM isOpenBehavior events.keyEvent
+
+  -- Attach commands to key events for state transformations
+  let keyEventsWithCommands ← Event.attachWithM
+    (fun (cmds : Array Command) (kd : KeyData) => (cmds, kd))
+    commands.current keyEvents
+
+  -- Map key events to state transformation functions
+  let keyStateOps ← Event.mapMaybeM (fun ((cmds, kd) : Array Command × KeyData) =>
+    match kd.event.code with
+    | .char c =>
+      if c.val >= 32 then
+        some fun (state : CommandPaletteState) => state.insertChar c
+      else
+        none
+    | .backspace => some fun (state : CommandPaletteState) => state.backspace
+    | .delete => some fun (state : CommandPaletteState) => state.delete
+    | .left => some fun (state : CommandPaletteState) => state.moveLeft
+    | .right => some fun (state : CommandPaletteState) => state.moveRight
+    | .home => some fun (state : CommandPaletteState) => state.moveHome
+    | .end => some fun (state : CommandPaletteState) => state.moveEnd
+    | .up => some fun (state : CommandPaletteState) =>
+      let filtered := filterCommands state.query cmds config.fuzzyMatch config.maxVisible
+      state.moveUp filtered.size
+    | .down => some fun (state : CommandPaletteState) =>
+      let filtered := filterCommands state.query cmds config.fuzzyMatch config.maxVisible
+      state.moveDown filtered.size
+    | .escape => some fun (state : CommandPaletteState) => state.setClosed
+    | .enter => some fun (state : CommandPaletteState) => state.setClosed
+    | _ => none) keyEventsWithCommands
+
+  -- Map control events to state transformation functions
+  let controlStateOps ← Event.mapM (fun (op : ControlOp) =>
+    match op with
+    | .open => fun (state : CommandPaletteState) => state.setOpen
+    | .close => fun (state : CommandPaletteState) => state.setClosed
+    | .toggle => fun (state : CommandPaletteState) => state.toggle) controlEvent
+
+  -- Merge all state operations
+  let allStateOps ← Event.mergeM keyStateOps controlStateOps
+
+  -- Fold state operations over initial state
+  let stateDyn ← foldDyn id initialState allStateOps
+
+  -- Update the isOpen ref whenever state changes (for visibility gating)
+  let _unsub ← SpiderM.liftIO <| stateDyn.updated.subscribe fun state => do
+    isOpenRef.set state.isOpen
 
   -- Create dynamics for isOpen and selectedCommand
   let isOpenDyn ← stateDyn.map' (·.isOpen)
@@ -554,89 +623,34 @@ def dynCommandPalette' (name : String) (commands : Dynamic Spider (Array Command
       none
   ) commands
 
-  -- Get events context for focus management
-  let events ← getEventsW
+  -- Filter for enter key events (for selection)
+  let enterEvents ← Event.filterM (fun (cmds, kd) => kd.event.code == .enter) keyEventsWithCommands
 
-  -- Compute input name for focus handling
-  let inputName := if name.isEmpty then widgetName else name
+  -- Attach current state to enter events to get the selected command
+  let selectEvent ← Event.mapMaybeM (fun ((state, cmds) : CommandPaletteState × Array Command) =>
+    let filtered := filterCommands state.query cmds config.fuzzyMatch config.maxVisible
+    if h : state.selectedIndex < filtered.size then
+      some filtered[state.selectedIndex]
+    else
+      none) (← Event.attachWithM (fun (state : CommandPaletteState) (cmds, _) => (state, cmds)) stateDyn.current enterEvents)
+
+  -- Filter for escape and enter events (for close)
+  let escapeEvents ← Event.filterM (fun (_, kd) => kd.event.code == .escape) keyEventsWithCommands
+  let closeFromEscape ← Event.mapM (fun _ => ()) escapeEvents
+  let closeFromEnter ← Event.mapM (fun _ => ()) enterEvents
+  let closeEvent ← Event.mergeM closeFromEscape closeFromEnter
+
+  -- Handle focus changes when opening/closing
+  let _unsub2 ← SpiderM.liftIO <| stateDyn.updated.subscribe fun state => do
+    if state.isOpen then
+      events.registry.fireFocus (some inputName)
+    else
+      events.registry.fireFocus none
 
   -- Control functions
-  let doOpenPalette : IO Unit := do
-    let state ← stateRef.get
-    let newState := state.setOpen
-    stateRef.set newState
-    fireState newState
-    events.registry.fireFocus (some inputName)
-
-  let doClosePalette : IO Unit := do
-    let state ← stateRef.get
-    let newState := state.setClosed
-    stateRef.set newState
-    fireState newState
-    events.registry.fireFocus none
-    fireClose ()
-
-  let doTogglePalette : IO Unit := do
-    let state ← stateRef.get
-    if state.isOpen then
-      doClosePalette
-    else
-      doOpenPalette
-
-  -- Get visibility-gated key events (only respond when open)
-  let keyEvents ← useVisibilityGatedKeyEventsW isOpenDyn
-
-  -- Attach commands to key events
-  let keyEventsWithCommands ← Event.attachWithM
-    (fun (cmds : Array Command) (kd : KeyData) => (cmds, kd))
-    commands.current keyEvents
-
-  -- Subscribe to key events
-  let _unsub ← SpiderM.liftIO <| keyEventsWithCommands.subscribe fun (cmds, kd) => do
-    let state ← stateRef.get
-    let ke := kd.event
-
-    -- Get current filtered commands for navigation bounds
-    let filteredCommands := filterCommands state.query cmds config.fuzzyMatch config.maxVisible
-    let resultCount := filteredCommands.size
-
-    -- Handle key
-    let (newState, shouldSelect, shouldClose) ← match ke.code with
-      | .char c =>
-        if c.val >= 32 then
-          pure (state.insertChar c, false, false)
-        else
-          pure (state, false, false)
-      | .backspace => pure (state.backspace, false, false)
-      | .delete => pure (state.delete, false, false)
-      | .left => pure (state.moveLeft, false, false)
-      | .right => pure (state.moveRight, false, false)
-      | .home => pure (state.moveHome, false, false)
-      | .end => pure (state.moveEnd, false, false)
-      | .up => pure (state.moveUp resultCount, false, false)
-      | .down => pure (state.moveDown resultCount, false, false)
-      | .enter =>
-        if h : state.selectedIndex < filteredCommands.size then
-          pure (state.setClosed, true, true)
-        else
-          pure (state, false, false)
-      | .escape => pure (state.setClosed, false, true)
-      | _ => pure (state, false, false)
-
-    -- Update state and fire events
-    if newState != state then
-      stateRef.set newState
-      fireState newState
-
-    -- Fire select event with the command that was selected
-    if shouldSelect then
-      let filteredAtSelect := filterCommands state.query cmds config.fuzzyMatch config.maxVisible
-      if h : state.selectedIndex < filteredAtSelect.size then
-        fireSelect filteredAtSelect[state.selectedIndex]
-
-    if shouldClose then
-      events.registry.fireFocus none
-      fireClose ()
+  let doOpenPalette : IO Unit := fireControl .open
+  let doClosePalette : IO Unit := fireControl .close
+  let doTogglePalette : IO Unit := fireControl .toggle
 
   -- Build render node
   let node ← stateDyn.zipWith' (fun state cmds =>

@@ -283,6 +283,9 @@ private def buildSuggestionsNodes (suggestions : Array String) (highlightIndex :
     - Tab to autocomplete with highlighted suggestion
     - Escape to close suggestions dropdown
 
+    This implementation uses FRP-idiomatic state management via foldDyn,
+    avoiding imperative subscribe patterns with IO.mkRef.
+
     Example:
     ```
     let suggestions := #["apple", "apricot", "banana", "blueberry"]
@@ -297,24 +300,6 @@ def autocomplete' (name : String) (suggestions : Array String)
   -- Register as focusable input
   let widgetName ← registerComponentW "autocomplete" (isInput := true) (nameOverride := name)
 
-  -- Create trigger events for select/submit
-  let (selectEvent, fireSelect) ← newTriggerEvent (t := Spider) (a := String)
-  let (submitEvent, fireSubmit) ← newTriggerEvent (t := Spider) (a := String)
-
-  -- Track internal state
-  let initialState : AutocompleteState := {}
-  let stateRef ← SpiderM.liftIO (IO.mkRef initialState)
-  let (stateEvent, fireState) ← newTriggerEvent (t := Spider) (a := AutocompleteState)
-  let stateDyn ← holdDyn initialState stateEvent
-
-  -- Create dynamic for the text value
-  let (valueEvent, fireValue) ← newTriggerEvent (t := Spider) (a := String)
-  let valueDyn ← holdDyn "" valueEvent
-
-  -- Create dynamic for selected item
-  let (selectedItemEvent, fireSelectedItem) ← newTriggerEvent (t := Spider) (a := Option String)
-  let selectedItemDyn ← holdDyn none selectedItemEvent
-
   -- Compute input name for focus handling
   let inputName := if name.isEmpty then widgetName else name
 
@@ -324,93 +309,141 @@ def autocomplete' (name : String) (suggestions : Array String)
   -- Get key events filtered by focus
   let keyEvents ← useFocusedKeyEventsW inputName
 
-  -- Subscribe to key events
-  let _unsub ← SpiderM.liftIO <| keyEvents.subscribe fun kd => do
-    let state ← stateRef.get
+  -- Constants for state transitions
+  let caseSens := config.caseSensitive
+  let maxSugg := config.maxSuggestions
+  let minChars := config.minChars
+
+  -- Initial state
+  let initialState : AutocompleteState := {}
+
+  -- Map key events to state transformation functions
+  let stateOps ← Event.mapMaybeM (fun (kd : KeyData) =>
     let ke := kd.event
-
-    -- Get current filtered suggestions
-    let currentSuggestions := filterSuggestions state.text suggestions
-      config.caseSensitive config.maxSuggestions
-    let suggestionCount := currentSuggestions.size
-
-    -- Handle key
-    let newState ← match ke.code with
-      | .char c =>
-        -- Only handle printable characters
-        if c.val >= 32 then
-          pure (state.insertChar c)
-        else
-          pure state
-      | .backspace => pure state.backspace
-      | .delete => pure state.delete
-      | .left => pure state.moveLeft
-      | .right => pure state.moveRight
-      | .home => pure state.moveHome
-      | .end => pure state.moveEnd
-      | .up =>
-        if state.showSuggestions && suggestionCount > 0 then
-          pure (state.highlightUp suggestionCount)
-        else
-          pure state
-      | .down =>
-        if state.showSuggestions && suggestionCount > 0 then
-          pure (state.highlightDown suggestionCount)
-        else if state.text.length >= config.minChars then
-          pure { state with showSuggestions := true, highlightIndex := 0 }
-        else
-          pure state
-      | .tab =>
-        -- Autocomplete with highlighted suggestion
-        if state.showSuggestions && suggestionCount > 0 then
-          if h : state.highlightIndex < currentSuggestions.size then
-            let selected := currentSuggestions[state.highlightIndex]
-            fireSelect selected
-            pure (state.setText selected)
-          else
-            pure state
-        else
-          pure state
-      | .enter =>
-        -- Select highlighted suggestion if visible, otherwise submit current text
-        if state.showSuggestions && suggestionCount > 0 then
-          if h : state.highlightIndex < currentSuggestions.size then
-            let selected := currentSuggestions[state.highlightIndex]
-            fireSelect selected
-            fireSubmit selected
-            pure (state.setText selected)
-          else
-            fireSubmit state.text
-            pure state.hideSuggestions
-        else
-          fireSubmit state.text
-          pure state.hideSuggestions
-      | .escape =>
-        pure state.hideSuggestions
-      | _ => pure state
-
-    -- Update state and fire events if changed
-    if newState.text != state.text || newState.highlightIndex != state.highlightIndex
-        || newState.cursor != state.cursor || newState.showSuggestions != state.showSuggestions then
-      stateRef.set newState
-      fireState newState
-
-      if newState.text != state.text then
-        fireValue newState.text
-
-      -- Update selected item
-      let newSuggestions := filterSuggestions newState.text suggestions
-        config.caseSensitive config.maxSuggestions
-      if newState.showSuggestions && newSuggestions.size > 0 then
-        if h : newState.highlightIndex < newSuggestions.size then
-          fireSelectedItem (some newSuggestions[newState.highlightIndex])
-        else
-          fireSelectedItem none
+    match ke.code with
+    | .char c =>
+      -- Only handle printable characters
+      if c.val >= 32 then
+        some fun (s : AutocompleteState) => s.insertChar c
       else
-        fireSelectedItem none
+        none
+    | .backspace => some fun (s : AutocompleteState) => s.backspace
+    | .delete => some fun (s : AutocompleteState) => s.delete
+    | .left => some fun (s : AutocompleteState) => s.moveLeft
+    | .right => some fun (s : AutocompleteState) => s.moveRight
+    | .home => some fun (s : AutocompleteState) => s.moveHome
+    | .end => some fun (s : AutocompleteState) => s.moveEnd
+    | .up => some fun (s : AutocompleteState) =>
+      let currentSuggestions := filterSuggestions s.text suggestions caseSens maxSugg
+      let suggestionCount := currentSuggestions.size
+      if s.showSuggestions && suggestionCount > 0 then
+        s.highlightUp suggestionCount
+      else
+        s
+    | .down => some fun (s : AutocompleteState) =>
+      let currentSuggestions := filterSuggestions s.text suggestions caseSens maxSugg
+      let suggestionCount := currentSuggestions.size
+      if s.showSuggestions && suggestionCount > 0 then
+        s.highlightDown suggestionCount
+      else if s.text.length >= minChars then
+        { s with showSuggestions := true, highlightIndex := 0 }
+      else
+        s
+    | .tab => some fun (s : AutocompleteState) =>
+      -- Autocomplete with highlighted suggestion
+      let currentSuggestions := filterSuggestions s.text suggestions caseSens maxSugg
+      let suggestionCount := currentSuggestions.size
+      if s.showSuggestions && suggestionCount > 0 then
+        if h : s.highlightIndex < currentSuggestions.size then
+          let selected := currentSuggestions[s.highlightIndex]
+          s.setText selected
+        else
+          s
+      else
+        s
+    | .enter => some fun (s : AutocompleteState) =>
+      -- Select highlighted suggestion if visible, otherwise just hide
+      let currentSuggestions := filterSuggestions s.text suggestions caseSens maxSugg
+      let suggestionCount := currentSuggestions.size
+      if s.showSuggestions && suggestionCount > 0 then
+        if h : s.highlightIndex < currentSuggestions.size then
+          let selected := currentSuggestions[s.highlightIndex]
+          s.setText selected
+        else
+          s.hideSuggestions
+      else
+        s.hideSuggestions
+    | .escape => some fun (s : AutocompleteState) => s.hideSuggestions
+    | _ => none) keyEvents
+
+  -- Fold state operations - no subscribe needed!
+  let stateDyn ← foldDyn id initialState stateOps
+
+  -- Derive value dynamic from state
+  let valueDyn ← stateDyn.map' (·.text)
+
+  -- Derive selected item from state
+  let selectedItemDyn ← stateDyn.map' fun (s : AutocompleteState) =>
+    let currentSuggestions := filterSuggestions s.text suggestions caseSens maxSugg
+    if s.showSuggestions && currentSuggestions.size > 0 then
+      if h : s.highlightIndex < currentSuggestions.size then
+        some currentSuggestions[s.highlightIndex]
+      else
+        none
+    else
+      none
+
+  -- For selection events on Tab (autocomplete)
+  let tabEvents ← Event.filterM (fun (kd : KeyData) =>
+    kd.event.code == .tab) keyEvents
+
+  -- Attach current state to Tab events to get selected suggestion
+  let selectEventFromTab ← Event.mapMaybeM (fun (s : AutocompleteState) =>
+    let currentSuggestions := filterSuggestions s.text suggestions caseSens maxSugg
+    if s.showSuggestions && currentSuggestions.size > 0 then
+      if h : s.highlightIndex < currentSuggestions.size then
+        some currentSuggestions[s.highlightIndex]
+      else
+        none
+    else
+      none)
+    (← Event.attachWithM (fun (s : AutocompleteState) _ => s) stateDyn.current tabEvents)
+
+  -- For Enter events
+  let enterEvents ← Event.filterM (fun (kd : KeyData) =>
+    kd.event.code == .enter) keyEvents
+
+  -- Attach current state to Enter events to get selected suggestion or current text
+  let enterEventWithState ← Event.attachWithM
+    (fun (s : AutocompleteState) _ => s) stateDyn.current enterEvents
+
+  -- Select event from Enter (only when suggestions are visible and selected)
+  let selectEventFromEnter ← Event.mapMaybeM (fun (s : AutocompleteState) =>
+    let currentSuggestions := filterSuggestions s.text suggestions caseSens maxSugg
+    if s.showSuggestions && currentSuggestions.size > 0 then
+      if h : s.highlightIndex < currentSuggestions.size then
+        some currentSuggestions[s.highlightIndex]
+      else
+        none
+    else
+      none) enterEventWithState
+
+  -- Submit event from Enter (selected suggestion or current text)
+  let submitEvent ← Event.mapM (fun (s : AutocompleteState) =>
+    let currentSuggestions := filterSuggestions s.text suggestions caseSens maxSugg
+    if s.showSuggestions && currentSuggestions.size > 0 then
+      if h : s.highlightIndex < currentSuggestions.size then
+        currentSuggestions[s.highlightIndex]
+      else
+        s.text
+    else
+      s.text) enterEventWithState
+
+  -- Merge select events from Tab and Enter
+  let selectEvent ← Event.leftmostM [selectEventFromTab, selectEventFromEnter]
 
   -- Emit render function
-  let node ← focusedInput.zipWith' (fun currentFocus state =>
+  let node ← focusedInput.zipWith' (fun currentFocus (state : AutocompleteState) =>
     let isFocused := currentFocus == some inputName
 
     -- Filter suggestions
@@ -443,6 +476,9 @@ def autocomplete' (name : String) (suggestions : Array String)
     The suggestions array can change over time, useful for async search
     or when suggestions depend on external state.
 
+    This implementation uses FRP-idiomatic state management via foldDyn,
+    avoiding imperative subscribe patterns with IO.mkRef.
+
     Example:
     ```
     let searchResults ← someDynamicSearchFunction
@@ -454,24 +490,6 @@ def dynAutocomplete' (name : String) (suggestions : Dynamic Spider (Array String
   -- Register as focusable input
   let widgetName ← registerComponentW "dynAutocomplete" (isInput := true) (nameOverride := name)
 
-  -- Create trigger events for select/submit
-  let (selectEvent, fireSelect) ← newTriggerEvent (t := Spider) (a := String)
-  let (submitEvent, fireSubmit) ← newTriggerEvent (t := Spider) (a := String)
-
-  -- Track internal state
-  let initialState : AutocompleteState := {}
-  let stateRef ← SpiderM.liftIO (IO.mkRef initialState)
-  let (stateEvent, fireState) ← newTriggerEvent (t := Spider) (a := AutocompleteState)
-  let stateDyn ← holdDyn initialState stateEvent
-
-  -- Create dynamic for the text value
-  let (valueEvent, fireValue) ← newTriggerEvent (t := Spider) (a := String)
-  let valueDyn ← holdDyn "" valueEvent
-
-  -- Create dynamic for selected item
-  let (selectedItemEvent, fireSelectedItem) ← newTriggerEvent (t := Spider) (a := Option String)
-  let selectedItemDyn ← holdDyn none selectedItemEvent
-
   -- Compute input name for focus handling
   let inputName := if name.isEmpty then widgetName else name
 
@@ -481,95 +499,148 @@ def dynAutocomplete' (name : String) (suggestions : Dynamic Spider (Array String
   -- Get key events filtered by focus
   let keyEvents ← useFocusedKeyEventsW inputName
 
+  -- Constants for state transitions
+  let caseSens := config.caseSensitive
+  let maxSugg := config.maxSuggestions
+  let minChars := config.minChars
+
+  -- Initial state
+  let initialState : AutocompleteState := {}
+
   -- Attach suggestions to key events
   let keyEventsWithSuggestions ← Event.attachWithM
     (fun (currentSuggestions : Array String) (kd : KeyData) => (currentSuggestions, kd))
     suggestions.current keyEvents
 
-  -- Subscribe to key events
-  let _unsub ← SpiderM.liftIO <| keyEventsWithSuggestions.subscribe fun (currentSuggestionsAll, kd) => do
-    let state ← stateRef.get
+  -- Map key events (with suggestions) to state transformation functions
+  let keyStateOps ← Event.mapMaybeM (fun ((currentSuggestionsAll, kd) : Array String × KeyData) =>
     let ke := kd.event
-
-    -- Filter suggestions based on current text
-    let currentSuggestions := filterSuggestions state.text currentSuggestionsAll
-      config.caseSensitive config.maxSuggestions
-    let suggestionCount := currentSuggestions.size
-
-    -- Handle key
-    let newState ← match ke.code with
-      | .char c =>
-        if c.val >= 32 then
-          pure (state.insertChar c)
-        else
-          pure state
-      | .backspace => pure state.backspace
-      | .delete => pure state.delete
-      | .left => pure state.moveLeft
-      | .right => pure state.moveRight
-      | .home => pure state.moveHome
-      | .end => pure state.moveEnd
-      | .up =>
-        if state.showSuggestions && suggestionCount > 0 then
-          pure (state.highlightUp suggestionCount)
-        else
-          pure state
-      | .down =>
-        if state.showSuggestions && suggestionCount > 0 then
-          pure (state.highlightDown suggestionCount)
-        else if state.text.length >= config.minChars then
-          pure { state with showSuggestions := true, highlightIndex := 0 }
-        else
-          pure state
-      | .tab =>
-        if state.showSuggestions && suggestionCount > 0 then
-          if h : state.highlightIndex < currentSuggestions.size then
-            let selected := currentSuggestions[state.highlightIndex]
-            fireSelect selected
-            pure (state.setText selected)
-          else
-            pure state
-        else
-          pure state
-      | .enter =>
-        if state.showSuggestions && suggestionCount > 0 then
-          if h : state.highlightIndex < currentSuggestions.size then
-            let selected := currentSuggestions[state.highlightIndex]
-            fireSelect selected
-            fireSubmit selected
-            pure (state.setText selected)
-          else
-            fireSubmit state.text
-            pure state.hideSuggestions
-        else
-          fireSubmit state.text
-          pure state.hideSuggestions
-      | .escape =>
-        pure state.hideSuggestions
-      | _ => pure state
-
-    -- Update state and fire events if changed
-    if newState.text != state.text || newState.highlightIndex != state.highlightIndex
-        || newState.cursor != state.cursor || newState.showSuggestions != state.showSuggestions then
-      stateRef.set newState
-      fireState newState
-
-      if newState.text != state.text then
-        fireValue newState.text
-
-      -- Update selected item with new suggestions
-      let newSuggestions := filterSuggestions newState.text currentSuggestionsAll
-        config.caseSensitive config.maxSuggestions
-      if newState.showSuggestions && newSuggestions.size > 0 then
-        if h : newState.highlightIndex < newSuggestions.size then
-          fireSelectedItem (some newSuggestions[newState.highlightIndex])
-        else
-          fireSelectedItem none
+    match ke.code with
+    | .char c =>
+      -- Only handle printable characters
+      if c.val >= 32 then
+        some fun (s : AutocompleteState) => s.insertChar c
       else
-        fireSelectedItem none
+        none
+    | .backspace => some fun (s : AutocompleteState) => s.backspace
+    | .delete => some fun (s : AutocompleteState) => s.delete
+    | .left => some fun (s : AutocompleteState) => s.moveLeft
+    | .right => some fun (s : AutocompleteState) => s.moveRight
+    | .home => some fun (s : AutocompleteState) => s.moveHome
+    | .end => some fun (s : AutocompleteState) => s.moveEnd
+    | .up => some fun (s : AutocompleteState) =>
+      let currentSuggestions := filterSuggestions s.text currentSuggestionsAll caseSens maxSugg
+      let suggestionCount := currentSuggestions.size
+      if s.showSuggestions && suggestionCount > 0 then
+        s.highlightUp suggestionCount
+      else
+        s
+    | .down => some fun (s : AutocompleteState) =>
+      let currentSuggestions := filterSuggestions s.text currentSuggestionsAll caseSens maxSugg
+      let suggestionCount := currentSuggestions.size
+      if s.showSuggestions && suggestionCount > 0 then
+        s.highlightDown suggestionCount
+      else if s.text.length >= minChars then
+        { s with showSuggestions := true, highlightIndex := 0 }
+      else
+        s
+    | .tab => some fun (s : AutocompleteState) =>
+      -- Autocomplete with highlighted suggestion
+      let currentSuggestions := filterSuggestions s.text currentSuggestionsAll caseSens maxSugg
+      let suggestionCount := currentSuggestions.size
+      if s.showSuggestions && suggestionCount > 0 then
+        if h : s.highlightIndex < currentSuggestions.size then
+          let selected := currentSuggestions[s.highlightIndex]
+          s.setText selected
+        else
+          s
+      else
+        s
+    | .enter => some fun (s : AutocompleteState) =>
+      -- Select highlighted suggestion if visible, otherwise just hide
+      let currentSuggestions := filterSuggestions s.text currentSuggestionsAll caseSens maxSugg
+      let suggestionCount := currentSuggestions.size
+      if s.showSuggestions && suggestionCount > 0 then
+        if h : s.highlightIndex < currentSuggestions.size then
+          let selected := currentSuggestions[s.highlightIndex]
+          s.setText selected
+        else
+          s.hideSuggestions
+      else
+        s.hideSuggestions
+    | .escape => some fun (s : AutocompleteState) => s.hideSuggestions
+    | _ => none) keyEventsWithSuggestions
+
+  -- Fold state operations - no subscribe needed!
+  let stateDyn ← foldDyn id initialState keyStateOps
+
+  -- Derive value dynamic from state
+  let valueDyn ← stateDyn.map' (·.text)
+
+  -- Derive selected item from state (needs suggestions)
+  let selectedItemDyn ← stateDyn.zipWith' (fun (s : AutocompleteState) (currentSuggestionsAll : Array String) =>
+    let currentSuggestions := filterSuggestions s.text currentSuggestionsAll caseSens maxSugg
+    if s.showSuggestions && currentSuggestions.size > 0 then
+      if h : s.highlightIndex < currentSuggestions.size then
+        some currentSuggestions[s.highlightIndex]
+      else
+        none
+    else
+      none) suggestions
+
+  -- For selection events on Tab (autocomplete)
+  let tabEventsWithSuggestions ← Event.filterM (fun ((_, kd) : Array String × KeyData) =>
+    kd.event.code == .tab) keyEventsWithSuggestions
+
+  -- Attach current state to Tab events to get selected suggestion
+  let selectEventFromTab ← Event.mapMaybeM (fun ((currentSuggestionsAll, _), s) =>
+    let currentSuggestions := filterSuggestions s.text currentSuggestionsAll caseSens maxSugg
+    if s.showSuggestions && currentSuggestions.size > 0 then
+      if h : s.highlightIndex < currentSuggestions.size then
+        some currentSuggestions[s.highlightIndex]
+      else
+        none
+    else
+      none)
+    (← Event.attachWithM (fun (s : AutocompleteState) (data : Array String × KeyData) => (data, s))
+      stateDyn.current tabEventsWithSuggestions)
+
+  -- For Enter events
+  let enterEventsWithSuggestions ← Event.filterM (fun ((_, kd) : Array String × KeyData) =>
+    kd.event.code == .enter) keyEventsWithSuggestions
+
+  -- Attach current state to Enter events to get selected suggestion or current text
+  let enterEventWithState ← Event.attachWithM
+    (fun (s : AutocompleteState) (data : Array String × KeyData) => (data, s))
+    stateDyn.current enterEventsWithSuggestions
+
+  -- Select event from Enter (only when suggestions are visible and selected)
+  let selectEventFromEnter ← Event.mapMaybeM (fun ((currentSuggestionsAll, _), s) =>
+    let currentSuggestions := filterSuggestions s.text currentSuggestionsAll caseSens maxSugg
+    if s.showSuggestions && currentSuggestions.size > 0 then
+      if h : s.highlightIndex < currentSuggestions.size then
+        some currentSuggestions[s.highlightIndex]
+      else
+        none
+    else
+      none) enterEventWithState
+
+  -- Submit event from Enter (selected suggestion or current text)
+  let submitEvent ← Event.mapM (fun ((currentSuggestionsAll, _), s) =>
+    let currentSuggestions := filterSuggestions s.text currentSuggestionsAll caseSens maxSugg
+    if s.showSuggestions && currentSuggestions.size > 0 then
+      if h : s.highlightIndex < currentSuggestions.size then
+        currentSuggestions[s.highlightIndex]
+      else
+        s.text
+    else
+      s.text) enterEventWithState
+
+  -- Merge select events from Tab and Enter
+  let selectEvent ← Event.leftmostM [selectEventFromTab, selectEventFromEnter]
 
   -- Emit render function
-  let node ← focusedInput.zipWith3' (fun currentFocus state currentSuggestionsAll =>
+  let node ← focusedInput.zipWith3' (fun currentFocus (state : AutocompleteState) currentSuggestionsAll =>
     let isFocused := currentFocus == some inputName
 
     -- Filter suggestions

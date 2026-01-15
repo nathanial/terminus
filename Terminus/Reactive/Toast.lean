@@ -144,7 +144,69 @@ private inductive ToastAction where
   | dismissAll
   | tick (currentTime : Nat)
 
+/-! ## Toast State -/
+
+/-- Internal state for the toast container. -/
+private structure ToastState where
+  /-- Current visible toasts. -/
+  toasts : Array Toast
+  /-- Next ID for new toasts. -/
+  nextId : Nat
+  /-- Current elapsed time in milliseconds. -/
+  currentTime : Nat
+  deriving Inhabited
+
+namespace ToastState
+
+/-- Add a new toast to the state. -/
+def addToast (state : ToastState) (message : String) (toastType : ToastType)
+    (config : ToastConfig) : ToastState :=
+  let toast : Toast := {
+    id := state.nextId
+    message
+    toastType
+    createdAt := state.currentTime
+  }
+  let newToasts := if state.toasts.size >= config.maxToasts then
+    if config.newestFirst then
+      #[toast] ++ state.toasts.extract 0 (state.toasts.size - 1)
+    else
+      state.toasts.extract 1 state.toasts.size |>.push toast
+  else
+    if config.newestFirst then
+      #[toast] ++ state.toasts
+    else
+      state.toasts.push toast
+  { state with toasts := newToasts, nextId := state.nextId + 1 }
+
+/-- Dismiss a toast by ID. -/
+def dismissById (state : ToastState) (toastId : Nat) : ToastState :=
+  { state with toasts := state.toasts.filter fun t => t.id != toastId }
+
+/-- Dismiss all toasts. -/
+def dismissAll (state : ToastState) : ToastState :=
+  { state with toasts := #[] }
+
+/-- Update time and remove expired toasts. -/
+def tick (state : ToastState) (elapsedMs : Nat) (config : ToastConfig) : ToastState :=
+  let newState := { state with currentTime := elapsedMs }
+  if config.duration > 0 then
+    let remaining := newState.toasts.filter fun toast =>
+      elapsedMs - toast.createdAt < config.duration
+    { newState with toasts := remaining }
+  else
+    newState
+
+end ToastState
+
 /-! ## Toast Container Widget -/
+
+/-- Internal actions for imperative toast API. -/
+private inductive ToastOp where
+  | add (message : String) (toastType : ToastType)
+  | dismissId (toastId : Nat)
+  | dismissAll
+  | tick (elapsedMs : Nat)
 
 /-- Create a toast notification container widget.
 
@@ -185,81 +247,48 @@ def toastContainer' (config : ToastConfig := {}) : WidgetM ToastManager := do
   let tickEvent ← useTickW
   let env ← SpiderM.getEnv
 
-  -- State refs
-  let toastsRef ← SpiderM.liftIO (IO.mkRef (#[] : Array Toast))
-  let nextIdRef ← SpiderM.liftIO (IO.mkRef 0)
-  let currentTimeRef ← SpiderM.liftIO (IO.mkRef 0)
+  -- Create trigger event for imperative API calls
+  let (opEvent, fireOp) ← newTriggerEvent (t := Spider) (a := ToastOp)
 
-  -- Events for state updates
-  let (toastsEvent, fireToasts) ← newTriggerEvent (t := Spider) (a := Array Toast)
-  let toastsDyn ← holdDyn #[] toastsEvent
+  -- Map tick events to tick operations
+  let tickOps ← Event.mapM (fun (td : TickData) => ToastOp.tick td.elapsedMs) tickEvent
 
-  -- Subscribe to tick events for auto-dismiss
-  let _unsub ← SpiderM.liftIO <| tickEvent.subscribe fun td => do
-    currentTimeRef.set td.elapsedMs
+  -- Merge all operation events
+  let allOps ← Event.leftmostM [opEvent, tickOps]
 
-    if config.duration > 0 then
-      let toasts ← toastsRef.get
-      let currentTime := td.elapsedMs
+  -- Initial state
+  let initialState : ToastState := { toasts := #[], nextId := 0, currentTime := 0 }
 
-      -- Filter out expired toasts
-      let remaining := toasts.filter fun toast =>
-        currentTime - toast.createdAt < config.duration
+  -- Fold all operations into state - NO subscribe needed!
+  let stateDyn : Dynamic Spider ToastState ← foldDyn
+    (fun (op : ToastOp) (state : ToastState) =>
+      match op with
+      | .add message toastType => state.addToast message toastType config
+      | .dismissId toastId => state.dismissById toastId
+      | .dismissAll => state.dismissAll
+      | .tick elapsedMs => state.tick elapsedMs config)
+    initialState allOps
 
-      if remaining.size != toasts.size then
-        env.withFrame do
-          toastsRef.set remaining
-          fireToasts remaining
+  -- Derive toasts dynamic from state
+  let toastsDyn : Dynamic Spider (Array Toast) ← stateDyn.map' (·.toasts)
 
-  -- Show function: adds a new toast
+  -- Show function: fires add operation
   let showFn : String → ToastType → IO Unit := fun message toastType => do
     env.withFrame do
-      let currentTime ← currentTimeRef.get
-      let id ← nextIdRef.modifyGet fun n => (n, n + 1)
+      fireOp (ToastOp.add message toastType)
 
-      let toast : Toast := {
-        id
-        message
-        toastType
-        createdAt := currentTime
-      }
-
-      let toasts ← toastsRef.get
-      -- Add new toast, keeping only maxToasts
-      let newToasts := if toasts.size >= config.maxToasts then
-        -- Remove oldest to make room
-        if config.newestFirst then
-          -- Newest at front, remove from back
-          #[toast] ++ toasts.extract 0 (toasts.size - 1)
-        else
-          -- Newest at back, remove from front
-          toasts.extract 1 toasts.size |>.push toast
-      else
-        if config.newestFirst then
-          #[toast] ++ toasts
-        else
-          toasts.push toast
-
-      toastsRef.set newToasts
-      fireToasts newToasts
-
-  -- Dismiss by ID function
+  -- Dismiss by ID function: fires dismissId operation
   let dismissFn : Nat → IO Unit := fun toastId => do
     env.withFrame do
-      let toasts ← toastsRef.get
-      let remaining := toasts.filter fun t => t.id != toastId
-      if remaining.size != toasts.size then
-        toastsRef.set remaining
-        fireToasts remaining
+      fireOp (ToastOp.dismissId toastId)
 
-  -- Dismiss all function
+  -- Dismiss all function: fires dismissAll operation
   let dismissAllFn : IO Unit := do
     env.withFrame do
-      toastsRef.set #[]
-      fireToasts #[]
+      fireOp ToastOp.dismissAll
 
   -- Render the toast stack
-  let node ← toastsDyn.map' fun toasts => Id.run do
+  let node ← toastsDyn.map' fun (toasts : Array Toast) => Id.run do
     if toasts.isEmpty then
       return RNode.empty
     else

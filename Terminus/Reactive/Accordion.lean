@@ -66,7 +66,7 @@ structure AccordionState where
   openStates : Array Bool := #[]
   /-- Currently focused section index. -/
   focusedIndex : Nat := 0
-  deriving Repr, Inhabited
+  deriving Repr, Inhabited, BEq
 
 namespace AccordionState
 
@@ -167,6 +167,51 @@ private def renderAccordion (sections : Array AccordionSection) (config : Accord
 
 /-! ## Accordion Widget -/
 
+/-- Internal operation type for accordion state transitions. -/
+private inductive AccordionOp
+  | focusUp (sectionCount : Nat)
+  | focusDown (sectionCount : Nat)
+  | focusFirst
+  | focusLast (sectionCount : Nat)
+  | toggle (allowMultiple : Bool)
+  | collapse
+  | expand (allowMultiple : Bool)
+  deriving Repr, Inhabited
+
+/-- Apply an accordion operation to state, returning new state and optional toggle index. -/
+private def AccordionOp.apply (op : AccordionOp) (state : AccordionState)
+    : AccordionState × Option Nat :=
+  match op with
+  | .focusUp sectionCount =>
+    let newState := state.focusUp sectionCount
+    (newState, none)
+  | .focusDown sectionCount =>
+    let newState := state.focusDown sectionCount
+    (newState, none)
+  | .focusFirst =>
+    let newState := state.focusFirst
+    (newState, none)
+  | .focusLast sectionCount =>
+    let newState := state.focusLast sectionCount
+    (newState, none)
+  | .toggle allowMultiple =>
+    let newState := state.toggleSection state.focusedIndex allowMultiple
+    (newState, some state.focusedIndex)
+  | .collapse =>
+    if h : state.focusedIndex < state.openStates.size then
+      if state.openStates[state.focusedIndex] then
+        let newState := state.closeSection state.focusedIndex
+        (newState, some state.focusedIndex)
+      else (state, none)
+    else (state, none)
+  | .expand allowMultiple =>
+    if h : state.focusedIndex < state.openStates.size then
+      if !state.openStates[state.focusedIndex] then
+        let newState := state.openSection state.focusedIndex allowMultiple
+        (newState, some state.focusedIndex)
+      else (state, none)
+    else (state, none)
+
 /-- Create an accordion widget with collapsible sections.
 
     The widget handles:
@@ -200,75 +245,48 @@ def accordion' (sections : Array AccordionSection) (config : AccordionConfig := 
   -- Get focused key events
   let keyEvents ← useFocusedKeyEventsW accordionName config.globalKeys
 
-  -- Create trigger events
-  let (toggleEvent, fireToggle) ← newTriggerEvent (t := Spider) (a := Nat)
-  let (openStatesEvent, fireOpenStates) ← newTriggerEvent (t := Spider) (a := Array Bool)
-  let (focusedEvent, fireFocused) ← newTriggerEvent (t := Spider) (a := Option Nat)
-
   -- Initialize state
   let initialOpenStates := sections.map (·.initiallyOpen)
   let initialState : AccordionState := {
     openStates := initialOpenStates
     focusedIndex := 0
   }
-  let stateRef ← SpiderM.liftIO (IO.mkRef initialState)
-  let (stateEvent, fireState) ← newTriggerEvent (t := Spider) (a := AccordionState)
-  let stateDyn ← holdDyn initialState stateEvent
+  let sectionCount := sections.size
 
-  -- Create result dynamics
-  let openSectionsDyn ← holdDyn initialOpenStates openStatesEvent
-  let focusedSectionDyn ← holdDyn (if sections.isEmpty then none else some 0) focusedEvent
-
-  let updateState : AccordionState → IO Unit := fun newState => do
-    stateRef.set newState
-    fireState newState
-    fireOpenStates newState.openStates
-    fireFocused (some newState.focusedIndex)
-
-  -- Subscribe to key events
-  let _unsub ← SpiderM.liftIO <| keyEvents.subscribe fun kd => do
-    if sections.isEmpty then pure ()
+  -- Map key events to state operations
+  let stateOps ← Event.mapMaybeM (fun (kd : KeyData) =>
+    if sections.isEmpty then none
     else
-      let state ← stateRef.get
-      let ke := kd.event
-      let sectionCount := sections.size
+      match kd.event.code with
+      | .up | .char 'k' => some (AccordionOp.focusUp sectionCount)
+      | .down | .char 'j' => some (AccordionOp.focusDown sectionCount)
+      | .home => some AccordionOp.focusFirst
+      | .end => some (AccordionOp.focusLast sectionCount)
+      | .enter | .space => some (AccordionOp.toggle config.allowMultiple)
+      | .left => some AccordionOp.collapse
+      | .right => some (AccordionOp.expand config.allowMultiple)
+      | _ => none) keyEvents
 
-      match ke.code with
-      | .up | .char 'k' =>
-        let newState := state.focusUp sectionCount
-        if newState.focusedIndex != state.focusedIndex then
-          updateState newState
-      | .down | .char 'j' =>
-        let newState := state.focusDown sectionCount
-        if newState.focusedIndex != state.focusedIndex then
-          updateState newState
-      | .home =>
-        let newState := state.focusFirst
-        if newState.focusedIndex != state.focusedIndex then
-          updateState newState
-      | .end =>
-        let newState := state.focusLast sectionCount
-        if newState.focusedIndex != state.focusedIndex then
-          updateState newState
-      | .enter | .space =>
-        let newState := state.toggleSection state.focusedIndex config.allowMultiple
-        updateState newState
-        fireToggle state.focusedIndex
-      | .left =>
-        -- Collapse focused section
-        if h : state.focusedIndex < state.openStates.size then
-          if state.openStates[state.focusedIndex] then
-            let newState := state.closeSection state.focusedIndex
-            updateState newState
-            fireToggle state.focusedIndex
-      | .right =>
-        -- Expand focused section
-        if h : state.focusedIndex < state.openStates.size then
-          if !state.openStates[state.focusedIndex] then
-            let newState := state.openSection state.focusedIndex config.allowMultiple
-            updateState newState
-            fireToggle state.focusedIndex
-      | _ => pure ()
+  -- Fold state operations with toggle tracking
+  -- We track (state, lastToggle) where lastToggle is the index that was toggled (if any)
+  let stateWithToggleDyn ← foldDyn
+    (fun (op : AccordionOp) (state : AccordionState × Option Nat) =>
+      let (newState, toggleIdx) := op.apply state.1
+      (newState, toggleIdx))
+    (initialState, none)
+    stateOps
+
+  -- Derive the state dynamic
+  let stateDyn ← stateWithToggleDyn.map' (·.1)
+
+  -- Derive output dynamics from state
+  let openSectionsDyn ← stateDyn.map' (·.openStates)
+  let focusedSectionDyn ← stateDyn.map' fun (state : AccordionState) =>
+    if sections.isEmpty then none else some state.focusedIndex
+
+  -- Derive toggle event from state updates (filter for when toggleIdx is some)
+  let toggleEvent ← Event.mapMaybeM (fun (_, toggleIdx) => toggleIdx)
+    stateWithToggleDyn.updated
 
   -- Build content renders for each section (done once at setup)
   let mut contentRenders : Array ComponentRender := #[]

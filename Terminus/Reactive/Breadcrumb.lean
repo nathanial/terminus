@@ -74,53 +74,38 @@ def breadcrumb' (name : String) (items : Array String)
   -- Check if this widget is focused
   let isFocusedDyn ← useIsFocused breadcrumbName
 
-  -- Create trigger events
-  let (navigateEvent, fireNavigate) ← newTriggerEvent (t := Spider) (a := Nat)
-  let (indexEvent, fireIndex) ← newTriggerEvent (t := Spider) (a := Nat)
-
   -- Track internal state
   let initialIndex := if items.isEmpty then 0 else items.size - 1  -- Start at last item
-  let indexRef ← SpiderM.liftIO (IO.mkRef initialIndex)
+  let itemCount := items.size
 
-  -- Create dynamics
-  let internalIndexDyn ← holdDyn initialIndex indexEvent
+  -- Map key events to state transformation functions
+  let stateOps ← Event.mapMaybeM (fun (kd : KeyData) =>
+    if items.isEmpty then none
+    else match kd.event.code with
+      | .left => some fun (idx : Nat) =>
+          if idx == 0 then
+            if config.wrapAround then itemCount - 1 else 0
+          else idx - 1
+      | .right => some fun (idx : Nat) =>
+          if idx >= itemCount - 1 then
+            if config.wrapAround then 0 else itemCount - 1
+          else idx + 1
+      | .home => some fun (_ : Nat) => 0
+      | .end => some fun (_ : Nat) => itemCount - 1
+      | _ => none) keyEvents
+
+  -- Fold state operations to get index dynamic
+  let internalIndexDyn ← foldDyn (fun op state => op state) initialIndex stateOps
 
   -- Combine focus state with index to get focusedIndex
   let focusedIndexDyn ← internalIndexDyn.zipWith' (fun idx focused =>
     if focused then some idx else none
   ) isFocusedDyn
 
-  -- Subscribe to key events
-  let _unsub ← SpiderM.liftIO <| keyEvents.subscribe fun kd => do
-    if items.isEmpty then pure ()
-    else
-      let currentIndex ← indexRef.get
-      let ke := kd.event
-
-      -- Handle navigation keys
-      let newIndex ← match ke.code with
-        | .left =>
-          if currentIndex == 0 then
-            if config.wrapAround then pure (items.size - 1) else pure 0
-          else
-            pure (currentIndex - 1)
-        | .right =>
-          if currentIndex >= items.size - 1 then
-            if config.wrapAround then pure 0 else pure (items.size - 1)
-          else
-            pure (currentIndex + 1)
-        | .home => pure 0
-        | .end => pure (items.size - 1)
-        | .enter =>
-          -- Fire navigation event and keep index
-          fireNavigate currentIndex
-          pure currentIndex
-        | _ => pure currentIndex
-
-      -- Update state if changed
-      if newIndex != currentIndex then
-        indexRef.set newIndex
-        fireIndex newIndex
+  -- Filter for Enter key events and attach current index to create navigate event
+  let enterEvents ← Event.filterM (fun (kd : KeyData) => kd.event.code == .enter) keyEvents
+  let navigateEvent ← Event.attachWithM (fun (idx : Nat) (_ : KeyData) => idx)
+    internalIndexDyn.current enterEvents
 
   -- Render the breadcrumb
   let node ← internalIndexDyn.zipWith' (fun currentIndex focused =>
@@ -183,68 +168,55 @@ def breadcrumbDyn' (name : String) (items : Dynamic Spider (Array String))
   -- Check if this widget is focused
   let isFocusedDyn ← useIsFocused breadcrumbName
 
-  -- Create trigger events
-  let (navigateEvent, fireNavigate) ← newTriggerEvent (t := Spider) (a := Nat)
-  let (indexUpdateEvent, fireIndexUpdate) ← newTriggerEvent (t := Spider) (a := Nat)
-
   -- Get initial items to determine initial state
   let initialItems ← SpiderM.liftIO items.sample
   let initialIndex := if initialItems.isEmpty then 0 else initialItems.size - 1
 
-  -- Build index dynamic from update events
-  let internalIndexDyn ← holdDyn initialIndex indexUpdateEvent
+  -- Attach items to key events to get item count for navigation
+  let keyEventsWithItems ← Event.attachWithM (fun (currentItems : Array String) (kd : KeyData) =>
+    (currentItems, kd)) items.current keyEvents
+
+  -- Map key events to state transformation functions (with item count context)
+  let keyStateOps ← Event.mapMaybeM (fun ((currentItems, kd) : Array String × KeyData) =>
+    if currentItems.isEmpty then none
+    else
+      let itemCount := currentItems.size
+      match kd.event.code with
+        | .left => some fun (idx : Nat) =>
+            if idx == 0 then
+              if config.wrapAround then itemCount - 1 else 0
+            else idx - 1
+        | .right => some fun (idx : Nat) =>
+            if idx >= itemCount - 1 then
+              if config.wrapAround then 0 else itemCount - 1
+            else idx + 1
+        | .home => some fun (_ : Nat) => 0
+        | .end => some fun (_ : Nat) => itemCount - 1
+        | _ => none) keyEventsWithItems
+
+  -- Map item changes to clamping operations (when items shrink)
+  let itemClampOps ← Event.mapM (fun (newItems : Array String) =>
+    fun (idx : Nat) =>
+      if idx >= newItems.size then
+        if newItems.isEmpty then 0 else newItems.size - 1
+      else idx) items.updated
+
+  -- Merge key ops and item clamp ops (key ops take precedence via leftmost)
+  let allStateOps ← Event.leftmostM [keyStateOps, itemClampOps]
+
+  -- Fold all state operations to get index dynamic
+  let internalIndexDyn ← foldDyn (fun op state => op state) initialIndex allStateOps
 
   -- Combine focus state with index to get focusedIndex
   let focusedIndexDyn ← internalIndexDyn.zipWith' (fun idx focused =>
     if focused then some idx else none
   ) isFocusedDyn
 
-  -- Attach items to key events
-  let keyEventsWithItems ← Event.attachWithM (fun (currentItems : Array String) (kd : KeyData) =>
-    (currentItems, kd)) items.current keyEvents
-
-  -- Attach current index to key events
-  let keyEventsWithState ← Event.attachWithM
-    (fun (currentIndex : Nat) (itemsAndKey : Array String × KeyData) => (currentIndex, itemsAndKey))
-    internalIndexDyn.current keyEventsWithItems
-
-  -- Subscribe to key events
-  let _keyUnsub ← SpiderM.liftIO <| keyEventsWithState.subscribe fun (currentIndex, (currentItems, kd)) => do
-    if currentItems.isEmpty then pure ()
-    else
-      let itemCount := currentItems.size
-      let ke := kd.event
-      let (newIndex, shouldNavigate) := match ke.code with
-        | .left =>
-          if currentIndex == 0 then
-            if config.wrapAround then (itemCount - 1, false) else (0, false)
-          else
-            (currentIndex - 1, false)
-        | .right =>
-          if currentIndex >= itemCount - 1 then
-            if config.wrapAround then (0, false) else (itemCount - 1, false)
-          else
-            (currentIndex + 1, false)
-        | .home => (0, false)
-        | .end => (itemCount - 1, false)
-        | .enter => (currentIndex, true)
-        | _ => (currentIndex, false)
-
-      if shouldNavigate then
-        fireNavigate currentIndex
-      if newIndex != currentIndex then
-        fireIndexUpdate newIndex
-
-  -- Attach current index to item changes
-  let itemChangesWithState ← Event.attachWithM
-    (fun (currentIndex : Nat) (newItems : Array String) => (currentIndex, newItems))
-    internalIndexDyn.current items.updated
-
-  -- Subscribe to item changes to clamp index
-  let _itemUnsub ← SpiderM.liftIO <| itemChangesWithState.subscribe fun (currentIndex, newItems) => do
-    if currentIndex >= newItems.size then
-      let newIndex := if newItems.isEmpty then 0 else newItems.size - 1
-      fireIndexUpdate newIndex
+  -- Filter for Enter key events and attach current index to create navigate event
+  let enterEvents ← Event.filterM (fun ((_, kd) : Array String × KeyData) =>
+    kd.event.code == .enter) keyEventsWithItems
+  let navigateEvent ← Event.attachWithM (fun (idx : Nat) (_ : Array String × KeyData) => idx)
+    internalIndexDyn.current enterEvents
 
   -- Render the breadcrumb
   let node ← internalIndexDyn.zipWith3' (fun currentIndex currentItems focused =>

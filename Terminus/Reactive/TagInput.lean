@@ -60,7 +60,11 @@ private structure TagInputState where
   input : String := ""
   /-- Cursor position within input. -/
   cursor : Nat := 0
-  deriving Repr, Inhabited
+  /-- Tag that was just added (for deriving events). -/
+  lastAddedTag : Option String := none
+  /-- Tag that was just removed (for deriving events). -/
+  lastRemovedTag : Option String := none
+  deriving Repr, Inhabited, BEq
 
 namespace TagInputState
 
@@ -68,67 +72,98 @@ namespace TagInputState
 def insertChar (s : TagInputState) (c : Char) : TagInputState :=
   let before := s.input.take s.cursor
   let after := s.input.drop s.cursor
-  { s with input := before ++ c.toString ++ after, cursor := s.cursor + 1 }
+  { s with
+    input := before ++ c.toString ++ after
+    cursor := s.cursor + 1
+    lastAddedTag := none
+    lastRemovedTag := none }
 
 /-- Delete character before cursor (backspace). -/
 def backspace (s : TagInputState) : TagInputState :=
-  if s.cursor == 0 then s
+  if s.cursor == 0 then { s with lastAddedTag := none, lastRemovedTag := none }
   else
     let before := s.input.take (s.cursor - 1)
     let after := s.input.drop s.cursor
-    { s with input := before ++ after, cursor := s.cursor - 1 }
+    { s with
+      input := before ++ after
+      cursor := s.cursor - 1
+      lastAddedTag := none
+      lastRemovedTag := none }
 
 /-- Delete character at cursor (delete key). -/
 def delete (s : TagInputState) : TagInputState :=
-  if s.cursor >= s.input.length then s
+  if s.cursor >= s.input.length then { s with lastAddedTag := none, lastRemovedTag := none }
   else
     let before := s.input.take s.cursor
     let after := s.input.drop (s.cursor + 1)
-    { s with input := before ++ after }
+    { s with
+      input := before ++ after
+      lastAddedTag := none
+      lastRemovedTag := none }
 
 /-- Move cursor left. -/
 def moveLeft (s : TagInputState) : TagInputState :=
-  if s.cursor == 0 then s
-  else { s with cursor := s.cursor - 1 }
+  if s.cursor == 0 then { s with lastAddedTag := none, lastRemovedTag := none }
+  else { s with cursor := s.cursor - 1, lastAddedTag := none, lastRemovedTag := none }
 
 /-- Move cursor right. -/
 def moveRight (s : TagInputState) : TagInputState :=
-  if s.cursor >= s.input.length then s
-  else { s with cursor := s.cursor + 1 }
+  if s.cursor >= s.input.length then { s with lastAddedTag := none, lastRemovedTag := none }
+  else { s with cursor := s.cursor + 1, lastAddedTag := none, lastRemovedTag := none }
 
 /-- Move cursor to start. -/
 def moveHome (s : TagInputState) : TagInputState :=
-  { s with cursor := 0 }
+  { s with cursor := 0, lastAddedTag := none, lastRemovedTag := none }
 
 /-- Move cursor to end. -/
 def moveEnd (s : TagInputState) : TagInputState :=
-  { s with cursor := s.input.length }
+  { s with cursor := s.input.length, lastAddedTag := none, lastRemovedTag := none }
 
 /-- Add current input as a tag (if non-empty) and clear input. -/
-def addTag (s : TagInputState) (maxTags : Option Nat) : TagInputState × Option String :=
+def addTag (s : TagInputState) (maxTags : Option Nat) : TagInputState :=
   let trimmed := s.input.trim
   if trimmed.isEmpty then
-    (s, none)
+    { s with lastAddedTag := none, lastRemovedTag := none }
   else if s.tags.contains trimmed then
     -- Don't add duplicate tags
-    ({ s with input := "", cursor := 0 }, none)
+    { s with input := "", cursor := 0, lastAddedTag := none, lastRemovedTag := none }
   else
     match maxTags with
     | some max =>
-      if s.tags.size >= max then (s, none)
-      else ({ s with tags := s.tags.push trimmed, input := "", cursor := 0 }, some trimmed)
+      if s.tags.size >= max then
+        { s with lastAddedTag := none, lastRemovedTag := none }
+      else
+        { s with
+          tags := s.tags.push trimmed
+          input := ""
+          cursor := 0
+          lastAddedTag := some trimmed
+          lastRemovedTag := none }
     | none =>
-      ({ s with tags := s.tags.push trimmed, input := "", cursor := 0 }, some trimmed)
+      { s with
+        tags := s.tags.push trimmed
+        input := ""
+        cursor := 0
+        lastAddedTag := some trimmed
+        lastRemovedTag := none }
 
 /-- Remove the last tag (for backspace on empty input). -/
-def removeLastTag (s : TagInputState) : TagInputState × Option String :=
+def removeLastTag (s : TagInputState) : TagInputState :=
   if s.tags.isEmpty then
-    (s, none)
+    { s with lastAddedTag := none, lastRemovedTag := none }
   else
     let removed := s.tags.back!
-    ({ s with tags := s.tags.pop }, some removed)
+    { s with
+      tags := s.tags.pop
+      lastAddedTag := none
+      lastRemovedTag := some removed }
 
 end TagInputState
+
+/-! ## State Operation Type -/
+
+/-- A state operation transforms TagInputState. -/
+private abbrev StateOp := TagInputState → TagInputState
 
 /-! ## TagInput Widget -/
 
@@ -155,21 +190,14 @@ def tagInput' (name : String) (initialTags : Array String := #[])
   let widgetName ← registerComponentW "tagInput" (isInput := true) (nameOverride := name)
   let inputName := if name.isEmpty then widgetName else name
 
-  -- Create trigger events
-  let (tagAddedEvent, fireTagAdded) ← newTriggerEvent (t := Spider) (a := String)
-  let (tagRemovedEvent, fireTagRemoved) ← newTriggerEvent (t := Spider) (a := String)
-  let (tagsEvent, fireTags) ← newTriggerEvent (t := Spider) (a := Array String)
-  let (inputEvent, fireInput) ← newTriggerEvent (t := Spider) (a := String)
-  let (stateEvent, fireState) ← newTriggerEvent (t := Spider) (a := TagInputState)
-
-  -- Track internal state
-  let initialState : TagInputState := { tags := initialTags, input := "", cursor := 0 }
-  let stateRef ← SpiderM.liftIO (IO.mkRef initialState)
-  let stateDyn ← holdDyn initialState stateEvent
-
-  -- Create dynamics for tags and input
-  let tagsDyn ← holdDyn initialTags tagsEvent
-  let inputDyn ← holdDyn "" inputEvent
+  -- Initial state
+  let initialState : TagInputState := {
+    tags := initialTags
+    input := ""
+    cursor := 0
+    lastAddedTag := none
+    lastRemovedTag := none
+  }
 
   -- Get focus state (for rendering)
   let focusedInput ← useFocusedInputW
@@ -177,54 +205,47 @@ def tagInput' (name : String) (initialTags : Array String := #[])
   -- Get key events filtered by focus
   let keyEvents ← useFocusedKeyEventsW inputName
 
-  -- Subscribe to key events
-  let _unsub ← SpiderM.liftIO <| keyEvents.subscribe fun kd => do
-    let state ← stateRef.get
+  -- Map key events to state transformation functions
+  let stateOps ← Event.mapMaybeM (fun (kd : KeyData) =>
     let ke := kd.event
-
-    -- Handle key
-    let (newState, tagAdded, tagRemoved) ← match ke.code with
-      | .char c =>
-        -- Only handle printable characters
-        if c.val >= 32 then
-          pure (state.insertChar c, none, none)
-        else
-          pure (state, none, none)
-      | .backspace =>
+    match ke.code with
+    | .char c =>
+      -- Only handle printable characters
+      if c.val >= 32 then
+        some fun (state : TagInputState) => state.insertChar c
+      else
+        none
+    | .backspace =>
+      some fun (state : TagInputState) =>
         if state.input.isEmpty then
-          -- Remove last tag when backspacing on empty input
-          let (newState, removed) := state.removeLastTag
-          pure (newState, none, removed)
+          state.removeLastTag
         else
-          pure (state.backspace, none, none)
-      | .delete => pure (state.delete, none, none)
-      | .left => pure (state.moveLeft, none, none)
-      | .right => pure (state.moveRight, none, none)
-      | .home => pure (state.moveHome, none, none)
-      | .end => pure (state.moveEnd, none, none)
-      | .enter =>
-        let (newState, added) := state.addTag config.maxTags
-        pure (newState, added, none)
-      | _ => pure (state, none, none)
+          state.backspace
+    | .delete =>
+      some fun (state : TagInputState) => state.delete
+    | .left =>
+      some fun (state : TagInputState) => state.moveLeft
+    | .right =>
+      some fun (state : TagInputState) => state.moveRight
+    | .home =>
+      some fun (state : TagInputState) => state.moveHome
+    | .end =>
+      some fun (state : TagInputState) => state.moveEnd
+    | .enter =>
+      some fun (state : TagInputState) => state.addTag config.maxTags
+    | _ => none) keyEvents
 
-    -- Update state and fire events
-    if newState.tags != state.tags || newState.input != state.input || newState.cursor != state.cursor then
-      stateRef.set newState
-      fireState newState
+  -- Fold state operations into state dynamic
+  let stateDyn ← foldDyn (fun op state => op state) initialState stateOps
 
-      if newState.tags != state.tags then
-        fireTags newState.tags
+  -- Derive dynamics for tags and input
+  let tagsDyn ← stateDyn.map' (·.tags)
+  let inputDyn ← stateDyn.map' (·.input)
 
-      if newState.input != state.input then
-        fireInput newState.input
+  -- Derive tag added/removed events from state updates
+  let tagAddedEvent ← Event.mapMaybeM (fun (state : TagInputState) => state.lastAddedTag) stateDyn.updated
 
-      match tagAdded with
-      | some tag => fireTagAdded tag
-      | none => pure ()
-
-      match tagRemoved with
-      | some tag => fireTagRemoved tag
-      | none => pure ()
+  let tagRemovedEvent ← Event.mapMaybeM (fun (state : TagInputState) => state.lastRemovedTag) stateDyn.updated
 
   -- Emit render function
   let node ← focusedInput.zipWith' (fun currentFocus state =>

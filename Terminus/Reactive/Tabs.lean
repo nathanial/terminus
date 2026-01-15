@@ -58,6 +58,9 @@ structure TabsResult where
     -- Use tabs.activeTab to get current selection
     -- Use tabs.onTabChange to handle tab switches
     ```
+
+    This implementation uses FRP-idiomatic state management via foldDyn,
+    avoiding imperative subscribe patterns with IO.mkRef.
 -/
 def tabs' (labels : Array String) (initial : Nat := 0)
     (config : TabsConfig := {}) : WidgetM TabsResult := do
@@ -71,52 +74,39 @@ def tabs' (labels : Array String) (initial : Nat := 0)
   -- Get focused key events
   let keyEvents ← useFocusedKeyEventsW tabsName config.globalKeys
 
-  -- Create trigger events
-  let (tabChangeEvent, fireTabChange) ← newTriggerEvent (t := Spider) (a := Nat)
-  let (indexEvent, fireIndex) ← newTriggerEvent (t := Spider) (a := Nat)
-
-  -- Track internal state
+  -- Initial state
   let initialTab := if initial < labels.size then initial else 0
-  let tabRef ← SpiderM.liftIO (IO.mkRef initialTab)
+  let labelCount := labels.size
+  let maxIndex := if labelCount > 0 then labelCount - 1 else 0
 
-  -- Create dynamics
-  let activeTabDyn ← holdDyn initialTab indexEvent
+  -- Map key events to state transformation functions
+  let stateOps ← Event.mapMaybeM (fun kd =>
+    if labels.isEmpty then none
+    else match kd.event.code with
+    | .left => some fun (idx : Nat) =>
+        if idx == 0 then
+          if config.wrapAround then maxIndex else 0
+        else idx - 1
+    | .right => some fun (idx : Nat) =>
+        if idx >= maxIndex then
+          if config.wrapAround then 0 else maxIndex
+        else idx + 1
+    | .home => some fun (_ : Nat) => 0
+    | .end => some fun (_ : Nat) => maxIndex
+    | .char c =>
+        -- Number key shortcuts (1-9)
+        if config.showNumbers && c >= '1' && c <= '9' then
+          let targetIdx := c.toNat - '1'.toNat
+          if targetIdx < labelCount then some fun (_ : Nat) => targetIdx
+          else none
+        else none
+    | _ => none) keyEvents
 
-  -- Subscribe to key events
-  let _unsub ← SpiderM.liftIO <| keyEvents.subscribe fun kd => do
-    if labels.isEmpty then pure ()
-    else
-      let currentTab ← tabRef.get
-      let ke := kd.event
+  -- Fold state operations - no subscribe needed!
+  let activeTabDyn ← foldDyn (fun op state => op state) initialTab stateOps
 
-      -- Handle navigation keys
-      let newTab ← match ke.code with
-        | .left =>
-          if currentTab == 0 then
-            if config.wrapAround then pure (labels.size - 1) else pure 0
-          else
-            pure (currentTab - 1)
-        | .right =>
-          if currentTab >= labels.size - 1 then
-            if config.wrapAround then pure 0 else pure (labels.size - 1)
-          else
-            pure (currentTab + 1)
-        | .home => pure 0
-        | .end => pure (labels.size - 1)
-        | .char c =>
-          -- Number key shortcuts (1-9)
-          if config.showNumbers && c >= '1' && c <= '9' then
-            let idx := c.toNat - '1'.toNat
-            if idx < labels.size then pure idx else pure currentTab
-          else
-            pure currentTab
-        | _ => pure currentTab
-
-      -- Update state and fire events if changed
-      if newTab != currentTab then
-        tabRef.set newTab
-        fireIndex newTab
-        fireTabChange newTab
+  -- Derive change event from state updates
+  let tabChangeEvent := activeTabDyn.updated
 
   let node ← activeTabDyn.map' fun currentTab =>
     Id.run do
@@ -161,8 +151,9 @@ def numberedTabs' (labels : Array String) (initial : Nat := 0)
 /-- Create tabs with a dynamic label array.
     The tabs update when labels change, preserving selection where possible.
 
-    This implementation uses FRP-idiomatic state management via holdDyn and
-    attachWithM, avoiding imperative subscribe patterns with IO.mkRef. -/
+    This implementation uses FRP-idiomatic state management via foldDyn,
+    avoiding imperative subscribe patterns with IO.mkRef. Key events and
+    label changes are merged into a single stream of state operations. -/
 def dynTabs' (labels : Reactive.Dynamic Spider (Array String)) (initial : Nat := 0)
     (config : TabsConfig := {}) : WidgetM TabsResult := do
   -- Register as focusable component
@@ -175,67 +166,57 @@ def dynTabs' (labels : Reactive.Dynamic Spider (Array String)) (initial : Nat :=
   -- Get focused key events
   let keyEvents ← useFocusedKeyEventsW tabsName config.globalKeys
 
-  -- Create trigger event for external notification and state updates
-  let (tabChangeEvent, fireTabChange) ← newTriggerEvent (t := Spider) (a := Nat)
-  let (tabUpdateEvent, fireTabUpdate) ← newTriggerEvent (t := Spider) (a := Nat)
+  -- Initial tab index (will be clamped at render time if out of bounds)
+  -- We use the provided initial value; clamping happens in the render function
+  -- and in the label clamp operations when labels change.
+  let initialTab := initial
 
-  -- Get initial labels to determine initial state
-  let initialLabels ← SpiderM.liftIO labels.sample
-  let initialTab := if initial < initialLabels.size then initial else 0
-
-  -- Build activeTabDyn from the tab update events
-  let activeTabDyn ← holdDyn initialTab tabUpdateEvent
-
-  -- Attach labels to key events
+  -- Attach labels to key events so we can compute state ops with current label count
   let keyEventsWithLabels ← Event.attachWithM (fun (currentLabels : Array String) (kd : KeyData) =>
     (currentLabels, kd)) labels.current keyEvents
 
-  -- Attach current tab to key events
-  let keyEventsWithState ← Event.attachWithM
-    (fun (currentTab : Nat) (labelsAndKey : Array String × KeyData) => (currentTab, labelsAndKey))
-    activeTabDyn.current keyEventsWithLabels
-
-  -- Subscribe to key events to compute and fire new tab
-  let _keyUnsub ← SpiderM.liftIO <| keyEventsWithState.subscribe fun (currentTab, (currentLabels, kd)) => do
-    if currentLabels.isEmpty then pure ()
+  -- Map key events (with labels) to state transformation functions
+  let keyStateOps ← Event.mapMaybeM (fun (currentLabels, kd) =>
+    if currentLabels.isEmpty then none
     else
       let labelCount := currentLabels.size
-      let ke := kd.event
-      let newTab := match ke.code with
-        | .left =>
-          if currentTab == 0 then
-            if config.wrapAround then labelCount - 1 else 0
-          else
-            currentTab - 1
-        | .right =>
-          if currentTab >= labelCount - 1 then
-            if config.wrapAround then 0 else labelCount - 1
-          else
-            currentTab + 1
-        | .home => 0
-        | .end => labelCount - 1
-        | .char c =>
+      let maxIndex := labelCount - 1
+      match kd.event.code with
+      | .left => some fun (idx : Nat) =>
+          if idx == 0 then
+            if config.wrapAround then maxIndex else 0
+          else idx - 1
+      | .right => some fun (idx : Nat) =>
+          if idx >= maxIndex then
+            if config.wrapAround then 0 else maxIndex
+          else idx + 1
+      | .home => some fun (_ : Nat) => 0
+      | .end => some fun (_ : Nat) => maxIndex
+      | .char c =>
           if config.showNumbers && c >= '1' && c <= '9' then
-            let idx := c.toNat - '1'.toNat
-            if idx < labelCount then idx else currentTab
-          else
-            currentTab
-        | _ => currentTab
+            let targetIdx := c.toNat - '1'.toNat
+            if targetIdx < labelCount then some fun (_ : Nat) => targetIdx
+            else none
+          else none
+      | _ => none) keyEventsWithLabels
 
-      if newTab != currentTab then
-        fireTabUpdate newTab
-        fireTabChange newTab
+  -- Map label change events to state clamping operations
+  -- When labels change, clamp the current index to be within bounds
+  let labelClampOps ← Event.mapMaybeM (fun (newLabels : Array String) =>
+    -- Return a function that clamps the index if needed
+    some fun (currentIdx : Nat) =>
+      if newLabels.isEmpty then 0
+      else if currentIdx >= newLabels.size then newLabels.size - 1
+      else currentIdx) labels.updated
 
-  -- Attach current tab to label changes
-  let labelChangesWithState ← Event.attachWithM
-    (fun (currentTab : Nat) (newLabels : Array String) => (currentTab, newLabels))
-    activeTabDyn.current labels.updated
+  -- Merge key operations and label clamp operations into single stream
+  let allStateOps ← Event.mergeM keyStateOps labelClampOps
 
-  -- Subscribe to label changes to clamp tab index
-  let _labelUnsub ← SpiderM.liftIO <| labelChangesWithState.subscribe fun (currentTab, newLabels) => do
-    if currentTab >= newLabels.size then
-      let newTab := if newLabels.isEmpty then 0 else newLabels.size - 1
-      fireTabUpdate newTab
+  -- Fold all state operations - no subscribe needed!
+  let activeTabDyn ← foldDyn (fun op state => op state) initialTab allStateOps
+
+  -- Derive change event from state updates
+  let tabChangeEvent := activeTabDyn.updated
 
   -- Render the tabs
   let node ← activeTabDyn.zipWith' (fun currentTab currentLabels =>

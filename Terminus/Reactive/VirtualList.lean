@@ -205,7 +205,7 @@ def renderScrollIndicator (state : VirtualListState) (itemCount : Nat)
       ...       |  <- scroll indicator
     ```
 -/
-def virtualList' [ToString α] (name : String) (items : Array α)
+def virtualList' [ToString α] [BEq α] (name : String) (items : Array α)
     (config : VirtualListConfig := {}) : WidgetM (VirtualListResult α) := do
   -- Register as focusable component
   let widgetName ← registerComponentW "virtualList" (isInput := true)
@@ -219,70 +219,53 @@ def virtualList' [ToString α] (name : String) (items : Array α)
   -- Get focused key events
   let keyEvents ← useFocusedKeyEventsW listName config.globalKeys
 
-  -- Create trigger events
-  let (selectEvent, fireSelect) ← newTriggerEvent (t := Spider) (a := Nat)
-  let (changeEvent, fireChange) ← newTriggerEvent (t := Spider) (a := α)
-  let (indexEvent, fireIndex) ← newTriggerEvent (t := Spider) (a := Nat)
-  let (itemEvent, fireItem) ← newTriggerEvent (t := Spider) (a := Option α)
-  let (rangeEvent, fireRange) ← newTriggerEvent (t := Spider) (a := Nat × Nat)
-
   -- Initialize state
   let initialState : VirtualListState := (VirtualListState.mk 0 0).adjustScroll config.visibleRows
-  let stateRef ← SpiderM.liftIO (IO.mkRef initialState)
-  let (stateEvent, fireState) ← newTriggerEvent (t := Spider) (a := VirtualListState)
-  let stateDyn ← holdDyn initialState stateEvent
 
-  -- Create dynamics
-  let selectedIndexDyn ← holdDyn 0 indexEvent
-  let initialItem := if h : 0 < items.size then some items[0] else none
-  let selectedItemDyn ← holdDyn initialItem itemEvent
-  let initialRange := initialState.visibleRange items.size config.visibleRows
-  let visibleRangeDyn ← holdDyn initialRange rangeEvent
+  -- Map key events to state transformation functions
+  let stateOps ← Event.mapMaybeM (fun (kd : KeyData) =>
+    if items.isEmpty then none
+    else match kd.event.code with
+    | .up => some fun (state : VirtualListState) =>
+        state.moveUp items.size config.wrapAround |>.adjustScroll config.visibleRows
+    | .down => some fun (state : VirtualListState) =>
+        state.moveDown items.size config.wrapAround |>.adjustScroll config.visibleRows
+    | .char 'k' => some fun (state : VirtualListState) =>
+        state.moveUp items.size config.wrapAround |>.adjustScroll config.visibleRows
+    | .char 'j' => some fun (state : VirtualListState) =>
+        state.moveDown items.size config.wrapAround |>.adjustScroll config.visibleRows
+    | .pageUp => some fun (state : VirtualListState) =>
+        state.pageUp config.visibleRows |>.adjustScroll config.visibleRows
+    | .pageDown => some fun (state : VirtualListState) =>
+        state.pageDown items.size config.visibleRows |>.adjustScroll config.visibleRows
+    | .home => some fun (state : VirtualListState) =>
+        state.moveToFirst.adjustScroll config.visibleRows
+    | .end => some fun (state : VirtualListState) =>
+        state.moveToLast items.size |>.adjustScroll config.visibleRows
+    | _ => none) keyEvents
 
-  -- Subscribe to key events
-  let _unsub ← SpiderM.liftIO <| keyEvents.subscribe fun kd => do
-    if items.isEmpty then pure ()
-    else
-      let state ← stateRef.get
-      let ke := kd.event
+  -- Fold state operations - no subscribe needed!
+  let stateDyn ← foldDyn id initialState stateOps
 
-      -- Handle navigation keys
-      let newState ← match ke.code with
-        | .up => pure (state.moveUp items.size config.wrapAround |>.adjustScroll config.visibleRows)
-        | .down => pure (state.moveDown items.size config.wrapAround |>.adjustScroll config.visibleRows)
-        | .char 'k' => pure (state.moveUp items.size config.wrapAround |>.adjustScroll config.visibleRows)
-        | .char 'j' => pure (state.moveDown items.size config.wrapAround |>.adjustScroll config.visibleRows)
-        | .pageUp => pure (state.pageUp config.visibleRows |>.adjustScroll config.visibleRows)
-        | .pageDown => pure (state.pageDown items.size config.visibleRows |>.adjustScroll config.visibleRows)
-        | .home => pure (state.moveToFirst.adjustScroll config.visibleRows)
-        | .end => pure (state.moveToLast items.size |>.adjustScroll config.visibleRows)
-        | .enter =>
-          if h : state.selected < items.size then
-            fireSelect state.selected
-          pure state
-        | .space =>
-          if h : state.selected < items.size then
-            fireSelect state.selected
-          pure state
-        | _ => pure state
+  -- Derive dynamics from state
+  let selectedIndexDyn ← stateDyn.map' (·.selected)
+  let selectedItemDyn ← stateDyn.map' fun (state : VirtualListState) =>
+    if h : state.selected < items.size then some items[state.selected] else none
+  let visibleRangeDyn ← stateDyn.map' fun (state : VirtualListState) =>
+    state.visibleRange items.size config.visibleRows
 
-      -- Update state and fire events if selection changed
-      if newState.selected != state.selected then
-        stateRef.set newState
-        fireState newState
-        fireIndex newState.selected
-        let newRange := newState.visibleRange items.size config.visibleRows
-        fireRange newRange
-        if h : newState.selected < items.size then
-          fireItem (some items[newState.selected])
-          fireChange items[newState.selected]
-        else
-          fireItem none
-      else if newState.scrollOffset != state.scrollOffset then
-        stateRef.set newState
-        fireState newState
-        let newRange := newState.visibleRange items.size config.visibleRows
-        fireRange newRange
+  -- Filter for enter/space key events for selection
+  let selectKeyEvents ← Event.filterM (fun (kd : KeyData) =>
+    kd.event.code == .enter || kd.event.code == .space) keyEvents
+
+  -- Derive select event (fires selected index when Enter/Space pressed)
+  let selectEvent ← Event.attachWithM
+    (fun (state : VirtualListState) (_ : KeyData) => state.selected)
+    stateDyn.current selectKeyEvents
+
+  -- Derive change event from state updates (fires when selection changes to new item)
+  let changeEvent ← Event.mapMaybeM (fun (state : VirtualListState) =>
+    if h : state.selected < items.size then some items[state.selected] else none) stateDyn.updated
 
   -- Render the list
   let node ← stateDyn.map' fun state =>
@@ -336,7 +319,7 @@ def virtualList' [ToString α] (name : String) (items : Array α)
     let list ← dynVirtualList' "results" searchResults { visibleRows := 15 }
     ```
 -/
-def dynVirtualList' [ToString α] [BEq α] (name : String)
+def dynVirtualList' [ToString α] [BEq α] [Inhabited α] (name : String)
     (items : Reactive.Dynamic Spider (Array α))
     (config : VirtualListConfig := {}) : WidgetM (VirtualListResult α) := do
   -- Register as focusable component
@@ -351,69 +334,51 @@ def dynVirtualList' [ToString α] [BEq α] (name : String)
   -- Get focused key events
   let keyEvents ← useFocusedKeyEventsW listName config.globalKeys
 
-  -- Create trigger events
-  let (selectEvent, fireSelect) ← newTriggerEvent (t := Spider) (a := Nat)
-  let (changeEvent, fireChange) ← newTriggerEvent (t := Spider) (a := α)
-
-  -- Get initial items to determine initial state
-  let initialItems ← SpiderM.liftIO items.sample
+  -- Initialize state
   let initialState : VirtualListState := (VirtualListState.mk 0 0).adjustScroll config.visibleRows
 
-  -- Create a trigger event for state updates
-  let (stateUpdateEvent, fireStateUpdate) ← newTriggerEvent (t := Spider) (a := VirtualListState)
-
-  -- Build stateDyn from the state update events
-  let stateDyn ← holdDyn initialState stateUpdateEvent
-
-  -- Attach items to key events to compute new state
+  -- Attach items to key events to get item count for state transitions
   let keyEventsWithItems ← Event.attachWithM (fun (currentItems : Array α) (kd : KeyData) =>
     (currentItems, kd)) items.current keyEvents
 
-  -- Attach current state to key events to compute state transitions
-  let keyEventsWithState ← Event.attachWithM
-    (fun (state : VirtualListState) (itemsAndKey : Array α × KeyData) => (state, itemsAndKey))
-    stateDyn.current keyEventsWithItems
+  -- Map key events with items to state transformation functions
+  let keyStateOps ← Event.mapMaybeM (fun ((currentItems, kd) : Array α × KeyData) =>
+    if currentItems.isEmpty then none
+    else match kd.event.code with
+    | .up => some fun (state : VirtualListState) =>
+        state.moveUp currentItems.size config.wrapAround |>.adjustScroll config.visibleRows
+    | .down => some fun (state : VirtualListState) =>
+        state.moveDown currentItems.size config.wrapAround |>.adjustScroll config.visibleRows
+    | .char 'k' => some fun (state : VirtualListState) =>
+        state.moveUp currentItems.size config.wrapAround |>.adjustScroll config.visibleRows
+    | .char 'j' => some fun (state : VirtualListState) =>
+        state.moveDown currentItems.size config.wrapAround |>.adjustScroll config.visibleRows
+    | .pageUp => some fun (state : VirtualListState) =>
+        state.pageUp config.visibleRows |>.adjustScroll config.visibleRows
+    | .pageDown => some fun (state : VirtualListState) =>
+        state.pageDown currentItems.size config.visibleRows |>.adjustScroll config.visibleRows
+    | .home => some fun (state : VirtualListState) =>
+        state.moveToFirst.adjustScroll config.visibleRows
+    | .end => some fun (state : VirtualListState) =>
+        state.moveToLast currentItems.size |>.adjustScroll config.visibleRows
+    | _ => none) keyEventsWithItems
 
-  -- Subscribe to key events to compute and fire new state
-  let _keyUnsub ← SpiderM.liftIO <| keyEventsWithState.subscribe fun (state, (currentItems, kd)) => do
-    if currentItems.isEmpty then pure ()
-    else
-      let ke := kd.event
-      let newState := match ke.code with
-        | .up => state.moveUp currentItems.size config.wrapAround |>.adjustScroll config.visibleRows
-        | .down => state.moveDown currentItems.size config.wrapAround |>.adjustScroll config.visibleRows
-        | .char 'k' => state.moveUp currentItems.size config.wrapAround |>.adjustScroll config.visibleRows
-        | .char 'j' => state.moveDown currentItems.size config.wrapAround |>.adjustScroll config.visibleRows
-        | .pageUp => state.pageUp config.visibleRows |>.adjustScroll config.visibleRows
-        | .pageDown => state.pageDown currentItems.size config.visibleRows |>.adjustScroll config.visibleRows
-        | .home => state.moveToFirst.adjustScroll config.visibleRows
-        | .end => state.moveToLast currentItems.size |>.adjustScroll config.visibleRows
-        | .enter => state
-        | .space => state
-        | _ => state
+  -- Map item changes to state adjustment functions (clamp selection when items shrink)
+  let itemAdjustOps ← Event.mapMaybeM (fun (newItems : Array α) =>
+    -- Always return a function that clamps if needed
+    some fun (state : VirtualListState) =>
+      if state.selected >= newItems.size then
+        let newSelected := if newItems.isEmpty then 0 else newItems.size - 1
+        { state with selected := newSelected }.adjustScroll config.visibleRows
+      else
+        state
+  ) items.updated
 
-      -- Handle enter/space selection
-      match ke.code with
-      | .enter | .space =>
-        if h : state.selected < currentItems.size then
-          fireSelect state.selected
-          fireChange currentItems[state.selected]
-      | _ => pure ()
+  -- Merge both event streams into single state operations stream
+  let allStateOps ← Event.mergeM keyStateOps itemAdjustOps
 
-      if newState.selected != state.selected || newState.scrollOffset != state.scrollOffset then
-        fireStateUpdate newState
-
-  -- Attach current state to item changes to clamp selection
-  let itemChangesWithState ← Event.attachWithM
-    (fun (state : VirtualListState) (newItems : Array α) => (state, newItems))
-    stateDyn.current items.updated
-
-  -- Subscribe to item changes to adjust selection
-  let _itemUnsub ← SpiderM.liftIO <| itemChangesWithState.subscribe fun (state, newItems) => do
-    if state.selected >= newItems.size then
-      let newSelected := if newItems.isEmpty then 0 else newItems.size - 1
-      let newState := { state with selected := newSelected }.adjustScroll config.visibleRows
-      fireStateUpdate newState
+  -- Fold all state operations - no subscribe needed!
+  let stateDyn ← foldDyn id initialState allStateOps
 
   -- Derive selectedIndex from state
   let selectedIndexDyn ← stateDyn.map' (·.selected)
@@ -428,6 +393,21 @@ def dynVirtualList' [ToString α] [BEq α] (name : String)
   let visibleRangeDyn ← stateDyn.zipWith' (fun (state : VirtualListState) (currentItems : Array α) =>
     state.visibleRange currentItems.size config.visibleRows
   ) items
+
+  -- Filter for enter/space key events for selection
+  let selectKeyEventsWithItems ← Event.filterM (fun ((_, kd) : Array α × KeyData) =>
+    kd.event.code == .enter || kd.event.code == .space) keyEventsWithItems
+
+  -- Derive select event (fires selected index when Enter/Space pressed)
+  let selectEvent ← Event.attachWithM
+    (fun (state : VirtualListState) (_ : Array α × KeyData) => state.selected)
+    stateDyn.current selectKeyEventsWithItems
+
+  -- Derive change event: attach items to select event and extract selected item
+  let changeEvent ← Event.attachWithM
+    (fun (currentItems : Array α) (idx : Nat) =>
+      if h : idx < currentItems.size then currentItems[idx] else currentItems[0]!)
+    items.current selectEvent
 
   -- Render the list
   let node ← stateDyn.zipWith' (fun state currentItems =>

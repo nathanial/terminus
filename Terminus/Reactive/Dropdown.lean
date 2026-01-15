@@ -164,71 +164,67 @@ def selectDropdown' (name : String) (items : Array String) (config : DropdownCon
   -- Get focused key events
   let keyEvents ← useFocusedKeyEventsW inputName
 
-  -- Create trigger events
-  let (selectEvent, fireSelect) ← newTriggerEvent (t := Spider) (a := Nat)
-  let (stateEvent, fireState) ← newTriggerEvent (t := Spider) (a := DropdownState)
-  let (indexEvent, fireIndex) ← newTriggerEvent (t := Spider) (a := Option Nat)
-  let (itemEvent, fireItem) ← newTriggerEvent (t := Spider) (a := Option String)
-  let (openEvent, fireOpen) ← newTriggerEvent (t := Spider) (a := Bool)
+  -- Constants for state transitions
+  let itemCount := items.size
+  let wrap := config.wrapAround
+  let maxVis := config.maxVisible
 
-  -- Track internal state
+  -- Initial state
   let initialState : DropdownState := {}
-  let stateRef ← SpiderM.liftIO (IO.mkRef initialState)
-  let stateDyn ← holdDyn initialState stateEvent
 
-  -- Create result dynamics
-  let selectedIndexDyn ← holdDyn none indexEvent
-  let selectedItemDyn ← holdDyn none itemEvent
-  let isOpenDyn ← holdDyn false openEvent
-
-  -- Subscribe to key events
-  let _unsub ← SpiderM.liftIO <| keyEvents.subscribe fun kd => do
-    let state ← stateRef.get
+  -- Map key events to state transformation functions
+  let stateOps ← Event.mapMaybeM (fun (kd : KeyData) =>
     let ke := kd.event
-
-    if state.isOpen then
-      -- Handle navigation when open
-      let newState ← match ke.code with
+    some fun (state : DropdownState) =>
+      if state.isOpen then
+        -- Handle navigation when open
+        match ke.code with
         | .up | .char 'k' =>
-          pure (state.moveUp items.size config.wrapAround |>.adjustScroll config.maxVisible)
+          state.moveUp itemCount wrap |>.adjustScroll maxVis
         | .down | .char 'j' =>
-          pure (state.moveDown items.size config.wrapAround |>.adjustScroll config.maxVisible)
+          state.moveDown itemCount wrap |>.adjustScroll maxVis
         | .home =>
-          pure (state.moveToFirst.adjustScroll config.maxVisible)
+          state.moveToFirst.adjustScroll maxVis
         | .end =>
-          pure (state.moveToLast items.size |>.adjustScroll config.maxVisible)
+          state.moveToLast itemCount |>.adjustScroll maxVis
         | .enter | .space =>
           -- Select the highlighted item
-          let selectedState := state.selectHighlighted
-          if h : state.highlightedIndex < items.size then
-            fireSelect state.highlightedIndex
-            fireIndex (some state.highlightedIndex)
-            fireItem (some items[state.highlightedIndex])
-          pure selectedState
+          state.selectHighlighted
         | .escape =>
           -- Close without selecting
-          pure state.closeMenu
-        | _ => pure state
+          state.closeMenu
+        | _ => state
+      else
+        -- Handle activation when closed
+        match ke.code with
+        | .enter | .space | .down | .char 'j' =>
+          state.openMenu.adjustScroll maxVis
+        | _ => state) keyEvents
 
-      if newState != state then
-        stateRef.set newState
-        fireState newState
-        fireOpen newState.isOpen
-    else
-      -- Handle activation when closed
-      match ke.code with
-      | .enter | .space =>
-        let newState := state.openMenu.adjustScroll config.maxVisible
-        stateRef.set newState
-        fireState newState
-        fireOpen newState.isOpen
-      | .down | .char 'j' =>
-        -- Down arrow also opens the dropdown
-        let newState := state.openMenu.adjustScroll config.maxVisible
-        stateRef.set newState
-        fireState newState
-        fireOpen newState.isOpen
-      | _ => pure ()
+  -- Fold state operations - NO subscribe needed!
+  let stateDyn ← foldDyn (fun op state => op state) initialState stateOps
+
+  -- Derive dynamics from state
+  let isOpenDyn ← stateDyn.map' (·.isOpen)
+  let selectedIndexDyn ← stateDyn.map' (·.selectedIndex)
+  let selectedItemDyn ← stateDyn.map' fun (state : DropdownState) =>
+    match state.selectedIndex with
+    | some idx => if h : idx < items.size then some items[idx] else none
+    | none => none
+
+  -- For selection event, filter enter/space events when open and attach state
+  let enterSpaceEvents ← Event.filterM (fun (kd : KeyData) =>
+    kd.event.code == .enter || kd.event.code == .space) keyEvents
+
+  -- Attach current state to enter/space events, then filter for when open
+  let selectEvent ← Event.mapMaybeM (fun (state : DropdownState) =>
+      -- Only fire if the dropdown was open (before this selection closed it)
+      -- and the highlighted index is valid
+      if h : state.highlightedIndex < items.size then
+        some state.highlightedIndex
+      else
+        none)
+    (← Event.attachWithM (fun (state : DropdownState) _ => state) stateDyn.current enterSpaceEvents)
 
   -- Focus for rendering
   let focusedInput ← useFocusedInputW
@@ -313,12 +309,10 @@ def selectDropdownWithDefault' (name : String) (items : Array String) (initialIn
   -- Get focused key events
   let keyEvents ← useFocusedKeyEventsW inputName
 
-  -- Create trigger events
-  let (selectEvent, fireSelect) ← newTriggerEvent (t := Spider) (a := Nat)
-  let (stateEvent, fireState) ← newTriggerEvent (t := Spider) (a := DropdownState)
-  let (indexEvent, fireIndex) ← newTriggerEvent (t := Spider) (a := Option Nat)
-  let (itemEvent, fireItem) ← newTriggerEvent (t := Spider) (a := Option String)
-  let (openEvent, fireOpen) ← newTriggerEvent (t := Spider) (a := Bool)
+  -- Constants for state transitions
+  let itemCount := items.size
+  let wrap := config.wrapAround
+  let maxVis := config.maxVisible
 
   -- Track internal state with initial selection
   let clampedInitial := if initialIndex < items.size then initialIndex else 0
@@ -326,54 +320,57 @@ def selectDropdownWithDefault' (name : String) (items : Array String) (initialIn
     selectedIndex := if items.isEmpty then none else some clampedInitial
     highlightedIndex := clampedInitial
   }
-  let stateRef ← SpiderM.liftIO (IO.mkRef initialState)
-  let stateDyn ← holdDyn initialState stateEvent
 
-  -- Create result dynamics with initial values
-  let initialSelectedIndex := if items.isEmpty then none else some clampedInitial
-  let initialSelectedItem := if h : clampedInitial < items.size then some items[clampedInitial] else none
-  let selectedIndexDyn ← holdDyn initialSelectedIndex indexEvent
-  let selectedItemDyn ← holdDyn initialSelectedItem itemEvent
-  let isOpenDyn ← holdDyn false openEvent
-
-  -- Subscribe to key events (same logic as dropdown')
-  let _unsub ← SpiderM.liftIO <| keyEvents.subscribe fun kd => do
-    let state ← stateRef.get
+  -- Map key events to state transformation functions
+  let stateOps ← Event.mapMaybeM (fun (kd : KeyData) =>
     let ke := kd.event
-
-    if state.isOpen then
-      let newState ← match ke.code with
+    some fun (state : DropdownState) =>
+      if state.isOpen then
+        -- Handle navigation when open
+        match ke.code with
         | .up | .char 'k' =>
-          pure (state.moveUp items.size config.wrapAround |>.adjustScroll config.maxVisible)
+          state.moveUp itemCount wrap |>.adjustScroll maxVis
         | .down | .char 'j' =>
-          pure (state.moveDown items.size config.wrapAround |>.adjustScroll config.maxVisible)
+          state.moveDown itemCount wrap |>.adjustScroll maxVis
         | .home =>
-          pure (state.moveToFirst.adjustScroll config.maxVisible)
+          state.moveToFirst.adjustScroll maxVis
         | .end =>
-          pure (state.moveToLast items.size |>.adjustScroll config.maxVisible)
+          state.moveToLast itemCount |>.adjustScroll maxVis
         | .enter | .space =>
-          let selectedState := state.selectHighlighted
-          if h : state.highlightedIndex < items.size then
-            fireSelect state.highlightedIndex
-            fireIndex (some state.highlightedIndex)
-            fireItem (some items[state.highlightedIndex])
-          pure selectedState
+          state.selectHighlighted
         | .escape =>
-          pure state.closeMenu
-        | _ => pure state
+          state.closeMenu
+        | _ => state
+      else
+        -- Handle activation when closed
+        match ke.code with
+        | .enter | .space | .down | .char 'j' =>
+          state.openMenu.adjustScroll maxVis
+        | _ => state) keyEvents
 
-      if newState != state then
-        stateRef.set newState
-        fireState newState
-        fireOpen newState.isOpen
-    else
-      match ke.code with
-      | .enter | .space | .down | .char 'j' =>
-        let newState := state.openMenu.adjustScroll config.maxVisible
-        stateRef.set newState
-        fireState newState
-        fireOpen newState.isOpen
-      | _ => pure ()
+  -- Fold state operations - NO subscribe needed!
+  let stateDyn ← foldDyn (fun op state => op state) initialState stateOps
+
+  -- Derive dynamics from state
+  let isOpenDyn ← stateDyn.map' (·.isOpen)
+  let selectedIndexDyn ← stateDyn.map' (·.selectedIndex)
+  let selectedItemDyn ← stateDyn.map' fun (state : DropdownState) =>
+    match state.selectedIndex with
+    | some idx => if h : idx < items.size then some items[idx] else none
+    | none => none
+
+  -- For selection event, filter enter/space events when open and attach state
+  let enterSpaceEvents ← Event.filterM (fun (kd : KeyData) =>
+    kd.event.code == .enter || kd.event.code == .space) keyEvents
+
+  -- Attach current state to enter/space events, then filter for when open
+  let selectEvent ← Event.mapMaybeM (fun (state : DropdownState) =>
+      -- Only fire if the highlighted index is valid
+      if h : state.highlightedIndex < items.size then
+        some state.highlightedIndex
+      else
+        none)
+    (← Event.attachWithM (fun (state : DropdownState) _ => state) stateDyn.current enterSpaceEvents)
 
   -- Focus for rendering
   let focusedInput ← useFocusedInputW

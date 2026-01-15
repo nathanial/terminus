@@ -186,30 +186,20 @@ def stepper' (name : String) (initial : Int := 0) (config : StepperConfig := {})
   -- Get focused key events
   let keyEvents ← useFocusedKeyEventsW inputName
 
-  -- Create events and state
-  let (valueEvent, fireValue) ← newTriggerEvent (t := Spider) (a := Int)
-  let valueRef ← SpiderM.liftIO (IO.mkRef clampedInitial)
-  let valueDyn ← holdDyn clampedInitial valueEvent
-
-  -- Key handling
-  let _unsub ← SpiderM.liftIO <| keyEvents.subscribe fun kd => do
-    let current ← valueRef.get
+  -- Map key events to value transformation functions
+  let valueOps ← Event.mapMaybeM (fun kd =>
     let ke := kd.event
+    match ke.code with
+    | .up | .char 'k' | .char '+' =>
+      some fun (v : Int) => min config.max (v + config.step)
+    | .down | .char 'j' | .char '-' =>
+      some fun (v : Int) => max config.min (v - config.step)
+    | .home => some fun (_ : Int) => config.min
+    | .end => some fun (_ : Int) => config.max
+    | _ => none) keyEvents
 
-    let newVal ← match ke.code with
-      | .up | .char 'k' | .char '+' =>
-        pure (min config.max (current + config.step))
-      | .down | .char 'j' | .char '-' =>
-        pure (max config.min (current - config.step))
-      | .home =>
-        pure config.min
-      | .end =>
-        pure config.max
-      | _ => pure current
-
-    if newVal != current then
-      valueRef.set newVal
-      fireValue newVal
+  -- Fold value operations
+  let valueDyn ← foldDyn (fun op v => op v) clampedInitial valueOps
 
   -- Focus for rendering
   let focusedInput ← useFocusedInputW
@@ -249,7 +239,7 @@ def stepper' (name : String) (initial : Int := 0) (config : StepperConfig := {})
 
   pure {
     value := valueDyn
-    onChange := valueEvent
+    onChange := valueDyn.updated
   }
 
 /-! ## Slider Widget -/
@@ -316,31 +306,21 @@ def slider' (name : String) (initial : Float := 0.5) (config : SliderConfig := {
   -- Get focused key events
   let keyEvents ← useFocusedKeyEventsW inputName
 
-  -- Create events and state
-  let (valueEvent, fireValue) ← newTriggerEvent (t := Spider) (a := Float)
-  let valueRef ← SpiderM.liftIO (IO.mkRef clampedInitial)
-  let valueDyn ← holdDyn clampedInitial valueEvent
-
-  -- Key handling
-  let _unsub ← SpiderM.liftIO <| keyEvents.subscribe fun kd => do
-    let current ← valueRef.get
+  -- Map key events to value transformation functions
+  let valueOps ← Event.mapMaybeM (fun kd =>
     let ke := kd.event
     let step := if ke.modifiers.shift then config.largeStep else config.step
+    match ke.code with
+    | .left | .char 'h' =>
+      some fun (v : Float) => max config.minValue (v - step)
+    | .right | .char 'l' =>
+      some fun (v : Float) => min config.maxValue (v + step)
+    | .home => some fun (_ : Float) => config.minValue
+    | .end => some fun (_ : Float) => config.maxValue
+    | _ => none) keyEvents
 
-    let newVal ← match ke.code with
-      | .left | .char 'h' =>
-        pure (max config.minValue (current - step))
-      | .right | .char 'l' =>
-        pure (min config.maxValue (current + step))
-      | .home =>
-        pure config.minValue
-      | .end =>
-        pure config.maxValue
-      | _ => pure current
-
-    if newVal != current then
-      valueRef.set newVal
-      fireValue newVal
+  -- Fold value operations
+  let valueDyn ← foldDyn (fun op v => op v) clampedInitial valueOps
 
   -- Focus for rendering
   let focusedInput ← useFocusedInputW
@@ -384,7 +364,7 @@ def slider' (name : String) (initial : Float := 0.5) (config : SliderConfig := {
 
   pure {
     value := valueDyn
-    onChange := valueEvent
+    onChange := valueDyn.updated
   }
 
 /-! ## PasswordInput Widget -/
@@ -455,96 +435,78 @@ def passwordInput' (name : String) (config : PasswordInputConfig := {})
   let widgetName ← registerComponentW "passwordInput" (isInput := true) (nameOverride := name)
   let inputName := if name.isEmpty then widgetName else name
 
-  -- Create events
-  let (submitEvent, fireSubmit) ← newTriggerEvent (t := Spider) (a := String)
-  let (cancelEvent, fireCancel) ← newTriggerEvent (t := Spider) (a := Unit)
-  let (changeEvent, fireChange) ← newTriggerEvent (t := Spider) (a := String)
-  let (valueEvent, fireValue) ← newTriggerEvent (t := Spider) (a := String)
-  let (revealEvent, fireReveal) ← newTriggerEvent (t := Spider) (a := Bool)
-  let (stateEvent, fireState) ← newTriggerEvent (t := Spider) (a := PasswordState)
-
-  -- State
-  let initialState : PasswordState := {}
-  let stateRef ← SpiderM.liftIO (IO.mkRef initialState)
-  let stateDyn ← holdDyn initialState stateEvent
-  let valueDyn ← holdDyn "" valueEvent
-  let revealDyn ← holdDyn false revealEvent
-
   -- Get focused key events
   let keyEvents ← useFocusedKeyEventsW inputName
 
-  -- Key handling
-  let _unsub ← SpiderM.liftIO <| keyEvents.subscribe fun kd => do
-    let state ← stateRef.get
-    let ke := kd.event
+  -- State
+  let initialState : PasswordState := {}
 
-    -- Check for reveal toggle first
+  -- Map key events to state transformation functions
+  let stateOps ← Event.mapMaybeM (fun kd =>
+    let ke := kd.event
+    -- Reveal toggle
     if ke.code == config.revealKey then
-      let newState := { state with revealed := !state.revealed }
-      stateRef.set newState
-      fireState newState
-      fireReveal newState.revealed
+      some fun (state : PasswordState) => { state with revealed := !state.revealed }
     else
-      let newState ← match ke.code with
-        | .char c =>
-          if c.val >= 32 then
+      match ke.code with
+      | .char c =>
+        if c.val >= 32 then
+          some fun (state : PasswordState) =>
             match config.maxLength with
             | some maxLen =>
-              if state.text.length >= maxLen then pure state
+              if state.text.length >= maxLen then state
               else
                 let before := state.text.take state.cursor
                 let after := state.text.drop state.cursor
-                pure { state with
-                  text := before ++ c.toString ++ after
-                  cursor := state.cursor + 1
-                }
+                { state with text := before ++ c.toString ++ after, cursor := state.cursor + 1 }
             | none =>
               let before := state.text.take state.cursor
               let after := state.text.drop state.cursor
-              pure { state with
-                text := before ++ c.toString ++ after
-                cursor := state.cursor + 1
-              }
-          else
-            pure state
-        | .backspace =>
-          if state.cursor == 0 then pure state
+              { state with text := before ++ c.toString ++ after, cursor := state.cursor + 1 }
+        else none
+      | .backspace =>
+        some fun (state : PasswordState) =>
+          if state.cursor == 0 then state
           else
             let before := state.text.take (state.cursor - 1)
             let after := state.text.drop state.cursor
-            pure { state with text := before ++ after, cursor := state.cursor - 1 }
-        | .delete =>
-          if state.cursor >= state.text.length then pure state
+            { state with text := before ++ after, cursor := state.cursor - 1 }
+      | .delete =>
+        some fun (state : PasswordState) =>
+          if state.cursor >= state.text.length then state
           else
             let before := state.text.take state.cursor
             let after := state.text.drop (state.cursor + 1)
-            pure { state with text := before ++ after }
-        | .left =>
-          if state.cursor == 0 then pure state
-          else pure { state with cursor := state.cursor - 1 }
-        | .right =>
-          if state.cursor >= state.text.length then pure state
-          else pure { state with cursor := state.cursor + 1 }
-        | .home =>
-          pure { state with cursor := 0 }
-        | .end =>
-          pure { state with cursor := state.text.length }
-        | .enter =>
-          fireSubmit state.text
-          pure state
-        | .escape =>
-          fireCancel ()
-          pure state
-        | _ => pure state
+            { state with text := before ++ after }
+      | .left =>
+        some fun (state : PasswordState) =>
+          if state.cursor == 0 then state
+          else { state with cursor := state.cursor - 1 }
+      | .right =>
+        some fun (state : PasswordState) =>
+          if state.cursor >= state.text.length then state
+          else { state with cursor := state.cursor + 1 }
+      | .home => some fun (state : PasswordState) => { state with cursor := 0 }
+      | .end => some fun (state : PasswordState) => { state with cursor := state.text.length }
+      | _ => none) keyEvents
 
-      if newState.text != state.text then
-        stateRef.set newState
-        fireState newState
-        fireValue newState.text
-        fireChange newState.text
-      else if newState.cursor != state.cursor then
-        stateRef.set newState
-        fireState newState
+  -- Fold state operations
+  let stateDyn ← foldDyn (fun op state => op state) initialState stateOps
+
+  -- Derive value and reveal dynamics from state
+  let valueDyn ← stateDyn.map' (·.text)
+  let revealDyn ← stateDyn.map' (·.revealed)
+
+  -- Derive submit event: fires current text when Enter pressed
+  let enterEvents ← Event.filterM (fun kd => kd.event.code == .enter) keyEvents
+  let submitEvent ← Event.attachWithM (fun state _ => state.text) stateDyn.current enterEvents
+
+  -- Derive cancel event: fires when Escape pressed
+  let cancelEvent ← Event.filterM (fun kd => kd.event.code == .escape) keyEvents
+  let cancelEvent ← Event.mapM (fun _ => ()) cancelEvent
+
+  -- Derive change event from text changes
+  let changeEvent ← Event.mapM (·.text) stateDyn.updated
 
   -- Focus for rendering
   let focusedInput ← useFocusedInputW
