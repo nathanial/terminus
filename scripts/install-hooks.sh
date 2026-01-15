@@ -16,8 +16,8 @@ cat > "$PROJECT_ROOT/.git/hooks/pre-commit" << 'EOF'
 
 BASELINE_FILE=".frp-baseline"
 
-# Count current .subscribe and .sample usages (excluding .lake build cache)
-current_count=$(grep -rn '\.subscribe\|\.sample' --include='*.lean' . --exclude-dir=.lake 2>/dev/null | wc -l | tr -d ' ')
+# Count current .subscribe and .sample usages in widget code only (not tests)
+current_count=$(grep -rn '\.subscribe\|\.sample' --include='*.lean' ./Terminus/Reactive 2>/dev/null | wc -l | tr -d ' ')
 
 # Read baseline
 if [ ! -f "$BASELINE_FILE" ]; then
@@ -40,7 +40,7 @@ if [ "$current_count" -gt "$baseline" ]; then
     echo "  Use declarative FRP combinators instead."
     echo ""
     echo "  To find the new usages:"
-    echo "    grep -rn '\\.subscribe\\|\\.sample' --include='*.lean' . --exclude-dir=.lake"
+    echo "    grep -rn '\\.subscribe\\|\\.sample' --include='*.lean' ./Terminus/Reactive"
     echo ""
     echo "  If you've removed usages elsewhere, update .frp-baseline:"
     echo "    echo $current_count > .frp-baseline"
