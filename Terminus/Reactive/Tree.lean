@@ -76,7 +76,7 @@ structure FlatLine (α : Type) where
 /-! ## Tree Configuration -/
 
 /-- Configuration for tree appearance and behavior. -/
-structure TreeConfig where
+structure TreeConfig (α : Type) where
   /-- Style for unselected items. -/
   style : Style := {}
   /-- Style for selected item. -/
@@ -101,6 +101,8 @@ structure TreeConfig where
   showConnectors : Bool := true
   /-- Style for connector lines. -/
   connectorStyle : Style := { fg := .ansi .brightBlack }
+  /-- Initial selection: if provided, tree will start with this item selected. -/
+  initialSelection : Option α := none
   deriving Repr, Inhabited
 
 /-! ## Tree Result -/
@@ -238,7 +240,7 @@ def selectedNode [Inhabited α] (s : FullTreeState α) : Option α :=
 end FullTreeState
 
 private def renderTreeView [Inhabited α] [ToString α]
-    (roots : Array (TreeNode α)) (state : TreeState) (config : TreeConfig) : RNode :=
+    (roots : Array (TreeNode α)) (state : TreeState) (config : TreeConfig α) : RNode :=
   Id.run do
     let flat := flattenForest roots
 
@@ -474,7 +476,7 @@ def applyTreeAction [Inhabited α] (action : TreeAction α) (s : FullTreeState �
     -- Use tree.onToggle for expand/collapse
     ```
 -/
-def tree' [Inhabited α] [ToString α] [BEq α] (root : TreeNode α) (config : TreeConfig := {})
+def tree' [Inhabited α] [ToString α] [BEq α] (root : TreeNode α) (config : TreeConfig α := {})
     : WidgetM (TreeResult α) := do
   -- Register as focusable component
   let widgetName ← registerComponentW "tree" (isInput := true)
@@ -486,8 +488,15 @@ def tree' [Inhabited α] [ToString α] [BEq α] (root : TreeNode α) (config : T
   -- Get focused key events
   let keyEvents ← useFocusedKeyEventsW treeName config.globalKeys
 
+  -- Find initial selection index if provided
+  let roots := #[root]
+  let flat := flattenForest roots
+  let initialIndex := match config.initialSelection with
+    | some target => flat.findIdx? (·.value == target) |>.getD 0
+    | none => 0
+
   -- Initial state
-  let initialState : FullTreeState α := { nav := { selectedIndex := 0, scrollOffset := 0 }, roots := #[root] }
+  let initialState : FullTreeState α := { nav := { selectedIndex := initialIndex, scrollOffset := 0 }, roots := roots }
 
   -- Map key events to tree actions
   let actionEvents ← Event.mapMaybeM (fun (kd : KeyData) =>
@@ -543,7 +552,7 @@ def tree' [Inhabited α] [ToString α] [BEq α] (root : TreeNode α) (config : T
   }
 
 /-- Create a tree from multiple root nodes. -/
-def forest' [Inhabited α] [ToString α] [BEq α] (roots : Array (TreeNode α)) (config : TreeConfig := {})
+def forest' [Inhabited α] [ToString α] [BEq α] (roots : Array (TreeNode α)) (config : TreeConfig α := {})
     : WidgetM (TreeResult α) := do
   let widgetName ← registerComponentW "forest" (isInput := true)
     (nameOverride := config.focusName)
@@ -554,8 +563,14 @@ def forest' [Inhabited α] [ToString α] [BEq α] (roots : Array (TreeNode α)) 
   -- Get focused key events
   let keyEvents ← useFocusedKeyEventsW treeName config.globalKeys
 
+  -- Find initial selection index if provided
+  let flat := flattenForest roots
+  let initialIndex := match config.initialSelection with
+    | some target => flat.findIdx? (·.value == target) |>.getD 0
+    | none => 0
+
   -- Initial state
-  let initialState : FullTreeState α := { nav := { selectedIndex := 0, scrollOffset := 0 }, roots := roots }
+  let initialState : FullTreeState α := { nav := { selectedIndex := initialIndex, scrollOffset := 0 }, roots := roots }
 
   -- Map key events to tree actions
   let actionEvents ← Event.mapMaybeM (fun (kd : KeyData) =>
