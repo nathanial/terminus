@@ -70,6 +70,6 @@ test "Overlay should be rendered ON TOP of subsequent siblings" := do
     -- In the buggy version, this assertion should FAIL (showing 'I' instead of 'O')
     SpiderM.liftIO (ensure (char == 'O') s!"expected 'O' from OVERLAY at (1,2) but got '{char}' (likely from SIBLING)")
 
-#generate_tests
+
 
 end TerminusTests.Reactive.ReproOverlayRendering

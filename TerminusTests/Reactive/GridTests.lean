@@ -351,6 +351,6 @@ test "blockGrid' renders colored blocks" := do
     -- Should contain filled blocks
     SpiderM.liftIO (ensure (rnodeContainsText node "██") "expected filled blocks")
 
-#generate_tests
+
 
 end TerminusTests.Reactive.GridTests

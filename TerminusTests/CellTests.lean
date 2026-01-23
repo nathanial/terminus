@@ -88,6 +88,6 @@ test "String.displayWidth mixed content" := do
   "Hi中".displayWidth ≡ 4
   "a日b".displayWidth ≡ 4
 
-#generate_tests
+
 
 end TerminusTests.CellTests

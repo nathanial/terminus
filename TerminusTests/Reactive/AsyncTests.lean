@@ -179,6 +179,6 @@ test "StreamResult chunks can be displayed dynamically" := do
     let node ← SpiderM.liftIO render.sample
     SpiderM.liftIO (ensure (rnodeContainsText node "no chunks") "should show no chunks initially")
 
-#generate_tests
+
 
 end TerminusTests.Reactive.AsyncTests

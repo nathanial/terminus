@@ -470,6 +470,6 @@ test "dynRadioGroup' handles options becoming empty" := do
 
   env.currentScope.dispose
 
-#generate_tests
+
 
 end TerminusTests.Reactive.CheckboxTests

@@ -226,6 +226,6 @@ test "vSeparator' creates vertical line" := do
     let node ← SpiderM.liftIO render.sample
     SpiderM.liftIO (ensure (rnodeContainsText node "│") "expected separator char")
 
-#generate_tests
+
 
 end TerminusTests.Reactive.UtilityTests

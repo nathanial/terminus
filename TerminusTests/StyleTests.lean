@@ -28,6 +28,6 @@ test "Style.merge combines styles" := do
   merged.modifier.bold ≡ true
   merged.fg ≡ Color.green
 
-#generate_tests
+
 
 end TerminusTests.StyleTests

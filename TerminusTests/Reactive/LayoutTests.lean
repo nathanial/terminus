@@ -300,6 +300,6 @@ test "nested splits work correctly" := do
     SpiderM.liftIO (ensure (rnodeContainsText node "BottomLeft") "should contain BottomLeft")
     SpiderM.liftIO (ensure (rnodeContainsText node "Right") "should contain Right")
 
-#generate_tests
+
 
 end TerminusTests.Reactive.LayoutTests

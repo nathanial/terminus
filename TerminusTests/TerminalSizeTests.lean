@@ -20,6 +20,6 @@ test "getTerminalSize returns configured size" := do
   let (size, _) := MockTerminal.run TerminalEffect.getTerminalSize initial
   size ≡ (120, 40)
 
-#generate_tests
+
 
 end TerminusTests.TerminalSizeTests

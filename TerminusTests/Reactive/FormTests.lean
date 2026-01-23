@@ -302,6 +302,6 @@ test "fieldGroup' renders with title" := do
     SpiderM.liftIO (ensure (rnodeContainsText node "Personal Info") "should contain title")
     SpiderM.liftIO (ensure (rnodeContainsText node "Content") "should contain content")
 
-#generate_tests
+
 
 end TerminusTests.Reactive.FormTests

@@ -91,6 +91,6 @@ test "dataGrid' edits cell on enter" := do
 
   env.currentScope.dispose
 
-#generate_tests
+
 
 end TerminusTests.Reactive.DataGridTests

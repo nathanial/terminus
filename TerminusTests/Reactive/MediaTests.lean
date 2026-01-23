@@ -311,6 +311,6 @@ test "naturalHeight for image node" := do
   let height := naturalHeight node
   height ≡ 20
 
-#generate_tests
+
 
 end TerminusTests.Reactive.MediaTests

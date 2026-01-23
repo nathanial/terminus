@@ -361,6 +361,6 @@ test "reactiveInputApp renders correctly" := do
 
   env.currentScope.dispose
 
-#generate_tests
+
 
 end TerminusTests.Reactive.IntegrationTests

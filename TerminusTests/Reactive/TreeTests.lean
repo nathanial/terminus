@@ -407,6 +407,6 @@ test "forest' handles multiple roots" := do
     SpiderM.liftIO (ensure (rnodeContainsText node "Root2") "expected Root2")
     SpiderM.liftIO (ensure (rnodeContainsText node "Root3") "expected Root3")
 
-#generate_tests
+
 
 end TerminusTests.Reactive.TreeTests

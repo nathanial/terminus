@@ -30,6 +30,6 @@ test "flushStdout sets flushed flag" := do
   let (_, state) := MockTerminal.run action
   state.flushed ≡ true
 
-#generate_tests
+
 
 end TerminusTests.OutputTests

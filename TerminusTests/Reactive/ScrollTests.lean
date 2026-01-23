@@ -187,6 +187,6 @@ test "computeThumbMetrics thumb position at end" := do
   -- Thumb should be at end of track
   (thumbPos + thumbSize) ≡ 10
 
-#generate_tests
+
 
 end TerminusTests.Reactive.ScrollTests

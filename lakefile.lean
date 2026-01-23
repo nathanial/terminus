@@ -4,7 +4,7 @@ open Lake DSL
 package «terminus» where
   -- precompileModules := true  -- disabled to test TerminusTests build
 
-require crucible from git "https://github.com/nathanial/crucible" @ "v0.0.8"
+require crucible from git "https://github.com/nathanial/crucible" @ "v0.0.9"
 require raster from git "https://github.com/nathanial/raster" @ "v0.0.4"
 require reactive from git "https://github.com/nathanial/reactive" @ "v0.1.7"
 require chronicle from git "https://github.com/nathanial/chronicle" @ "v0.0.2"

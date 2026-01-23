@@ -32,6 +32,6 @@ test "withRawMode enables raw mode during action" := do
   let (wasEnabled, _) := MockTerminal.run action
   wasEnabled ≡ true
 
-#generate_tests
+
 
 end TerminusTests.RawModeTests

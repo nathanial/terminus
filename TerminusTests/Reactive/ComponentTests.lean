@@ -201,6 +201,6 @@ test "numberedList' renders with numbers" := do
     SpiderM.liftIO (ensure (rnodeHasText node "  2. Green") "expected numbered item 2")
     SpiderM.liftIO (ensure (rnodeHasText node "  3. Blue") "expected numbered item 3")
 
-#generate_tests
+
 
 end TerminusTests.Reactive.ComponentTests

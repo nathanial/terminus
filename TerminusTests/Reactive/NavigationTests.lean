@@ -356,6 +356,6 @@ test "calendar' returns correct initial date" := do
     SpiderM.liftIO (date.month ≡ 6)
     SpiderM.liftIO (date.day ≡ 20)
 
-#generate_tests
+
 
 end TerminusTests.Reactive.NavigationTests

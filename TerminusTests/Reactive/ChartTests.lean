@@ -410,6 +410,6 @@ test "pieChart' filters zero values" := do
     SpiderM.liftIO (ensure (rnodeContainsText node "Valid") "expected Valid label")
     -- Zero value slice should not appear
 
-#generate_tests
+
 
 end TerminusTests.Reactive.ChartTests

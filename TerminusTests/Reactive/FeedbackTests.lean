@@ -282,6 +282,6 @@ test "notifications' shows different level styles" := do
     SpiderM.liftIO (ensure (rnodeContainsText node "[!]") "should have warning symbol")
     SpiderM.liftIO (ensure (rnodeContainsText node "[x]") "should have error symbol")
 
-#generate_tests
+
 
 end TerminusTests.Reactive.FeedbackTests

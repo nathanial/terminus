@@ -344,6 +344,6 @@ test "textArea' ignores input when not focused" := do
 
   env.currentScope.dispose
 
-#generate_tests
+
 
 end TerminusTests.Reactive.TextAreaTests

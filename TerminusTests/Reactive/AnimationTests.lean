@@ -238,6 +238,6 @@ test "InterpolatedResult has correct structure" := do
     SpiderM.liftIO (ensure (value == 10.0) "value should be fromVal")
     SpiderM.liftIO (ensure (!running) "should not be running")
 
-#generate_tests
+
 
 end TerminusTests.Reactive.AnimationTests

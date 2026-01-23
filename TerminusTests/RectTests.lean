@@ -22,6 +22,6 @@ test "Rect.area calculates correctly" := do
   let r : Rect := { x := 0, y := 0, width := 4, height := 3 }
   r.area ≡ 12
 
-#generate_tests
+
 
 end TerminusTests.RectTests

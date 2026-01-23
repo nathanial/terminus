@@ -92,6 +92,6 @@ test "Buffer.diff detects changes" := do
   let changes := Buffer.diff old new_
   changes.length ≡ 1
 
-#generate_tests
+
 
 end TerminusTests.BufferTests

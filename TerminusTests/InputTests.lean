@@ -269,6 +269,6 @@ test "parses mouse with ctrl modifier" := do
     me.modifiers.ctrl ≡ true
   | _ => ensure false "expected mouse event"
 
-#generate_tests
+
 
 end TerminusTests.InputTests

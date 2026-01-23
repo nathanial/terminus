@@ -374,6 +374,6 @@ test "column' with row' containing emitDynamic updates buffer" := do
     let diff := Buffer.diff buf1 buf2
     SpiderM.liftIO (ensure (!diff.isEmpty) "expected buffer to differ after count change")
 
-#generate_tests
+
 
 end TerminusTests.Reactive.RenderingTests

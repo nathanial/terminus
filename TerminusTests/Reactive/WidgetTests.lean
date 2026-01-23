@@ -96,6 +96,6 @@ test "row' collects children renders" := do
       SpiderM.liftIO (children.size ≡ 2)
     | _ => SpiderM.liftIO (ensure false "expected row node")
 
-#generate_tests
+
 
 end TerminusTests.Reactive.WidgetTests

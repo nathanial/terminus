@@ -36,6 +36,6 @@ test "Layout.percent constraint uses percentage" := do
   let rects := hsplit area [.percent 25, .fill]
   if h : 0 < rects.length then rects[0].width ≡ 50 else ensure false "expected rect"
 
-#generate_tests
+
 
 end TerminusTests.LayoutTests
