@@ -546,4 +546,40 @@ test "treeDyn' single root works" := do
     SpiderM.liftIO (ensure (rnodeContainsText node "Root") "expected Root")
     SpiderM.liftIO (ensure (rnodeContainsText node "Child1") "expected Child1")
 
+test "forestDyn' globalKeys works without focus" := do
+  let env ← SpiderEnv.new
+  let (treeResult, inputs) ← (do
+    let (events, inputs) ← createInputs
+    -- NOTE: We do NOT call fireFocus here - tree should work via globalKeys
+    let roots := #[
+      TreeData.branch "Root" #[
+        TreeData.leaf "Child1",
+        TreeData.leaf "Child2"
+      ]
+    ]
+    let dataDyn ← Dynamic.pureM roots
+    let (result, _render) ← (runWidget do
+      forestDyn' dataDyn { globalKeys := true }  -- globalKeys enabled
+    ).run events
+    pure (result, inputs)
+  ).run env
+
+  env.postBuildTrigger ()
+
+  -- Start at Root
+  let sel1 ← treeResult.selectedNode.sample
+  match sel1 with
+  | some "Root" => pure ()
+  | _ => ensure false "should start at Root"
+
+  -- Press down WITHOUT focus set - should still work with globalKeys
+  inputs.fireKey { event := KeyEvent.down, focusedWidget := none }
+
+  let sel2 ← treeResult.selectedNode.sample
+  match sel2 with
+  | some "Child1" => pure ()
+  | other => ensure false s!"globalKeys should allow navigation without focus, got {other}"
+
+  env.currentScope.dispose
+
 end TerminusTests.Reactive.TreeTests
