@@ -60,9 +60,14 @@ def registerComponent (namePrefix : String) (isInput : Bool := false)
     (isInteractive : Bool := true) (nameOverride : String := "") : ReactiveTermM String := do
   let events ← getEvents
   let name ← SpiderM.liftIO <| events.registry.register namePrefix isInput isInteractive nameOverride
+  SpiderM.liftIO <| events.registry.registerGroups name events.focusGroups
   let scope ← SpiderM.getScope
   SpiderM.liftIO <| scope.register (events.registry.unregister name isInput isInteractive)
   pure name
+
+/-- Run a ReactiveTermM computation with a focus group added to the context. -/
+def withFocusGroup (group : String) (m : ReactiveTermM α) : ReactiveTermM α :=
+  fun events => m { events with focusGroups := group :: events.focusGroups }
 
 /-! ## Type Aliases -/
 
@@ -163,5 +168,15 @@ def getEventsW : WidgetM TerminusEvents := StateT.lift getEvents
 def registerComponentW (namePrefix : String) (isInput : Bool := false)
     (isInteractive : Bool := true) (nameOverride : String := "") : WidgetM String :=
   StateT.lift (registerComponent namePrefix isInput isInteractive nameOverride)
+
+/-- Run a WidgetM computation with a focus group added to the context. -/
+def withFocusGroupW (group : String) (m : WidgetM α) : WidgetM α := do
+  let s ← get
+  let events ← getEventsW
+  let newEvents := { events with focusGroups := group :: events.focusGroups }
+  let action : ReactiveTermM (α × WidgetMState) := fun _ => (m.run s) newEvents
+  let (result, newState) ← StateT.lift action
+  set newState
+  pure result
 
 end Terminus.Reactive

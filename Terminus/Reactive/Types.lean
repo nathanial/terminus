@@ -4,6 +4,7 @@
 -/
 import Terminus
 import Reactive
+import Std.Data.HashMap
 
 -- Note: We open Reactive for access to exported functions (Reactive.holdDyn, Reactive.newTriggerEvent, etc.)
 -- but still use fully qualified Reactive.Event, Reactive.Dynamic for clarity vs Terminus.Event.
@@ -284,23 +285,50 @@ structure ComponentRegistry where
   private mk ::
   /-- Counter for generating unique IDs. -/
   idCounter : IO.Ref Nat
+  /-- Counter for generating unique group IDs (e.g., panels). -/
+  groupCounter : IO.Ref Nat
   /-- Names of focusable input widgets. -/
   inputNames : IO.Ref (Array String)
   /-- Names of all interactive widgets. -/
   interactiveNames : IO.Ref (Array String)
+  /-- Mapping from widget name to focus group ancestry (nearest first). -/
+  groupMembers : IO.Ref (Std.HashMap String (List String))
   /-- Currently focused input (by auto-generated name). -/
   focusedInput : Reactive.Dynamic Spider (Option String)
+  /-- Focus group ancestry for the currently focused input. -/
+  focusedGroups : Reactive.Dynamic Spider (List String)
   /-- Trigger to change focus. -/
   fireFocus : Option String → IO Unit
 
 /-- Create a new component registry. -/
 def ComponentRegistry.create : SpiderM ComponentRegistry := do
   let idCounter ← SpiderM.liftIO <| IO.mkRef 0
+  let groupCounter ← SpiderM.liftIO <| IO.mkRef 0
   let inputNames ← SpiderM.liftIO <| IO.mkRef #[]
   let interactiveNames ← SpiderM.liftIO <| IO.mkRef #[]
-  let (focusEvent, fireFocus) ← Reactive.newTriggerEvent (t := Spider) (a := Option String)
+  let groupMembers ← SpiderM.liftIO <| IO.mkRef ({} : Std.HashMap String (List String))
+  let (focusEvent, fireFocusName) ← Reactive.newTriggerEvent (t := Spider) (a := Option String)
+  let (focusGroupsEvent, fireFocusGroups) ← Reactive.newTriggerEvent (t := Spider) (a := List String)
   let focusedInput ← Reactive.holdDyn none focusEvent
-  pure { idCounter, inputNames, interactiveNames, focusedInput, fireFocus }
+  let focusedGroups ← Reactive.holdDyn [] focusGroupsEvent
+  let fireFocus := fun name => do
+    fireFocusName name
+    let groups ← match name with
+      | some n => do
+          let members ← groupMembers.get
+          pure (members.getD n [])
+      | none => pure []
+    fireFocusGroups groups
+  pure {
+    idCounter,
+    groupCounter,
+    inputNames,
+    interactiveNames,
+    groupMembers,
+    focusedInput,
+    focusedGroups,
+    fireFocus
+  }
 
 /-- Register a component and get a name (auto-generated unless `nameOverride` is provided).
     - `namePrefix`: Component type prefix (e.g., "button", "text-input")
@@ -321,6 +349,18 @@ def ComponentRegistry.register (reg : ComponentRegistry) (namePrefix : String)
     reg.interactiveNames.modify (·.push name)
   pure name
 
+/-- Associate a widget name with its focus group ancestry. -/
+def ComponentRegistry.registerGroups (reg : ComponentRegistry) (name : String)
+    (groups : List String) : IO Unit := do
+  if !groups.isEmpty then
+    reg.groupMembers.modify (fun members => members.insert name groups)
+
+/-- Allocate a new focus group ID. -/
+def ComponentRegistry.newGroup (reg : ComponentRegistry) (groupPrefix : String := "panel")
+    : IO String := do
+  let id ← reg.groupCounter.modifyGet fun n => (n, n + 1)
+  pure s!"{groupPrefix}-{id}"
+
 private def removeFirst (names : Array String) (name : String) : Array String := Id.run do
   let mut out : Array String := #[]
   let mut removed := false
@@ -338,9 +378,17 @@ def ComponentRegistry.unregister (reg : ComponentRegistry) (name : String)
     reg.inputNames.modify (fun names => removeFirst names name)
   if isInteractive then
     reg.interactiveNames.modify (fun names => removeFirst names name)
+  reg.groupMembers.modify (fun members => members.erase name)
   let current ← reg.focusedInput.sample
   if current == some name then
     reg.fireFocus none
+
+/-- Check if a widget name belongs to a focus group. -/
+def ComponentRegistry.isInGroup (reg : ComponentRegistry) (name group : String) : IO Bool := do
+  let members ← reg.groupMembers.get
+  match members.get? name with
+  | some groups => pure (groups.contains group)
+  | none => pure false
 
 /-- Cycle focus to the next registered input widget.
     If no widget is focused, focuses the first one.
@@ -387,6 +435,8 @@ structure TerminusEvents where
   resizeEvent : Reactive.Event Spider ResizeData
   /-- Tick events (fired each frame for animations). -/
   tickEvent : Reactive.Event Spider TickData
+  /-- Focus group ancestry for child widgets (used for panel focus styling). -/
+  focusGroups : List String := []
   /-- Whether a tick stream is needed (set by useTick/useFrame hooks). -/
   tickRequested : IO.Ref Bool
   /-- Component registry for focus management. -/
@@ -421,6 +471,7 @@ def createInputs (debugLog : String → IO Unit := fun _ => pure ()) : SpiderM (
     mouseEvent := mouseEvent
     resizeEvent := resizeEvent
     tickEvent := tickEvent
+    focusGroups := []
     tickRequested := tickRequested
     registry := registry
     debugLog := debugLog

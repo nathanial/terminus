@@ -3,6 +3,9 @@
   Layout containers for composing reactive terminal widgets.
 -/
 import Terminus.Reactive.Monad
+import Reactive
+
+open Reactive Reactive.Host
 
 namespace Terminus.Reactive
 
@@ -64,27 +67,34 @@ def dockBottom' (footerHeight : Nat := 1)
 Blocks add borders and optional titles around content.
 -/
 
+private def panelBlock (title : Option String) (borderType : BorderType) (theme : Theme)
+    (fillStyle : Option Style := none) (gap : Nat := 0) (children : WidgetM α) : WidgetM α := do
+  let events ← getEventsW
+  let panelGroup ← SpiderM.liftIO <| events.registry.newGroup "panel"
+  let (result, childRenders) ← withFocusGroupW panelGroup (runWidgetChildren children)
+  let childrenList ← Reactive.Dynamic.sequence childRenders.toList
+  let isFocusedDyn ← events.registry.focusedGroups.map' (·.contains panelGroup)
+  let node ← childrenList.zipWith' (fun nodes isFocused =>
+    let borderStyle :=
+      if isFocused then
+        { fg := theme.primary, modifier := { bold := true } }
+      else
+        theme.borderStyle
+    let inner := RNode.column gap {} nodes.toArray
+    RNode.block title borderType borderStyle fillStyle inner
+  ) isFocusedDyn
+  emit node
+  pure result
+
 /-- Create a block container with a border. -/
 def block' (borderType : BorderType := .rounded) (theme : Theme)
     (fillStyle : Option Style := none) (children : WidgetM α) : WidgetM α := do
-  let (result, childRenders) ← runWidgetChildren children
-  let childrenList ← Reactive.Dynamic.sequence childRenders.toList
-  let node ← childrenList.map' fun nodes =>
-    let inner := RNode.column 0 {} nodes.toArray
-    RNode.block none borderType (theme.borderStyle) fillStyle inner
-  emit node
-  pure result
+  panelBlock none borderType theme fillStyle 0 children
 
 /-- Create a block container with a title and border. -/
 def titledBlock' (title : String) (borderType : BorderType := .rounded) (theme : Theme)
     (fillStyle : Option Style := none) (children : WidgetM α) : WidgetM α := do
-  let (result, childRenders) ← runWidgetChildren children
-  let childrenList ← Reactive.Dynamic.sequence childRenders.toList
-  let node ← childrenList.map' fun nodes =>
-    let inner := RNode.column 0 {} nodes.toArray
-    RNode.block (some title) borderType (theme.borderStyle) fillStyle inner
-  emit node
-  pure result
+  panelBlock (some title) borderType theme fillStyle 0 children
 
 /-- Create a single-line bordered block. -/
 def singleBlock' (theme : Theme) (children : WidgetM α) : WidgetM α :=
@@ -110,13 +120,7 @@ Panels are styled blocks with padding and themed borders.
 /-- Create a titled panel container. -/
 def titledPanel' (title : String) (borderType : BorderType := .rounded) (theme : Theme)
     (fillStyle : Option Style := none) (children : WidgetM α) : WidgetM α := do
-  let (result, childRenders) ← runWidgetChildren children
-  let childrenList ← Reactive.Dynamic.sequence childRenders.toList
-  let node ← childrenList.map' fun nodes =>
-    let inner := RNode.column 1 {} nodes.toArray  -- 1 cell gap between children
-    RNode.block (some title) borderType (theme.borderStyle) fillStyle inner
-  emit node
-  pure result
+  panelBlock (some title) borderType theme fillStyle 1 children
 
 /-- Create an outlined panel (simple border). -/
 def outlinedPanel' (theme : Theme) (children : WidgetM α) : WidgetM α :=
