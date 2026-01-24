@@ -33,18 +33,19 @@ def navigationContent (theme : Theme) (_events : TerminusEvents) : WidgetM Unit 
       -- Tree demo
       column' (gap := 1) {} do
         titledBlock' "Tree Widget" .rounded theme none do
-          let fileTree := TreeNode.branch "project" #[
-            TreeNode.branch "src" #[
-              TreeNode.leaf "Main.lean",
-              TreeNode.leaf "Types.lean"
+          let fileTree := TreeData.branch "project" #[
+            TreeData.branch "src" #[
+              TreeData.leaf "Main.lean",
+              TreeData.leaf "Types.lean"
             ],
-            TreeNode.branch "tests" #[
-              TreeNode.leaf "Tests.lean"
+            TreeData.branch "tests" #[
+              TreeData.leaf "Tests.lean"
             ],
-            TreeNode.leaf "lakefile.lean"
+            TreeData.leaf "lakefile.lean"
           ]
+          let dataDyn ← Dynamic.pureM fileTree
 
-          let treeResult ← tree' fileTree {
+          let treeResult ← treeDyn' dataDyn {
             focusName := "file-tree"
             maxVisible := some 6
             selectedStyle := { bg := .ansi .blue, fg := .ansi .white }
