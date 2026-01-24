@@ -221,8 +221,20 @@ structure TreeInternalState where
   expansion : ExpansionState := ExpansionState.empty
   deriving Inhabited
 
+private def expansionEq (a b : ExpansionState) : Bool :=
+  if a.size != b.size then
+    false
+  else
+    a.fold (init := true) fun acc path expanded =>
+      if !acc then
+        false
+      else
+        match b.get? path with
+        | some other => other == expanded
+        | none => false
+
 instance : BEq TreeInternalState where
-  beq a b := a.nav == b.nav && a.expansion.size == b.expansion.size
+  beq a b := a.nav == b.nav && expansionEq a.expansion b.expansion
 
 /-! ## Tree Flattening Helpers -/
 
