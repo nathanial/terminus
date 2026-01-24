@@ -95,9 +95,8 @@ partial def runReactiveLoop [Monad m] [TerminalEffect m] [MonadLift IO m]
     if kd.event.isCtrlC || kd.event.isCtrlQ then
       quitRef.set true
 
-  let renderFrame : m Unit := do
+  let renderFrameWithSize (width height : Nat) (full : Bool := false) : m Unit := do
     let rootNode ← liftM (m := IO) render.sample
-    let (width, height) ← getTerminalSize
     let renderResult := Terminus.Reactive.render rootNode width height
     let buffer := renderResult.buffer
     let commands := renderResult.commands.toList
@@ -121,9 +120,18 @@ partial def runReactiveLoop [Monad m] [TerminalEffect m] [MonadLift IO m]
         row5 := row5 ++ (term.currentBuffer.get x 5).char.toString
       deps.log s!"Row 5: '{row5}'"
 
-    let term ← term.flush commands
-    liftM (m := IO) <| termRef.set term
+    if full then
+      let term ← term.draw
+      let term ← term.flush commands
+      liftM (m := IO) <| termRef.set term
+    else
+      let term ← term.flush commands
+      liftM (m := IO) <| termRef.set term
     deps.onFrame frame buffer
+
+  let renderFrame : m Unit := do
+    let (width, height) ← getTerminalSize
+    renderFrameWithSize width height
 
   -- Initial render
   renderFrame
@@ -157,9 +165,11 @@ partial def runReactiveLoop [Monad m] [TerminalEffect m] [MonadLift IO m]
         | .resize w h =>
           deps.log s!"Resize event: {w}x{h}"
           liftM (m := IO) <| inputs.fireResize { width := w, height := h }
-          let newTerm ← Terminal.new
-          liftM (m := IO) <| termRef.set newTerm
-          renderFrame
+          let term ← liftM (m := IO) termRef.get
+          let term := term.resize w h
+          liftM (m := IO) <| termRef.set term
+          Terminal.clear
+          renderFrameWithSize w h true
         | .none => pure ()
         loop
       | .tick =>
@@ -249,11 +259,19 @@ def runReactiveApp (setup : ReactiveTermM ReactiveAppState) (config : AppConfig 
       Std.Channel.Sync.send signalSync .render
     spiderEnv.currentScope.register renderUnsub
 
+    let sizeRef ← IO.mkRef (← getTerminalSize)
+
     -- Input worker (blocking)
     let inputTask ← IO.asTask (prio := .dedicated) do
       while true do
         if (← stopRef.get) then
           break
+        let size ← getTerminalSize
+        let lastSize ← sizeRef.get
+        if size != lastSize then
+          sizeRef.set size
+          let (width, height) := size
+          Std.Channel.Sync.send signalSync (.input (.resize width height))
         let ev ← Events.poll
         match ev with
         | .none =>
