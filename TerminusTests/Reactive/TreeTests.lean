@@ -17,46 +17,33 @@ open TerminusTests.Reactive.Common
 testSuite "Reactive Tree Tests"
 
 -- ============================================================================
--- TreeNode Tests
+-- TreeData Tests
 -- ============================================================================
 
-test "TreeNode.leaf creates node without children" := do
-  let node : TreeNode String := TreeNode.leaf "item"
+test "TreeData.leaf creates node without children" := do
+  let node : TreeData String := TreeData.leaf "item"
   ensure node.children.isEmpty "leaf should have no children"
   ensure node.isLeaf "isLeaf should be true"
   ensure (!node.isBranch) "isBranch should be false"
 
-test "TreeNode.branch creates node with children" := do
-  let node := TreeNode.branch "parent" #[TreeNode.leaf "child1", TreeNode.leaf "child2"]
+test "TreeData.branch creates node with children" := do
+  let node := TreeData.branch "parent" #[TreeData.leaf "child1", TreeData.leaf "child2"]
   ensure (node.children.size == 2) "branch should have 2 children"
   ensure (!node.isLeaf) "isLeaf should be false"
   ensure node.isBranch "isBranch should be true"
-
-test "TreeNode.toggle toggles expanded state" := do
-  let node := TreeNode.branch "test" #[TreeNode.leaf "child"]
-  ensure node.expanded "should start expanded"
-  let toggled := node.toggle
-  ensure (!toggled.expanded) "should be collapsed after toggle"
-  let toggled2 := toggled.toggle
-  ensure toggled2.expanded "should be expanded after second toggle"
-
-test "TreeNode.toggle does nothing to leaf nodes" := do
-  let node : TreeNode String := TreeNode.leaf "item"
-  let toggled := node.toggle
-  ensure (toggled.expanded == node.expanded) "toggle should not change leaf"
 
 -- ============================================================================
 -- Tree Flattening Tests
 -- ============================================================================
 
-test "flattenTree produces correct flat representation" := do
-  let root := TreeNode.branch "root" #[
-    TreeNode.leaf "child1",
-    TreeNode.branch "child2" #[
-      TreeNode.leaf "grandchild"
+test "flattenForestData produces correct flat representation" := do
+  let root := TreeData.branch "root" #[
+    TreeData.leaf "child1",
+    TreeData.branch "child2" #[
+      TreeData.leaf "grandchild"
     ]
   ]
-  let flat := flattenTree root 0 #[0] true
+  let flat := flattenForestData #[root] ExpansionState.empty true
   ensure (flat.size == 4) s!"expected 4 items, got {flat.size}"
   ensure (flat[0]!.value == "root") "first should be root"
   ensure (flat[0]!.depth == 0) "root depth should be 0"
@@ -66,12 +53,14 @@ test "flattenTree produces correct flat representation" := do
   ensure (flat[3]!.value == "grandchild") "fourth should be grandchild"
   ensure (flat[3]!.depth == 2) "grandchild depth should be 2"
 
-test "flattenTree respects collapsed branches" := do
-  let root := TreeNode.mk "root" #[
-    TreeNode.leaf "visible",
-    TreeNode.mk "collapsed" #[TreeNode.leaf "hidden"] false  -- expanded = false
-  ] true
-  let flat := flattenTree root 0 #[0] true
+test "flattenForestData respects collapsed branches" := do
+  let root := TreeData.branch "root" #[
+    TreeData.leaf "visible",
+    TreeData.branch "collapsed" #[TreeData.leaf "hidden"]
+  ]
+  -- Set "collapsed" branch to collapsed via expansion state
+  let expansion := ExpansionState.empty.set #[0, 1] false
+  let flat := flattenForestData #[root] expansion true
   -- Should see: root, visible, collapsed (but not hidden)
   ensure (flat.size == 3) s!"expected 3 items (hidden child excluded), got {flat.size}"
   ensure (flat.all (fun f => f.value != "hidden")) "hidden should not appear"
@@ -419,26 +408,6 @@ test "forestDyn' handles multiple roots" := do
     SpiderM.liftIO (ensure (rnodeContainsText node "Root1") "expected Root1")
     SpiderM.liftIO (ensure (rnodeContainsText node "Root2") "expected Root2")
     SpiderM.liftIO (ensure (rnodeContainsText node "Root3") "expected Root3")
-
--- ============================================================================
--- TreeData Tests
--- ============================================================================
-
-test "TreeData.leaf creates node without children" := do
-  let node : TreeData String := TreeData.leaf "item"
-  ensure node.children.isEmpty "leaf should have no children"
-  ensure node.isLeaf "isLeaf should be true"
-  ensure (!node.isBranch) "isBranch should be false"
-
-test "TreeData.branch creates node with children" := do
-  let node := TreeData.branch "parent" #[TreeData.leaf "child1", TreeData.leaf "child2"]
-  ensure (node.children.size == 2) "branch should have 2 children"
-  ensure (!node.isLeaf) "isLeaf should be false"
-  ensure node.isBranch "isBranch should be true"
-
--- ============================================================================
--- Dynamic Tree Widget Tests
--- ============================================================================
 
 test "forestDyn' renders tree data" := do
   runSpider do

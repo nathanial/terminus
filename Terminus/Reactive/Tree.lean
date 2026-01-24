@@ -55,57 +55,6 @@ partial def size (node : TreeData α) : Nat :=
 
 end TreeData
 
-/-! ## Legacy TreeNode (Deprecated) -/
-
-/-- A node in the tree hierarchy.
-    **Deprecated**: Use `TreeData` with dynamic tree widgets instead.
-    This type embeds expansion state which doesn't work well with FRP. -/
-structure TreeNode (α : Type) where
-  /-- Value stored in this node. -/
-  value : α
-  /-- Child nodes. -/
-  children : Array (TreeNode α) := #[]
-  /-- Whether this branch is expanded (ignored for leaves). -/
-  expanded : Bool := true
-  deriving Repr, Inhabited
-
-namespace TreeNode
-
-/-- Create a leaf node (no children). -/
-def leaf (value : α) : TreeNode α := { value, children := #[], expanded := true }
-
-/-- Create a branch node with children. -/
-def branch (value : α) (children : Array (TreeNode α)) : TreeNode α :=
-  { value, children, expanded := true }
-
-/-- Create a collapsed branch. -/
-def collapsedBranch (value : α) (children : Array (TreeNode α)) : TreeNode α :=
-  { value, children, expanded := false }
-
-/-- Check if this is a leaf (no children). -/
-def isLeaf (node : TreeNode α) : Bool := node.children.isEmpty
-
-/-- Check if this is a branch (has children). -/
-def isBranch (node : TreeNode α) : Bool := !node.children.isEmpty
-
-/-- Toggle expand/collapse state. -/
-def toggle (node : TreeNode α) : TreeNode α :=
-  if node.isLeaf then node else { node with expanded := !node.expanded }
-
-/-- Expand a branch. -/
-def expand (node : TreeNode α) : TreeNode α :=
-  if node.isLeaf then node else { node with expanded := true }
-
-/-- Collapse a branch. -/
-def collapse (node : TreeNode α) : TreeNode α :=
-  if node.isLeaf then node else { node with expanded := false }
-
-/-- Convert TreeNode to TreeData (strips expansion state). -/
-partial def toTreeData [Inhabited α] (node : TreeNode α) : TreeData α :=
-  { value := node.value, children := node.children.map toTreeData }
-
-end TreeNode
-
 /-! ## Expansion State -/
 
 /-- Expansion state stored by path. Paths not in the map use the default expansion. -/
@@ -275,17 +224,6 @@ structure TreeInternalState where
 instance : BEq TreeInternalState where
   beq a b := a.nav == b.nav && a.expansion.size == b.expansion.size
 
-/-! ## Legacy FullTreeState (for flattenForest tests) -/
-
-/-- Combined state for tree widget: navigation state + tree structure.
-    **Deprecated**: Only used by flattenForest helper tests. -/
-structure FullTreeState (α : Type) where
-  /-- Navigation state (selection, scroll). -/
-  nav : TreeState := {}
-  /-- Tree roots (structure with expand/collapse state). -/
-  roots : Array (TreeNode α) := #[]
-  deriving Inhabited
-
 /-! ## Tree Flattening Helpers -/
 
 /-- Flatten a TreeData node into visible lines using external expansion state. -/
@@ -361,74 +299,6 @@ where
       | none => true
       | some child => isLeafAtPathInNode child rest
 
-/-! ## Legacy TreeNode Flattening (for backward compatibility) -/
-
-/-- Flatten a tree into visible lines. -/
-partial def flattenTree [Inhabited α] (node : TreeNode α) (depth : Nat) (path : Array Nat)
-    (isLast : Bool) : Array (FlatLine α) := Id.run do
-  let mut result : Array (FlatLine α) := #[]
-
-  -- Add this node
-  result := result.push {
-    value := node.value
-    depth := depth
-    path := path
-    isLeaf := node.isLeaf
-    isExpanded := node.expanded
-    isLast := isLast
-  }
-
-  -- Add children if expanded
-  if node.expanded && !node.children.isEmpty then
-    for h : i in [:node.children.size] do
-      let child := node.children[i]
-      let childPath := path.push i
-      let childIsLast := i == node.children.size - 1
-      result := result ++ flattenTree child (depth + 1) childPath childIsLast
-
-  result
-
-/-- Flatten a forest (array of root nodes). -/
-def flattenForest [Inhabited α] (roots : Array (TreeNode α)) : Array (FlatLine α) := Id.run do
-  let mut result : Array (FlatLine α) := #[]
-  for h : i in [:roots.size] do
-    let root := roots[i]
-    let isLast := i == roots.size - 1
-    result := result ++ flattenTree root 0 #[i] isLast
-  result
-
--- Simple BEq for change detection (compares value and expanded, not children structure)
-instance [BEq α] : BEq (TreeNode α) where
-  beq a b := a.value == b.value && a.expanded == b.expanded && a.children.size == b.children.size
-
-instance [BEq α] : BEq (FullTreeState α) where
-  beq a b := a.nav == b.nav && a.roots == b.roots
-
-namespace FullTreeState
-
-/-- Get the flattened view of the tree. -/
-def flatten [Inhabited α] (s : FullTreeState α) : Array (FlatLine α) :=
-  flattenForest s.roots
-
-/-- Get the currently selected line (if any). -/
-def currentLine [Inhabited α] (s : FullTreeState α) : Option (FlatLine α) :=
-  let flat := s.flatten
-  flat[s.nav.selectedIndex]?
-
-/-- Get the path to the currently selected node. -/
-def selectedPath [Inhabited α] (s : FullTreeState α) : Array Nat :=
-  match s.currentLine with
-  | some line => line.path
-  | none => #[]
-
-/-- Get the currently selected node value. -/
-def selectedNode [Inhabited α] (s : FullTreeState α) : Option α :=
-  match s.currentLine with
-  | some line => some line.value
-  | none => none
-
-end FullTreeState
-
 /-! ## Rendering -/
 
 private def renderTreeViewData [Inhabited α] [ToString α]
@@ -472,80 +342,6 @@ private def renderTreeViewData [Inhabited α] [ToString α]
           rows := rows.push (RNode.text text style)
 
       return RNode.column 0 {} rows
-
-/-! ## Legacy Path Manipulation (for backward compatibility) -/
-
-/-- Get node at path. -/
-partial def getNodeAtPath [Inhabited α] (roots : Array (TreeNode α)) (path : Array Nat) : Option α :=
-  match path.toList with
-  | [] => none
-  | [idx] => roots[idx]?.map (·.value)
-  | idx :: rest =>
-    match roots[idx]? with
-    | none => none
-    | some node => getNodeAtPathInNode node rest
-where
-  getNodeAtPathInNode (node : TreeNode α) : List Nat → Option α
-    | [] => some node.value
-    | [idx] => node.children[idx]?.map (·.value)
-    | idx :: rest =>
-      match node.children[idx]? with
-      | none => none
-      | some child => getNodeAtPathInNode child rest
-
-/-- Toggle node at path in a forest. -/
-partial def toggleAtPath [Inhabited α] (roots : Array (TreeNode α)) (path : Array Nat) : Array (TreeNode α) :=
-  match path.toList with
-  | [] => roots
-  | [idx] =>
-    roots.mapIdx fun i node => if i == idx then node.toggle else node
-  | idx :: rest =>
-    roots.mapIdx fun i node =>
-      if i == idx then toggleInNode node rest else node
-where
-  toggleInNode (node : TreeNode α) : List Nat → TreeNode α
-    | [] => node.toggle
-    | [idx] =>
-      { node with children := node.children.mapIdx fun i c => if i == idx then c.toggle else c }
-    | idx :: rest =>
-      { node with children := node.children.mapIdx fun i c =>
-          if i == idx then toggleInNode c rest else c }
-
-/-- Collapse node at path. -/
-partial def collapseAtPath [Inhabited α] (roots : Array (TreeNode α)) (path : Array Nat) : Array (TreeNode α) :=
-  match path.toList with
-  | [] => roots
-  | [idx] =>
-    roots.mapIdx fun i node => if i == idx then node.collapse else node
-  | idx :: rest =>
-    roots.mapIdx fun i node =>
-      if i == idx then collapseInNode node rest else node
-where
-  collapseInNode (node : TreeNode α) : List Nat → TreeNode α
-    | [] => node.collapse
-    | [idx] =>
-      { node with children := node.children.mapIdx fun i c => if i == idx then c.collapse else c }
-    | idx :: rest =>
-      { node with children := node.children.mapIdx fun i c =>
-          if i == idx then collapseInNode c rest else c }
-
-/-- Expand node at path. -/
-partial def expandAtPath [Inhabited α] (roots : Array (TreeNode α)) (path : Array Nat) : Array (TreeNode α) :=
-  match path.toList with
-  | [] => roots
-  | [idx] =>
-    roots.mapIdx fun i node => if i == idx then node.expand else node
-  | idx :: rest =>
-    roots.mapIdx fun i node =>
-      if i == idx then expandInNode node rest else node
-where
-  expandInNode (node : TreeNode α) : List Nat → TreeNode α
-    | [] => node.expand
-    | [idx] =>
-      { node with children := node.children.mapIdx fun i c => if i == idx then c.expand else c }
-    | idx :: rest =>
-      { node with children := node.children.mapIdx fun i c =>
-          if i == idx then expandInNode c rest else c }
 
 /-! ## Tree Actions -/
 
