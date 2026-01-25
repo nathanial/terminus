@@ -22,9 +22,16 @@ end Reactive.Host.Dynamic
 
 namespace Reactive.Dynamic
 
-/-- Map a function over a Dynamic (dot-notation friendly). -/
-def map' [BEq b] (da : Dynamic Spider a) (f : a → b) : SpiderM (Dynamic Spider b) :=
+/-- Map a function over a Dynamic (dot-notation friendly).
+    No deduplication - fires on every source update.
+    Use `mapUniq'` if you want deduplication. -/
+def map' (da : Dynamic Spider a) (f : a → b) : SpiderM (Dynamic Spider b) :=
   Reactive.Host.Dynamic.map' da f
+
+/-- Map a function over a Dynamic with deduplication (dot-notation friendly).
+    Only fires when the mapped value actually changes (requires BEq). -/
+def mapUniq' [BEq b] (da : Dynamic Spider a) (f : a → b) : SpiderM (Dynamic Spider b) :=
+  Reactive.Host.Dynamic.mapUniq' da f
 
 /-- Combine two Dynamics (dot-notation friendly). -/
 def zipWith' [BEq c] (da : Dynamic Spider a) (f : a → b → c) (db : Dynamic Spider b)
