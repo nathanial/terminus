@@ -130,3 +130,36 @@ useHover : String → ReactiveM (Dynamic Spider Bool)
 -- Get click events
 useClick : String → ReactiveM (Event Spider Unit)
 ```
+
+## Debug Mode
+
+Terminus supports frame capture for debugging and testing TUI applications.
+
+### Live Frame Capture
+
+Enable frame capture during normal operation via `AppConfig.debugDir`:
+
+```lean
+def main : IO Unit := do
+  let config : AppConfig := { debugDir := some ".debug" }
+  runReactiveApp (config := config) do
+    -- ... your app setup
+```
+
+This writes changed frames to `.debug/frame-NNN.txt` as plain text (no ANSI codes).
+
+### Scripted Debug Capture
+
+For reproducible testing, use `Debug.runDebugCapture` with scripted input:
+
+```lean
+import Terminus.Reactive.Debug
+
+def testMyApp : IO Unit := do
+  let script : InputScript := InputScript.fromKeyCodes [.down, .down, .enter]
+  let config : DebugConfig := { width := 80, height := 24, writeFiles := true }
+  let state ← Debug.runDebugCapture myAppSetup config script
+  -- state.capturedFrames contains (frameNum, plainText) pairs
+```
+
+This runs the app with mock terminal input, capturing frames for verification.
