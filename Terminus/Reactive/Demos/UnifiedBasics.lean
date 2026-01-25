@@ -108,8 +108,34 @@ def basicsContent (theme : Theme) : WidgetM Unit := do
       column' (gap := 1) {} do
         titledBlock' "Paragraph" .rounded theme none do
           paragraph' "This is a paragraph widget that supports automatic word wrapping. It handles long text gracefully by wrapping it to the next line." {
+            wrapMode := .wrap
             maxWidth := some 30
             alignment := .left
+            style := theme.bodyStyle
+          }
+
+      -- Unicode paragraph
+      column' (gap := 1) {} do
+        titledBlock' "Unicode Text" .rounded theme none do
+          text' "CJK wrapping (width=12):" theme.captionStyle
+          paragraph' "Hello 世界! This text mixes English and 中文字符 for testing." {
+            wrapMode := .wrap
+            maxWidth := some 12
+            style := theme.bodyStyle
+          }
+          spacer' 0 1
+          text' "Emoji support:" theme.captionStyle
+          paragraph' "Status: ✓ Done 🎉" {
+            style := theme.bodyStyle
+          }
+
+      -- Scrollable paragraph
+      column' (gap := 1) {} do
+        titledBlock' "Scrollable" .rounded theme none do
+          text' "← → to scroll:" theme.captionStyle
+          let _ ← scrollableParagraph' "demo-scroll" "This is a long line that extends beyond the viewport. Use arrow keys (or h/l) to scroll horizontally. Press Home/End to jump to start/end." {
+            viewportWidth := 20
+            scrollStep := 4
             style := theme.bodyStyle
           }
 
@@ -117,18 +143,17 @@ def basicsContent (theme : Theme) : WidgetM Unit := do
       column' (gap := 1) {} do
         titledBlock' "Dividers" .rounded theme none do
           text' "Horizontal:" theme.captionStyle
-          text' "━━━━━━━━━━━━━━━━━━━━" theme.bodyStyle
+          text' "━━━━━━━━━━━━━━━━" theme.bodyStyle
           spacer' 0 1
           text' "Vertical:" theme.captionStyle
-          text' "┃" theme.bodyStyle
           text' "┃" theme.bodyStyle
           text' "┃" theme.bodyStyle
 
       -- Clear
       column' (gap := 1) {} do
         titledBlock' "Clear" .rounded theme none do
-          text' "Clears a styled region:" theme.captionStyle
-          clear' { width := 14, height := 3, fillChar := '.', style := { fg := .ansi .cyan } }
+          text' "Styled region:" theme.captionStyle
+          clear' { width := 12, height := 2, fillChar := '.', style := { fg := .ansi .cyan } }
 
     spacer' 0 1
 

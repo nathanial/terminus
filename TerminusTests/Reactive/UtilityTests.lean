@@ -226,6 +226,167 @@ test "vSeparator' creates vertical line" := do
     let node ← SpiderM.liftIO render.sample
     SpiderM.liftIO (ensure (rnodeContainsText node "│") "expected separator char")
 
+-- ============================================================================
+-- Unicode Display Width Tests
+-- ============================================================================
 
+test "TextLine.width counts ASCII correctly" := do
+  let line := TextLine.new "Hello"
+  line.width ≡ 5
+
+test "TextLine.width counts CJK as width 2" := do
+  let line := TextLine.new "世界"
+  -- Each CJK character is width 2, so "世界" = 4
+  line.width ≡ 4
+
+test "TextLine.width counts mixed ASCII and CJK" := do
+  let line := TextLine.new "Hi世界"
+  -- "Hi" = 2, "世界" = 4, total = 6
+  line.width ≡ 6
+
+test "TextLine.width counts emoji as width 2" := do
+  let line := TextLine.new "Hello 🎉"
+  -- "Hello " = 6, "🎉" = 2, total = 8
+  line.width ≡ 8
+
+test "String.displayWidth handles ASCII" := do
+  "hello".displayWidth ≡ 5
+
+test "String.displayWidth handles CJK" := do
+  "你好".displayWidth ≡ 4
+
+test "String.displayWidth handles mixed content" := do
+  "Hello 世界!".displayWidth ≡ 11  -- 6 + 4 + 1
+
+-- ============================================================================
+-- Word Wrap Unicode Tests
+-- ============================================================================
+
+test "paragraph' with wrap handles CJK correctly" := do
+  runSpider do
+    let (events, _) ← createInputs
+    -- "Hello 世界" with maxWidth=8 should wrap after "Hello" (width 5+1+4=10 > 8)
+    let (_, render) ← (runWidget do
+      paragraph' "Hello 世界" { wrapMode := .wrap, maxWidth := some 8 }
+    ).run events
+
+    let node ← SpiderM.liftIO render.sample
+    SpiderM.liftIO (ensure (rnodeContainsText node "Hello") "expected Hello")
+    SpiderM.liftIO (ensure (rnodeContainsText node "世界") "expected 世界")
+
+-- ============================================================================
+-- sliceByDisplayWidth Tests
+-- ============================================================================
+
+test "sliceByDisplayWidth extracts ASCII substring" := do
+  let result := sliceByDisplayWidth "Hello World" 0 5
+  result ≡ "Hello"
+
+test "sliceByDisplayWidth handles offset" := do
+  let result := sliceByDisplayWidth "Hello World" 6 5
+  result ≡ "World"
+
+test "sliceByDisplayWidth handles CJK" := do
+  -- "世界" is 4 columns wide
+  let result := sliceByDisplayWidth "世界你好" 0 4
+  result ≡ "世界"
+
+test "sliceByDisplayWidth handles CJK with offset" := do
+  -- Skip first 4 columns (世界), get next 4 (你好)
+  let result := sliceByDisplayWidth "世界你好" 4 4
+  result ≡ "你好"
+
+test "sliceByDisplayWidth handles mixed content" := do
+  -- "Hi世界" = Hi(2) + 世(2) + 界(2) = 6 total
+  let result := sliceByDisplayWidth "Hi世界" 2 4
+  result ≡ "世界"
+
+test "sliceByDisplayWidth returns empty for zero width" := do
+  let result := sliceByDisplayWidth "Hello" 0 0
+  result ≡ ""
+
+test "sliceByDisplayWidth includes partial overlap characters" := do
+  -- If a wide char starts before endCol but extends past startCol, include it
+  let result := sliceByDisplayWidth "世界" 1 2
+  -- "世" starts at col 0, ends at 2; "界" starts at 2, ends at 4
+  -- With startCol=1, endCol=3, both overlap, so both included
+  result ≡ "世界"
+
+-- ============================================================================
+-- ParagraphScrollState Tests
+-- ============================================================================
+
+test "ParagraphScrollState.scrollRight clamps at max" := do
+  let state : ParagraphScrollState := { offsetX := 0, contentWidth := 100, viewportWidth := 20 }
+  let scrolled := state.scrollRight 100  -- Try to scroll way past end
+  scrolled.offsetX ≡ 80  -- Max is contentWidth - viewportWidth = 80
+
+test "ParagraphScrollState.scrollLeft clamps at zero" := do
+  let state : ParagraphScrollState := { offsetX := 5, contentWidth := 100, viewportWidth := 20 }
+  let scrolled := state.scrollLeft 10  -- Try to scroll past start
+  scrolled.offsetX ≡ 0
+
+test "ParagraphScrollState.scrollToStart resets offset" := do
+  let state : ParagraphScrollState := { offsetX := 50, contentWidth := 100, viewportWidth := 20 }
+  let scrolled := state.scrollToStart
+  scrolled.offsetX ≡ 0
+
+test "ParagraphScrollState.scrollToEnd goes to max" := do
+  let state : ParagraphScrollState := { offsetX := 0, contentWidth := 100, viewportWidth := 20 }
+  let scrolled := state.scrollToEnd
+  scrolled.offsetX ≡ 80
+
+test "ParagraphScrollState.isScrollable true when content wider" := do
+  let state : ParagraphScrollState := { offsetX := 0, contentWidth := 100, viewportWidth := 20 }
+  state.isScrollable ≡ true
+
+test "ParagraphScrollState.isScrollable false when content fits" := do
+  let state : ParagraphScrollState := { offsetX := 0, contentWidth := 15, viewportWidth := 20 }
+  state.isScrollable ≡ false
+
+test "ParagraphScrollState.canScrollLeft true when offset > 0" := do
+  let state : ParagraphScrollState := { offsetX := 10, contentWidth := 100, viewportWidth := 20 }
+  state.canScrollLeft ≡ true
+
+test "ParagraphScrollState.canScrollRight true when more content" := do
+  let state : ParagraphScrollState := { offsetX := 0, contentWidth := 100, viewportWidth := 20 }
+  state.canScrollRight ≡ true
+
+test "ParagraphScrollState.canScrollRight false at end" := do
+  let state : ParagraphScrollState := { offsetX := 80, contentWidth := 100, viewportWidth := 20 }
+  state.canScrollRight ≡ false
+
+-- ============================================================================
+-- Scrollable Paragraph Widget Tests
+-- ============================================================================
+
+test "ScrollableParagraphConfig has sensible defaults" := do
+  let config : ScrollableParagraphConfig := {}
+  config.viewportWidth ≡ 80
+  config.scrollStep ≡ 4
+  config.showScrollIndicators ≡ true
+
+test "scrollableParagraph' creates widget with scroll state" := do
+  runSpider do
+    let (events, _) ← createInputs
+
+    let (result, _) ← (runWidget do
+      scrollableParagraph' "test-scroll" "This is a very long text that should be scrollable" { viewportWidth := 20 }
+    ).run events
+
+    let state ← SpiderM.liftIO result.scrollState.sample
+    state.offsetX ≡ 0
+    state.viewportWidth ≡ 20
+
+test "scrollableParagraph' renders visible portion" := do
+  runSpider do
+    let (events, _) ← createInputs
+
+    let (_, render) ← (runWidget do
+      scrollableParagraph' "test-scroll" "Hello World" { viewportWidth := 5 }
+    ).run events
+
+    let node ← SpiderM.liftIO render.sample
+    SpiderM.liftIO (ensure (rnodeContainsText node "Hello") "expected Hello in viewport")
 
 end TerminusTests.Reactive.UtilityTests
