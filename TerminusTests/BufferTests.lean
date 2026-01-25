@@ -92,6 +92,18 @@ test "Buffer.diff detects changes" := do
   let changes := Buffer.diff old new_
   changes.length ≡ 1
 
+test "Buffer.diff marks newly expanded area as changes" := do
+  let old := Buffer.new 2 1
+  let new_ := Buffer.new 3 1
+  let changes := Buffer.diff old new_
+  match changes with
+  | [(x, y, cell)] =>
+    x ≡ 2
+    y ≡ 0
+    cell.char ≡ ' '
+  | _ =>
+    ensure false s!"expected a single change for the new column, got {changes.length}"
+
 
 
 end TerminusTests.BufferTests

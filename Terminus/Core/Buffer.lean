@@ -159,8 +159,12 @@ def diff (old new_ : Buffer) : List (Nat × Nat × Cell) := Id.run do
   for y in [0 : new_.height] do
     for x in [0 : new_.width] do
       let newCell := new_.get x y
-      let oldCell := old.get x y
-      if newCell != oldCell then
+      if old.inBounds x y then
+        let oldCell := old.get x y
+        if newCell != oldCell then
+          changes := (x, y, newCell) :: changes
+      else
+        -- Force updates for newly added cells so the terminal gets cleared.
         changes := (x, y, newCell) :: changes
   changes.reverse
 
