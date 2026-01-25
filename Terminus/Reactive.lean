@@ -108,3 +108,4 @@ import Terminus.Reactive.Accordion
 import Terminus.Reactive.CommandPalette
 import Terminus.Reactive.MenuBar
 import Terminus.Reactive.StatusBar
+import Terminus.Reactive.Debug

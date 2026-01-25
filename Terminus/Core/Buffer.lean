@@ -173,6 +173,19 @@ def merge (buf : Buffer) (other : Buffer) (offsetX offsetY : Nat) : Buffer := Id
       result := result.set (offsetX + x) (offsetY + y) cell
   result
 
+/-- Convert buffer to plain text string (no styling, just characters).
+    Wide character placeholders are skipped, and trailing spaces are trimmed. -/
+def toPlainText (buf : Buffer) : String := Id.run do
+  let mut lines : Array String := #[]
+  for y in [0 : buf.height] do
+    let mut line := ""
+    for x in [0 : buf.width] do
+      let cell := buf.get x y
+      if cell.isPlaceholder then continue  -- Skip wide char placeholders
+      line := line ++ cell.char.toString
+    lines := lines.push line.trimRight  -- Trim trailing spaces
+  String.intercalate "\n" lines.toList
+
 end Buffer
 
 end Terminus

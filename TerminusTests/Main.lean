@@ -12,6 +12,7 @@ import TerminusTests.BufferTests
 import TerminusTests.RectTests
 import TerminusTests.StyleTests
 import TerminusTests.LayoutTests
+import TerminusTests.DebugTests
 
 -- Reactive tests
 import TerminusTests.Reactive.Common

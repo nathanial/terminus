@@ -37,6 +37,8 @@ structure AppConfig where
   debug : Bool := false
   /-- Log file path for debug output. -/
   logPath : System.FilePath := "reactive_debug.log"
+  /-- Optional directory to write changed frames (for debugging/testing). -/
+  debugDir : Option System.FilePath := none
   deriving Repr, Inhabited
 
 /-! ## App Loop Dependencies -/
@@ -186,6 +188,13 @@ partial def runReactiveLoop [Monad m] [TerminalEffect m] [MonadLift IO m]
 
   loop
 
+/-- Format frame number as zero-padded string for debug output. -/
+private def formatFrameNumber (n : Nat) : String :=
+  let s := toString n
+  let padLen := if s.length >= 3 then 0 else 3 - s.length
+  let padding := "".pushn '0' padLen
+  padding ++ s
+
 /-- Run a reactive terminal application.
 
     The `setup` function receives the TerminusEvents context and should:
@@ -296,7 +305,28 @@ def runReactiveApp (setup : ReactiveTermM ReactiveAppState) (config : AppConfig 
     let nextSignal : IO LoopSignal :=
       Std.Channel.Sync.recv signalSync
 
-    let deps := LoopDeps.io nextSignal log
+    -- Frame capture state (if debugDir is set)
+    let captureStateRef ← IO.mkRef ((none, 0) : Option Buffer × Nat)  -- (prevBuffer, frameNum)
+
+    let onFrame : Nat → Buffer → IO Unit := match config.debugDir with
+      | none => fun _ _ => pure ()
+      | some dir => fun _ buf => do
+          let (prev, frameNum) ← captureStateRef.get
+          let changed := match prev with
+            | none => true
+            | some p => !(Buffer.diff p buf).isEmpty
+          if changed then
+            IO.FS.createDirAll dir
+            let filename := s!"frame-{formatFrameNumber frameNum}.txt"
+            IO.FS.writeFile (dir / filename) buf.toPlainText
+            captureStateRef.set (some buf, frameNum + 1)
+          else
+            captureStateRef.set (some buf, frameNum)
+
+    let deps : LoopDeps IO := {
+      LoopDeps.io nextSignal log with
+      onFrame := onFrame
+    }
     runReactiveLoop config events inputs appState.render termRef deps
 
     log "Main loop exited"
