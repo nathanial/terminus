@@ -156,16 +156,20 @@ def toRect (buf : Buffer) : Rect := { x := 0, y := 0, width := buf.width, height
 /-- Compute differences between two buffers -/
 def diff (old new_ : Buffer) : List (Nat × Nat × Cell) := Id.run do
   let mut changes : List (Nat × Nat × Cell) := []
-  for y in [0 : new_.height] do
-    for x in [0 : new_.width] do
-      let newCell := new_.get x y
-      if old.inBounds x y then
+  let maxWidth := max old.width new_.width
+  let maxHeight := max old.height new_.height
+  for y in [0 : maxHeight] do
+    for x in [0 : maxWidth] do
+      let inOld := old.inBounds x y
+      let inNew := new_.inBounds x y
+      if inNew && !inOld then
+        -- Newly exposed area should always be refreshed, even if empty.
+        changes := (x, y, new_.get x y) :: changes
+      else
+        let newCell := new_.get x y
         let oldCell := old.get x y
         if newCell != oldCell then
           changes := (x, y, newCell) :: changes
-      else
-        -- Force updates for newly added cells so the terminal gets cleared.
-        changes := (x, y, newCell) :: changes
   changes.reverse
 
 /-- Merge another buffer on top at the given offset -/

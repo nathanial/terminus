@@ -104,6 +104,16 @@ test "Buffer.diff marks newly expanded area as changes" := do
   | _ =>
     ensure false s!"expected a single change for the new column, got {changes.length}"
 
+test "Buffer.diff marks removed area as changes when buffer shrinks" := do
+  let bgStyle : Style := { bg := .ansi .blue }
+  let old := (Buffer.new 3 2).fill (Cell.styled ' ' bgStyle)
+  let new_ := Buffer.new 2 1
+  let changes := Buffer.diff old new_
+  let hasOutside := changes.any (fun (x, y, _) =>
+    x >= new_.width || y >= new_.height)
+  ensure hasOutside "expected diff to include cells outside the new buffer bounds"
+  changes.length ≡ old.area
+
 
 
 end TerminusTests.BufferTests
