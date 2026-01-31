@@ -45,9 +45,10 @@ def navigationContent (theme : Theme) (_events : TerminusEvents) : WidgetM Unit 
           ]
           let dataDyn ← Dynamic.pureM fileTree
 
+          let maxVisDyn ← Dynamic.pureM 6
           let treeResult ← treeDyn' dataDyn {
             focusName := "file-tree"
-            maxVisible := some 6
+            maxVisible := some maxVisDyn
             selectedStyle := { bg := .ansi .blue, fg := .ansi .white }
             branchStyle := { fg := .ansi .yellow, modifier := { bold := true } }
             expandedIcon := "▼ "

@@ -131,8 +131,8 @@ structure TreeConfig (α : Type) where
   leafIcon : String := "• "
   /-- Characters per indent level. -/
   indent : Nat := 2
-  /-- Maximum visible lines (none = no limit). -/
-  maxVisible : Option Nat := none
+  /-- Maximum visible lines (none = no limit). Use `Dynamic.pureM` for constant values. -/
+  maxVisible : Option (Reactive.Dynamic Spider Nat) := none
   /-- Focus name for this tree. Empty = auto-generated. -/
   focusName : String := ""
   /-- Whether tree responds to keys without focus. -/
@@ -145,7 +145,7 @@ structure TreeConfig (α : Type) where
   initialSelection : Option α := none
   /-- Whether branches start expanded by default. -/
   expandByDefault : Bool := true
-  deriving Repr, Inhabited
+  deriving Inhabited
 
 /-! ## Tree Result -/
 
@@ -315,14 +315,14 @@ where
 
 private def renderTreeViewData [Inhabited α] [ToString α]
     (roots : Array (TreeData α)) (nav : TreeState) (expansion : ExpansionState)
-    (config : TreeConfig α) : RNode :=
+    (config : TreeConfig α) (maxVisible : Option Nat) : RNode :=
   Id.run do
     let flat := flattenForestData roots expansion config.expandByDefault
 
     if flat.isEmpty then
       return RNode.text "(empty)" config.style
     else
-      let maxVis := config.maxVisible.getD flat.size
+      let maxVis := maxVisible.getD flat.size
 
       -- Calculate visible range
       let startIdx := nav.scrollOffset
@@ -387,9 +387,10 @@ structure InternalActionResult (α : Type) where
 
 /-- Apply a tree action to the internal state. -/
 def applyTreeActionInternal [Inhabited α] (action : TreeAction α) (s : TreeInternalState)
-    (data : Array (TreeData α)) (config : TreeConfig α) : InternalActionResult α := Id.run do
+    (data : Array (TreeData α)) (config : TreeConfig α) (maxVisible : Option Nat)
+    : InternalActionResult α := Id.run do
   let flat := flattenForestData data s.expansion config.expandByDefault
-  let maxVis := config.maxVisible.getD flat.size
+  let maxVis := maxVisible.getD flat.size
 
   if flat.isEmpty then return { state := s }
 
@@ -527,21 +528,26 @@ def forestDyn' [Inhabited α] [ToString α] [BEq α]
     expansion := ExpansionState.empty
   }
 
+  -- Create maxVisible behavior (sample the dynamic if provided, otherwise none)
+  let maxVisBehavior : Behavior Spider (Option Nat) ← match config.maxVisible with
+    | some dyn => pure (dyn.current.map some)
+    | none => pure (Behavior.pure none)
+
   -- Use fixDynM for self-referential state:
   -- Actions need current data AND current state to compute results
   let stateWithResultDyn ← SpiderM.fixDynM fun stateBehavior => do
     -- Extract just the state (first element of tuple)
     let pureStateBehavior := stateBehavior.map (·.1)
 
-    -- Attach current state AND current data to action events
+    -- Attach current state, current data, and maxVisible to action events
     let actionsWithContext ← Event.attachWithM
-      (fun (state, data) action => (action, state, data))
-      (Behavior.zipWith (·, ·) pureStateBehavior dataDyn.current)
+      (fun ((state, data), maxVis) action => (action, state, data, maxVis))
+      (Behavior.zipWith (·, ·) (Behavior.zipWith (·, ·) pureStateBehavior dataDyn.current) maxVisBehavior)
       allActions
 
     -- Map actions to state updates
-    let updates ← Event.mapM (fun (action, state, data) =>
-      let result := applyTreeActionInternal action state data config
+    let updates ← Event.mapM (fun (action, state, data, maxVis) =>
+      let result := applyTreeActionInternal action state data config maxVis
       (result.state, some result)) actionsWithContext
 
     -- Fold updates into state
@@ -575,9 +581,15 @@ def forestDyn' [Inhabited α] [ToString α] [BEq α]
     let flat := flattenForestData data state.expansion config.expandByDefault
     flat[state.nav.selectedIndex]?.map (·.value)
 
-  -- Emit render function
-  let node ← dataStateDyn.map' fun (data, state) =>
-    renderTreeViewData data state.nav state.expansion config
+  -- Emit render function (include maxVisible for dynamic viewport)
+  let node ← match config.maxVisible with
+    | some maxVisDyn =>
+      let combined ← dataStateDyn.zipWith' (fun (data, state) maxVis => (data, state, maxVis)) maxVisDyn
+      combined.map' fun (data, state, maxVis) =>
+        renderTreeViewData data state.nav state.expansion config (some maxVis)
+    | none =>
+      dataStateDyn.map' fun (data, state) =>
+        renderTreeViewData data state.nav state.expansion config none
   emit node
 
   pure {

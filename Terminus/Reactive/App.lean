@@ -255,6 +255,11 @@ def runReactiveApp (setup : ReactiveTermM ReactiveAppState) (config : AppConfig 
     spiderEnv.postBuildTrigger ()
     log "Post-build event fired"
 
+    -- Fire initial resize event with current terminal size
+    let (initWidth, initHeight) ← getTerminalSize
+    inputs.fireResize { width := initWidth, height := initHeight }
+    log s!"Initial resize event fired: {initWidth}x{initHeight}"
+
     -- Track quit signal
     let termRef ← IO.mkRef (← Terminal.new)
     log "Terminal created"
