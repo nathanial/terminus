@@ -112,7 +112,7 @@ private def substringMatch (query : String) (target : String) : Bool :=
       -- Check each starting position using fold
       let positions := List.range (tLen - qLen + 1)
       positions.any fun i =>
-        t.extract ⟨i⟩ ⟨i + qLen⟩ == q
+        (t.drop i).take qLen == q
 
 /-- Filter commands based on query and matching mode. -/
 private def filterCommands (query : String) (commands : Array Command)

@@ -16,7 +16,7 @@ private def mkColumnNode (children : Array ComponentRender) : WidgetM (Dynamic S
   list.map' fun kids =>
     if kids.isEmpty then
       RNode.empty
-    else if h : kids.length = 1 then
+    else if _ : kids.length = 1 then
       kids.head!
     else
       RNode.column 0 {} kids.toArray

@@ -71,7 +71,7 @@ def tooltip' (name : String) (tip : String) (config : TooltipConfig := {})
   let node ← isFocusedDyn.zipWith' (fun isFocused kids =>
     let contentNode := if kids.isEmpty then
         RNode.empty
-      else if h : kids.length = 1 then
+      else if _ : kids.length = 1 then
         kids.head!
       else
         RNode.column 0 {} kids.toArray

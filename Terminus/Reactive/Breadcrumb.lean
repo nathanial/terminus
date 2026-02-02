@@ -59,7 +59,7 @@ structure BreadcrumbResult where
     -- Use bc.onNavigate to handle navigation clicks
     ```
 -/
-def breadcrumb' (name : String) (items : Array String)
+def breadcrumb' (_name : String) (items : Array String)
     (config : BreadcrumbConfig := {}) : WidgetM BreadcrumbResult := do
   -- Register as focusable component
   let widgetName ← registerComponentW "breadcrumb" (isInput := true)
@@ -153,7 +153,7 @@ def breadcrumb' (name : String) (items : Array String)
     let bc ← breadcrumbDyn' "nav" pathDyn {}
     ```
 -/
-def breadcrumbDyn' (name : String) (items : Dynamic Spider (Array String))
+def breadcrumbDyn' (_name : String) (items : Dynamic Spider (Array String))
     (config : BreadcrumbConfig := {}) : WidgetM BreadcrumbResult := do
   -- Register as focusable component
   let widgetName ← registerComponentW "breadcrumb" (isInput := true)

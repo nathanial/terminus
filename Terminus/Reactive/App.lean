@@ -79,7 +79,7 @@ end LoopDeps
 /-- Run the reactive app main loop.
     This is extracted to enable deterministic tests with mock terminal effects. -/
 partial def runReactiveLoop [Monad m] [TerminalEffect m] [MonadLift IO m]
-    (config : AppConfig)
+    (_config : AppConfig)
     (events : TerminusEvents)
     (inputs : TerminusInputs)
     (render : ComponentRender)
